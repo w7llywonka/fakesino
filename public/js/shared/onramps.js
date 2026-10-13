@@ -9,7 +9,6 @@ export const PROVIDERS = [
   { id: 'mockramp', name: 'MockRamp', color: '#e8590c', feePct: 3.2, spreadPct: 0.4, methods: ['Card', 'Bank transfer'], eta: '10–30 min' },
 ];
 export const QUOTE_MS = 15000;
-export const BUY_MIN_USD = 10;
 
 export const quoteEpoch = (t = Date.now()) => Math.floor(t / QUOTE_MS);
 const drift = (epoch, code) => 1 + 0.003 * Math.sin(epoch * 1.7 + code.charCodeAt(0));

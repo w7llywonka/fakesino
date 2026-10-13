@@ -16,7 +16,7 @@ export function promotionsPage(page) {
     ['p1', 'VIP bonuses', 'From Bronze up: weekly, monthly, daily and level-up bonuses based on what you play, plus reloads from Platinum.', '/vip?tab=bonuses', 'View bonuses'],
     ['p2', 'Rakeback', '5% of the house edge on every bet you place comes back to you. Claim it whenever you like.', '/vip', 'View rakeback'],
     ['p3', 'Daily Race', 'The top 10 by wager each UTC day share $2,000 of play money, paid out automatically.', '/leaderboard', 'See the race'],
-    ['p1', 'Welcome offer', 'New wallet? Redeem the code WELCOME within 24 hours for $20 of play money (3× wagering).', '/settings/offers', 'Redeem'],
+    ['p1', 'Welcome offer', 'New wallet? Redeem the code WELCOME within 24 hours for $20 of play money.', '/settings/offers', 'Redeem'],
     ['p2', 'Bonus drops', 'DropBot posts a limited code in chat every four hours. Be quick: 50 claims each, gone in an hour.', '/settings/offers', 'Redeem a code'],
     ['p3', 'Challenges', 'Be the first to hit the target multiplier on a game and win a play-money prize. New challenges every Monday.', '/challenges', 'View challenges'],
     ['p1', 'RainBot', 'Every hour RainBot shares $50 of play money among active chatters who played $500 this week.', '?modal=wallet&tab=tip', 'Tip a friend'],
@@ -100,7 +100,7 @@ export function termsPage(page) {
   document.title = 'Terms — Fakesino';
   page.innerHTML = `<div class="page-title">${icon('list', 22)} Terms of Service</div><div class="card doc">
     <h2>1. Play money only</h2><p>All balances, deposits, withdrawals, bonuses and winnings on Fakesino are fictional. They have no monetary value, cannot be exchanged, sold or transferred, and are never paid out.</p>
-    <h2>2. No real payments</h2><p>The checkout only accepts published demo card numbers. Real card numbers are rejected in your browser and by the server, and no card data is stored beyond the last four digits of demo cards you choose to save. Crypto deposit addresses are fake and exist on no blockchain — never send real funds to them.</p>
+    <h2>2. No real payments</h2><p>Deposits never ask for card details and nothing is ever charged — they simply add play money. Crypto deposit addresses are fake and exist on no blockchain — never send real funds to them.</p>
     <h2>3. Eligibility</h2><p>You must be 18 or older to use Fakesino.</p>
     <h2>4. Fairness</h2><p>Game outcomes are generated with a provably fair scheme. You can verify any bet in the Fairness panel.</p>
     <h2>5. Your wallet</h2><p>There are no accounts. Your wallet is tied to a random key stored in your browser — back it up from Settings if you want to keep it. Losing the key means losing the play money, which was never worth anything anyway.</p>

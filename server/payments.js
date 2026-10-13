@@ -1,15 +1,15 @@
 import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
 import { amountText } from './notify.js';
-import { NETWORKS, networkFor, validAddress, validTag } from '../public/js/shared/networks.js';
+import { NETWORKS, networkFor } from '../public/js/shared/networks.js';
 import { requireTwoFactor } from './totp.js';
-import { PROVIDERS, quote, quotes, BUY_MIN_USD } from '../public/js/shared/onramps.js';
-import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
+import { PROVIDERS, quote, quotes } from '../public/js/shared/onramps.js';
 import { HttpError, badRequest } from './http.js';
-import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit, assertWagered } from './accounts.js';
+import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit } from './accounts.js';
 
-export const DEPOSIT_LIMITS = { min: 10, max: 100000 }; // in fiat units
-export const WITHDRAW_MIN_USD = 5;
+// Play money: nothing is verified, nothing waits. Deposits, purchases, swaps
+// and withdrawals complete the moment they are made.
+export const DEPOSIT_LIMITS = { max: 100000 }; // in fiat units, a sanity cap
 export const CONFIRMATIONS = { BTC: 2, ETH: 6, LTC: 3, SOL: 1, DOGE: 3, USDT: 6, TRX: 3, USDC: 6, XRP: 1, BNB: 15, BCH: 3 };
 export const NETWORK_FEES_USD = { BTC: 2, ETH: 1.5, LTC: 0.05, SOL: 0.01, DOGE: 0.2, USDT: 1, TRX: 1, USDC: 1, XRP: 0.1, BNB: 0.3, BCH: 0.04 };
 
@@ -36,13 +36,6 @@ function txId() {
 
 export function createPayments({ store, live, publicUser, notify = () => {} }) {
   const timers = new Set();
-  const later = (ms, fn) => {
-    const t = setTimeout(() => {
-      timers.delete(t);
-      fn();
-    }, ms);
-    timers.add(t);
-  };
 
   function addTx(user, tx) {
     const full = {
@@ -74,47 +67,6 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       notify(user.id, { kind: 'swap', title: 'Swap complete', message: `${amountText(tx.details.fromAmount, tx.details.from)} → ${amt}`, link: '/transactions/swaps' });
   }
 
-  function validateCardInput(card) {
-    if (!card || typeof card !== 'object') throw badRequest('Enter your card details');
-    const number = String(card.number || '').replace(/\D/g, '');
-    const brand = cardBrand(number);
-    if (number.length < 13 || !luhn(number)) throw badRequest('Your card number is invalid.', { field: 'number', code: 'invalid_number' });
-    const demo = demoCard(number);
-    if (!demo) {
-      throw badRequest('Fakesino only accepts demo cards. Real cards are never charged or stored. Use 4242 4242 4242 4242.', {
-        field: 'number',
-        code: 'real_card_rejected',
-      });
-    }
-    const expMonth = Number(card.expMonth);
-    let expYear = Number(card.expYear);
-    if (expYear < 100) expYear += 2000;
-    if (!Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12) throw badRequest("Your card's expiration date is incomplete.", { field: 'exp' });
-    const now = new Date();
-    if (!Number.isInteger(expYear) || expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < now.getMonth() + 1)) {
-      throw badRequest("Your card's expiration year is in the past.", { field: 'exp', code: 'expired_card' });
-    }
-    const cvc = String(card.cvc || '');
-    const cvcLen = brand === 'amex' ? 4 : 3;
-    if (!new RegExp(`^\\d{${cvcLen}}$`).test(cvc)) throw badRequest("Your card's security code is incomplete.", { field: 'cvc' });
-    const name = String(card.name || '').trim();
-    if (!name) throw badRequest('Enter the name on the card', { field: 'name' });
-    return { number, brand, demo, expMonth, expYear, name: name.slice(0, 60), last4: number.slice(-4) };
-  }
-
-  function resolveCard(user, body) {
-    if (body.savedCardId) {
-      const saved = (user.cards || []).find((c) => c.id === body.savedCardId);
-      if (!saved) throw badRequest('Saved card not found');
-      const cvc = String(body.cvc || '');
-      const cvcLen = saved.brand === 'amex' ? 4 : 3;
-      if (!new RegExp(`^\\d{${cvcLen}}$`).test(cvc)) throw badRequest("Enter your card's security code", { field: 'cvc' });
-      return { ...saved, demo: DEMO_CARDS[saved.demoKey], saved: true };
-    }
-    const c = validateCardInput(body.card);
-    return { ...c, demoKey: c.number, saved: false };
-  }
-
   function settleCardDeposit(user, payment) {
     if (payment.buy) return startPurchase(user, payment);
     const creditCurrency = payment.creditCurrency;
@@ -127,7 +79,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       currency: creditCurrency,
       amount: creditAmount,
       fiat: { currency: payment.currency, amount: payment.amount },
-      details: { brand: payment.brand, last4: payment.last4, threeDS: !!payment.threeDS },
+      details: { brand: 'demo' },
     });
     payment.status = 'succeeded';
     payment.txId = tx.id;
@@ -136,29 +88,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     return tx;
   }
 
-  // Credit a pending on-chain deposit block by block.
-  function confirmLater(user, tx, required) {
-    // Long confirmation counts (Polygon, BSC) are compressed to ~20 s overall.
-    const step = Math.min(Number(process.env.FAKESINO_CONFIRM_MS ?? 1500), 20000 / required);
-    const confirm = () => {
-      tx.details.confirmations++;
-      tx.updatedAt = Date.now();
-      if (tx.details.confirmations >= required) {
-        tx.status = 'completed';
-        credit(user, tx.currency, tx.amount);
-        store.save();
-        pushTx(user, tx);
-        return;
-      }
-      store.save();
-      live.toUser(user.id, 'tx', publicTx(tx));
-      later(step, confirm);
-    };
-    later(step, confirm);
-  }
-
-  // On-ramp purchase: the card is charged, then the provider sends the coins
-  // to this wallet's address on the chosen network.
+  // On-ramp purchase: the provider sends the coins straight to this wallet.
   function startPurchase(user, payment) {
     const coin = payment.creditCurrency;
     const net = networkFor(coin, payment.buy.network);
@@ -170,7 +100,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     const tx = addTx(user, {
       type: 'deposit',
       method: 'buy',
-      status: 'pending',
+      status: 'completed',
       currency: coin,
       amount,
       fiat: { currency: payment.currency, amount: payment.amount },
@@ -185,20 +115,18 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
         network: net.id,
         networkLabel: net.label,
         address: user.addresses[key],
-        brand: payment.brand,
-        last4: payment.last4,
-        threeDS: !!payment.threeDS,
         txHash: crypto.randomBytes(32).toString('hex'),
-        confirmations: 0,
+        confirmations: net.confirmations,
         required: net.confirmations,
       },
     });
+    credit(user, coin, amount);
     payment.status = 'succeeded';
     payment.txId = tx.id;
     store.save();
     live.toUser(user.id, 'tx', publicTx(tx));
-    notify(user.id, { kind: 'deposit', title: `Purchase complete · ${q.name}`, message: `${amountText(amount, coin)} is on its way to your wallet.`, link: '/transactions/purchases' });
-    confirmLater(user, tx, net.confirmations);
+    live.toUser(user.id, 'balance', { currency: coin, amount: user.balances[coin] });
+    notify(user.id, { kind: 'deposit', title: `Purchase complete · ${q.name}`, message: `${amountText(amount, coin)} has been added to your wallet.`, link: '/transactions/purchases' });
     return tx;
   }
 
@@ -207,75 +135,20 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     const coin = CURRENCIES[params.coin]?.type === 'crypto' ? params.coin : 'BTC';
     const fiatAmount = Math.max(0, Number(params.amount) || 0);
     const network = networkFor(coin, params.network).id;
-    return { fiat, coin, network, fiatAmount, minimum: BUY_MIN_USD / CURRENCIES[fiat].usd, quotes: quotes({ fiat, fiatAmount, coin, network }), refreshIn: 15000 - (Date.now() % 15000) };
+    return { fiat, coin, network, fiatAmount, minimum: 0, quotes: quotes({ fiat, fiatAmount, coin, network }), refreshIn: 15000 - (Date.now() % 15000) };
   }
 
   function cardDeposit(user, body) {
-    const fiat = body.currency === 'EUR' ? 'EUR' : 'USD';
-    const amount = parseAmount(fiat, body.amount);
-    if (amount < DEPOSIT_LIMITS.min) throw badRequest(`Minimum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.min}`, { field: 'amount' });
-    if (amount > DEPOSIT_LIMITS.max) throw badRequest(`Maximum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.max.toLocaleString('en-US')}`, { field: 'amount' });
+    const { fiat, amount } = fiatAmount(user, body);
     const creditCurrency = parseCurrency(user, body.creditCurrency || fiat);
-    // Buying crypto through an on-ramp: the coins arrive as an on-chain deposit.
+    // Buying crypto through an on-ramp: the coins land in this wallet at once.
     let buy = null;
     if (body.provider) {
       if (!PROVIDERS.some((p) => p.id === body.provider)) throw badRequest('Unknown provider');
       if (CURRENCIES[creditCurrency].type !== 'crypto') throw badRequest('Choose a crypto to buy');
-      if (toUsd(fiat, amount) < BUY_MIN_USD) throw badRequest(`Minimum purchase is ${CURRENCIES[fiat].symbol}${BUY_MIN_USD}`, { field: 'amount' });
       buy = { provider: body.provider, network: networkFor(creditCurrency, body.network).id };
     }
-    assertNotOnBreak(user);
-    assertDepositLimit(store, user, toUsd(fiat, amount));
-    const card = resolveCard(user, body);
-    const payment = {
-      id: `pay_${crypto.randomBytes(12).toString('hex')}`,
-      userId: user.id,
-      amount,
-      currency: fiat,
-      creditCurrency,
-      brand: card.brand,
-      last4: card.last4,
-      status: 'processing',
-      createdAt: Date.now(),
-      buy,
-    };
-    if (body.saveCard && !card.saved) {
-      user.cards ||= [];
-      if (!user.cards.some((c) => c.demoKey === card.demoKey)) {
-        user.cards.push({
-          id: `card_${crypto.randomBytes(8).toString('hex')}`,
-          brand: card.brand,
-          last4: card.last4,
-          expMonth: card.expMonth,
-          expYear: card.expYear,
-          name: card.name,
-          demoKey: card.demoKey,
-        });
-      }
-    }
-    const outcome = card.demo.outcome;
-    if (outcome === 'declined') {
-      payment.status = 'failed';
-      const tx = addTx(user, {
-        type: 'deposit',
-        method: 'card',
-        status: 'failed',
-        currency: creditCurrency,
-        amount: 0,
-        fiat: { currency: fiat, amount },
-        details: { brand: card.brand, last4: card.last4, declineCode: card.demo.code },
-      });
-      store.save();
-      return { payment: { ...publicPayment(payment), declineCode: card.demo.code, message: card.demo.message }, transaction: publicTx(tx), user: publicUser(user) };
-    }
-    if (outcome === '3ds') {
-      payment.status = 'requires_action';
-      payment.threeDS = true;
-      payment.attempts = 0;
-      store.data.payments[payment.id] = payment;
-      store.save();
-      return { payment: publicPayment(payment), user: publicUser(user) };
-    }
+    const payment = { id: `pay_${crypto.randomBytes(12).toString('hex')}`, userId: user.id, amount, currency: fiat, creditCurrency, status: 'processing', createdAt: Date.now(), buy };
     const tx = settleCardDeposit(user, payment);
     return { payment: publicPayment(payment), transaction: publicTx(tx), user: publicUser(user) };
   }
@@ -283,44 +156,6 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   function publicPayment(p) {
     const { userId, ...rest } = p;
     return rest;
-  }
-
-  function authenticate(user, id, body) {
-    const payment = store.data.payments[id];
-    if (!payment || payment.userId !== user.id) throw new HttpError(404, 'Payment not found');
-    if (payment.status !== 'requires_action') throw badRequest('This payment does not need authentication');
-    if (Date.now() - payment.createdAt > 15 * 60 * 1000) {
-      payment.status = 'failed';
-      throw badRequest('Authentication expired, please try again');
-    }
-    if (body.cancel) {
-      payment.status = 'failed';
-      delete store.data.payments[id];
-      const tx = addTx(user, {
-        type: 'deposit',
-        method: 'card',
-        status: 'failed',
-        currency: payment.creditCurrency,
-        amount: 0,
-        fiat: { currency: payment.currency, amount: payment.amount },
-        details: { brand: payment.brand, last4: payment.last4, declineCode: 'authentication_failed' },
-      });
-      store.save();
-      return { payment: { ...publicPayment(payment), declineCode: 'authentication_failed', message: 'We are unable to authenticate your payment method.' }, transaction: publicTx(tx), user: publicUser(user) };
-    }
-    if (String(body.code || '') !== DEMO_3DS_CODE) {
-      payment.attempts++;
-      if (payment.attempts >= 3) {
-        payment.status = 'failed';
-        delete store.data.payments[id];
-        store.save();
-        throw badRequest('Too many incorrect codes. The payment was cancelled.', { code: 'authentication_failed' });
-      }
-      throw badRequest(`Incorrect code. ${3 - payment.attempts} attempt(s) left.`, { field: 'code' });
-    }
-    delete store.data.payments[id];
-    const tx = settleCardDeposit(user, payment);
-    return { payment: publicPayment(payment), transaction: publicTx(tx), user: publicUser(user) };
   }
 
   function depositAddress(user, body) {
@@ -347,82 +182,54 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     };
   }
 
-  // Simulates a blockchain transfer arriving at the user's deposit address:
-  // pending → N confirmations → credited.
+  // Simulates a blockchain transfer arriving at the user's deposit address.
+  // It is credited immediately: there is nothing to confirm with play money.
   function simulateCryptoDeposit(user, body) {
     const currency = parseCurrency(user, body.currency);
     if (CURRENCIES[currency].type !== 'crypto') throw badRequest('Choose a crypto currency');
     const amount = parseAmount(currency, body.amount);
-    if (amount <= 0) throw badRequest('Enter an amount');
-    if (toUsd(currency, amount) > 1_000_000) throw badRequest('Maximum simulated deposit is $1,000,000 equivalent');
+    if (amount <= 0) throw badRequest('Enter an amount', { field: 'amount' });
+    if (toUsd(currency, amount) > 1_000_000) throw badRequest('Maximum simulated deposit is $1,000,000 equivalent', { field: 'amount' });
     assertNotOnBreak(user);
+    assertDepositLimit(store, user, toUsd(currency, amount));
     const net = networkFor(currency, body.network);
     const address = user.addresses?.[`${currency}:${net.id}`] || null;
     const tag = net.tag ? user.tags?.[`${currency}:${net.id}`] : undefined;
-    if (amount < net.depositMin) {
-      // Like a real chain: the transfer happens, but it is never credited.
-      const tx = addTx(user, { type: 'deposit', method: 'crypto', status: 'failed', currency, amount, details: { address, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), reason: 'Not credited: below minimum', minimum: net.depositMin } });
-      store.save();
-      return { transaction: publicTx(tx) };
-    }
-    assertDepositLimit(store, user, toUsd(currency, amount));
     const required = net.confirmations;
+    credit(user, currency, amount);
     const tx = addTx(user, {
       type: 'deposit',
       method: 'crypto',
-      status: 'pending',
+      status: 'completed',
       currency,
       amount,
-      details: { address, tag, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required },
+      details: { address, tag, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: required, required },
     });
     store.save();
-    notify(user.id, { kind: 'deposit', title: 'Deposit detected', message: `${amountText(amount, currency)} is on its way · 0/${required} confirmations.`, link: '/transactions/deposits' });
-    confirmLater(user, tx, required);
-    return { transaction: publicTx(tx) };
+    pushTx(user, tx);
+    return { transaction: publicTx(tx), user: publicUser(user) };
   }
 
   function withdraw(user, body) {
     const currency = parseCurrency(user, body.currency);
     const amount = parseAmount(currency, body.amount);
+    if (amount <= 0) throw badRequest('Enter an amount', { field: 'amount' });
     const isCrypto = CURRENCIES[currency].type === 'crypto';
-    if (!isCrypto && toUsd(currency, amount) < WITHDRAW_MIN_USD) throw badRequest(`Minimum withdrawal is $${WITHDRAW_MIN_USD} equivalent`, { field: 'amount' });
     let details;
-    let fee = 0;
     if (isCrypto) {
+      // Any address will do: nothing ever leaves the site.
       const net = networkFor(currency, body.network);
-      const address = String(body.address || '').trim();
-      if (!validAddress(currency, net.id, address)) throw badRequest(`Invalid ${currency} (${net.label}) address`, { field: 'address' });
-      if (amount < net.withdrawMin) throw badRequest(`Minimum withdrawal: ${amountText(net.withdrawMin, currency)}`, { field: 'amount' });
-      fee = net.withdrawFee;
-      if (amount <= fee) throw badRequest('Amount must be larger than the network fee', { field: 'amount' });
-      const tag = String(body.tag ?? '').trim();
-      if (net.tag && !validTag(tag)) throw badRequest('Destination tag must be a number up to 4294967295', { field: 'tag' });
-      details = { address, ...(net.tag && tag ? { tag } : {}), network: net.id, networkLabel: net.label, fee };
-    } else {
-      const saved = (user.cards || []).find((c) => c.id === body.cardId);
-      if (!saved) throw badRequest('Choose a saved card to withdraw to', { field: 'card' });
-      details = { brand: saved.brand, last4: saved.last4 };
-    }
+      const address = String(body.address || '').trim().slice(0, 140) || fakeAddress(currency, net.id);
+      const tag = String(body.tag ?? '').trim().slice(0, 20);
+      details = { address, ...(net.tag && tag ? { tag } : {}), network: net.id, networkLabel: net.label, fee: 0, txHash: crypto.randomBytes(32).toString('hex') };
+    } else details = { bank: 'Fakesino Demo Bank' };
     if (!(amount <= (user.balances[currency] || 0) + 1e-12)) throw badRequest('Insufficient balance', { field: 'amount', code: 'insufficient_balance' });
-    assertWagered(user);
     requireTwoFactor(user, body.code);
     debit(user, currency, amount);
-    const tx = addTx(user, { type: 'withdrawal', method: isCrypto ? 'crypto' : 'card', status: 'pending', currency, amount, details });
+    const tx = addTx(user, { type: 'withdrawal', method: isCrypto ? 'crypto' : 'bank', status: 'completed', currency, amount, details });
     store.save();
-    later(Number(process.env.FAKESINO_WITHDRAW_MS ?? 4000), () => {
-      tx.status = 'completed';
-      tx.updatedAt = Date.now();
-      if (isCrypto) tx.details.txHash = crypto.randomBytes(32).toString('hex');
-      store.save();
-      pushTx(user, tx);
-    });
+    pushTx(user, tx);
     return { transaction: publicTx(tx), user: publicUser(user) };
-  }
-
-  function removeCard(user, id) {
-    user.cards = (user.cards || []).filter((c) => c.id !== id);
-    store.save();
-    return { user: publicUser(user) };
   }
 
   function claimRakeback(user) {
@@ -490,62 +297,29 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   function fiatAmount(user, body) {
     const fiat = body.currency === 'EUR' ? 'EUR' : 'USD';
     const amount = parseAmount(fiat, body.amount);
-    if (amount < DEPOSIT_LIMITS.min) throw badRequest(`Minimum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.min}`, { field: 'amount' });
+    if (amount <= 0) throw badRequest('Enter an amount', { field: 'amount' });
     if (amount > DEPOSIT_LIMITS.max) throw badRequest(`Maximum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.max.toLocaleString('en-US')}`, { field: 'amount' });
     assertNotOnBreak(user);
     assertDepositLimit(store, user, toUsd(fiat, amount));
     return { fiat, amount };
   }
 
-  // Bank transfer: we show (fake) account details and a reference; the
-  // player "sends" it with a button and it lands after a short delay.
+  // Bank transfer from the (fictional) Fakesino Demo Bank: credited at once.
   function bankStart(user, body) {
     const { fiat, amount } = fiatAmount(user, body);
     const reference = `FKS-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    credit(user, fiat, amount);
     const tx = addTx(user, {
       type: 'deposit',
       method: 'bank',
-      status: 'pending',
+      status: 'completed',
       currency: fiat,
       amount,
-      details: { stage: 'awaiting', reference, bank: 'Fakesino Demo Bank', accountName: 'Fakesino Play Money Ltd', account: `FAKE00 DEMO ${String(user.id).padStart(4, '0')} 0000 0000`, routing: 'DEMO0000' },
+      details: { stage: 'credited', reference, bank: 'Fakesino Demo Bank' },
     });
     store.save();
-    return { transaction: publicTx(tx) };
-  }
-
-  function pendingBank(user, id) {
-    const tx = store.data.transactions.find((t) => t.id === Number(id) && t.userId === user.id && t.method === 'bank');
-    if (!tx) throw new HttpError(404, 'Transfer not found');
-    if (tx.status !== 'pending' || tx.details.stage !== 'awaiting') throw badRequest('This transfer is no longer waiting');
-    return tx;
-  }
-
-  function bankSimulate(user, body) {
-    const tx = pendingBank(user, body.id);
-    tx.details.stage = 'received';
-    tx.updatedAt = Date.now();
-    store.save();
-    live.toUser(user.id, 'tx', publicTx(tx));
-    later(Number(process.env.FAKESINO_WITHDRAW_MS ?? 4000), () => {
-      tx.status = 'completed';
-      tx.details.stage = 'credited';
-      tx.updatedAt = Date.now();
-      credit(user, tx.currency, tx.amount);
-      store.save();
-      pushTx(user, tx);
-    });
-    return { transaction: publicTx(tx) };
-  }
-
-  function bankCancel(user, body) {
-    const tx = pendingBank(user, body.id);
-    tx.status = 'failed';
-    tx.details.stage = 'cancelled';
-    tx.details.reason = 'Cancelled';
-    tx.updatedAt = Date.now();
-    store.save();
-    return { transaction: publicTx(tx) };
+    pushTx(user, tx);
+    return { transaction: publicTx(tx), user: publicUser(user) };
   }
 
   // Mobile wallet ("Demo Pay"): a one-tap payment sheet, settled instantly.
@@ -564,7 +338,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     return { transaction: publicTx(t) };
   }
 
-  // ---- swap between cryptos (0.5% fee, ~$1 minimum) ----
+  // ---- swap between cryptos (0.5% fee) ----
   const SWAP_FEE = 0.005;
   function swapQuote(from, to, amount) {
     if (CURRENCIES[from]?.type !== 'crypto' || CURRENCIES[to]?.type !== 'crypto') throw badRequest('Swaps are between cryptocurrencies');
@@ -572,31 +346,31 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     const rate = CURRENCIES[from].usd / CURRENCIES[to].usd;
     const fee = roundDown(from, amount * SWAP_FEE);
     const toAmount = roundDown(to, (amount - fee) * rate);
-    return { from, to, amount, rate, fee, toAmount, minimum: roundDown(from, fromUsd(from, 1)) };
+    return { from, to, amount, rate, fee, toAmount, minimum: 0 };
   }
 
   function swap(user, body) {
     const from = parseCurrency(user, body.from);
     const to = parseCurrency(user, body.to);
     const amount = parseAmount(from, body.amount);
+    if (amount <= 0) throw badRequest('Enter an amount', { field: 'amount' });
     const q = swapQuote(from, to, amount);
-    if (toUsd(from, amount) < 1) throw badRequest(`Minimum swap is ${amountText(q.minimum, from)}`, { field: 'amount' });
+    if (!(q.toAmount > 0)) throw badRequest('That amount is too small to swap', { field: 'amount' });
     assertNotOnBreak(user);
     debit(user, from, amount);
+    credit(user, to, q.toAmount);
     const net = networkFor(to);
     const tx = addTx(user, {
       type: 'swap',
       method: 'swap',
-      status: 'pending',
+      status: 'completed',
       currency: to,
       amount: q.toAmount,
-      details: { from, to, fromAmount: amount, toAmount: q.toAmount, rate: q.rate, fee: q.fee, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required: net.confirmations },
+      details: { from, to, fromAmount: amount, toAmount: q.toAmount, rate: q.rate, fee: q.fee, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: net.confirmations, required: net.confirmations },
     });
     store.save();
     live.toUser(user.id, 'balance', { currency: from, amount: user.balances[from] });
-    // Withdraw leg, then the deposit leg confirms on the target network (~30 s).
-    const step = Math.min(Number(process.env.FAKESINO_CONFIRM_MS ?? 1500), 30000 / Math.max(1, net.confirmations + 1));
-    later(step, () => confirmLater(user, tx, net.confirmations));
+    pushTx(user, tx);
     return { transaction: publicTx(tx), user: publicUser(user) };
   }
 
@@ -637,7 +411,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       if (tx.status !== 'pending') continue;
       const user = store.data.users[tx.userId];
       if (!user) continue;
-      if ((tx.type === 'deposit' && (tx.method === 'crypto' || tx.method === 'buy' || (tx.method === 'bank' && tx.details.stage === 'received'))) || tx.type === 'swap') {
+      if ((tx.type === 'deposit' && (tx.method === 'crypto' || tx.method === 'buy' || tx.method === 'bank')) || tx.type === 'swap') {
         if (tx.method === 'bank') tx.details.stage = 'credited';
         tx.status = 'completed';
         tx.details.confirmations = tx.details.required;
@@ -659,31 +433,23 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     buyQuotes,
     transaction,
     bankStart,
-    bankSimulate,
-    bankCancel,
     mobilePay,
     swap,
     swapQuote: (q) => swapQuote(q.from, q.to, Number(q.amount) || 0),
     explorerTx,
     cardDeposit,
-    authenticate,
     depositAddress,
     simulateCryptoDeposit,
     withdraw,
-    removeCard,
     claimRakeback,
     vault,
     transactions,
     recover,
     stop,
     methods: () => ({
-      demoCards: Object.entries(DEMO_CARDS).map(([number, c]) => ({ number, ...c })),
       limits: DEPOSIT_LIMITS,
       confirmations: CONFIRMATIONS,
-      fees: NETWORK_FEES_USD,
       networks: NETWORKS,
-      withdrawMinUsd: WITHDRAW_MIN_USD,
-      threeDSCode: DEMO_3DS_CODE,
     }),
   };
 }

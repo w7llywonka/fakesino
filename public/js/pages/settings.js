@@ -4,7 +4,6 @@ import { api } from '../api.js';
 import { state, setUser, bus, savePrefs, deviceId, useWalletKey, newWallet } from '../state.js';
 import { toastSuccess, toastError, toast } from '../ui/toast.js';
 import { showFieldErrors } from '../ui/forms.js';
-import { brandChip } from '../ui/wallet.js';
 import { qrSvg } from '../shared/qr.js';
 import { LANGUAGES, currentLanguage, setLanguage } from '../i18n.js';
 import * as fmt from '../format.js';
@@ -15,7 +14,6 @@ const TABS = [
   ['preferences', 'Preferences'],
   ['security', 'Security'],
   ['offers', 'Offers'],
-  ['payments', 'Saved cards'],
   ['limits', 'Responsible Gaming'],
 ];
 
@@ -215,9 +213,9 @@ export default function settingsPage(page, { tab = 'general' }) {
         body.innerHTML = `<h3 style="margin-top:0">Offers</h3>
           ${
             welcome.available
-              ? `<div class="offer-card"><div><div class="t">${icon('gift', 18)} Welcome offer</div><div class="d">New wallets can claim ${fmt.fiat(welcome.valueUsd)} of play money once, within 24 hours (wager it 3× before withdrawing). Code: <b class="mono">WELCOME</b> · ${Math.max(1, Math.floor(left / 3600000))}h left</div></div><button class="btn btn-primary" data-redeem="WELCOME">Claim</button></div>`
+              ? `<div class="offer-card"><div><div class="t">${icon('gift', 18)} Welcome offer</div><div class="d">New wallets can claim ${fmt.fiat(welcome.valueUsd)} of play money once, within 24 hours. Code: <b class="mono">WELCOME</b> · ${Math.max(1, Math.floor(left / 3600000))}h left</div></div><button class="btn btn-primary" data-redeem="WELCOME">Claim</button></div>`
               : welcome.claimed
-                ? `<div class="offer-card claimed"><div><div class="t">${icon('check', 18)} Welcome offer claimed</div><div class="d">You used the code ${esc(welcome.claimed)}.${state.user.wagering?.remainingUsd > 0 ? ` $${state.user.wagering.remainingUsd.toFixed(2)} left to wager.` : ''}</div></div></div>`
+                ? `<div class="offer-card claimed"><div><div class="t">${icon('check', 18)} Welcome offer claimed</div><div class="d">You used the code ${esc(welcome.claimed)}.</div></div></div>`
                 : ''
           }
           <form class="offer-form" novalidate><div class="field"><div class="field-label">Redeem bonus drop</div>
@@ -281,22 +279,5 @@ export default function settingsPage(page, { tab = 'general' }) {
     const codeField = () =>
       '<div class="field" data-field="code"><div class="field-label">Two Factor Code</div><input class="input mono" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><div class="field-error"></div></div>';
     render();
-  } else if (tab === 'payments') {
-    const render = () => {
-      const cards = state.user.cards || [];
-      body.innerHTML = `<h3 style="margin-top:0">Saved cards</h3>
-        ${cards.length ? `<div class="method-list">${cards.map((c) => `<div class="method">${icon('card', 20)}<div><div class="m-title">•••• ${esc(c.last4)}</div><div class="m-sub">${esc(c.name)} · Expires ${String(c.expMonth).padStart(2, '0')}/${String(c.expYear).slice(-2)}</div></div><div class="m-right">${brandChip(c.brand)}<button class="icon-btn" data-remove="${c.id}" data-tip="Remove">${icon('trash', 16)}</button></div></div>`).join('')}</div>` : `<div class="empty">No saved cards. Save one during a <a class="link" href="?modal=wallet&tab=deposit">deposit</a>.</div>`}
-        <div class="demo-notice" style="margin-top:14px">${icon('lock', 16)}<div>Only demo cards can be saved, and only the last four digits are shown.</div></div>`;
-    };
-    render();
-    on(body, 'click', '[data-remove]', async (e, b) => {
-      try {
-        const { user } = await api.post(`/api/payments/cards/${b.dataset.remove}/remove`);
-        setUser(user);
-        render();
-      } catch (err) {
-        toastError(err);
-      }
-    });
   }
 }

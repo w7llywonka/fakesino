@@ -22,13 +22,3 @@ export function twoFactorField(user) {
   return `<div class="field" data-field="code"><div class="field-label"><span>Two Factor Code</span><span class="dim" style="font-size:12px">From your authenticator app</span></div>
     <input class="input mono" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><div class="field-error"></div></div>`;
 }
-
-// Outstanding bonus wagering, shown on forms that move play money out.
-export function wageringNotice(user, action = 'withdraw') {
-  const w = user?.wagering;
-  if (!(w?.remainingUsd > 0)) return '';
-  const pct = w.requiredUsd ? Math.min(100, ((w.requiredUsd - w.remainingUsd) / w.requiredUsd) * 100) : 0;
-  return `<div class="demo-notice warn wager-req"><div style="flex:1">
-    <b>Wager $${w.remainingUsd.toFixed(2)} more to ${action}</b> — bonus wagering requirement ($${w.requiredUsd.toFixed(2)} in total). Every game counts.
-    <div class="progress" style="margin-top:8px"><div style="width:${pct.toFixed(1)}%"></div></div></div></div>`;
-}

@@ -12,8 +12,6 @@ import * as zoo from '../public/js/shared/games/zoo.js';
 import { slidePointFromHex } from '../public/js/shared/fair.js';
 import { createRng, sha256 } from '../server/fair.js';
 
-process.env.FAKESINO_CONFIRM_MS = '20';
-process.env.FAKESINO_WITHDRAW_MS = '20';
 process.env.FAKESINO_GUEST_LIMIT = '500';
 
 let app;
@@ -59,13 +57,12 @@ async function waitFor(check, ms = 5000) {
   }
   assert.fail('timed out waiting');
 }
-const card = (number) => ({ number, expMonth: 12, expYear: new Date().getFullYear() + 2, cvc: number.startsWith('3') ? '1234' : '123', name: 'Test Player' });
 async function newPlayer(deposit = 1000) {
   const c = client();
   const r = await c.post('/api/auth/guest', { deviceId: key() });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   if (deposit) {
-    const d = await c.post('/api/payments/card', { amount: deposit, currency: 'USD', card: card('4242424242424242') });
+    const d = await c.post('/api/payments/card', { amount: deposit, currency: 'USD' });
     assert.equal(d.data.payment.status, 'succeeded');
   }
   return c;
@@ -162,7 +159,7 @@ test('the X-Wallet-Key header identifies the wallet without cookies', async () =
   const created = await c.post('/api/auth/guest', {});
   assert.equal(created.data.created, true);
   assert.equal((await c.get('/api/me')).data.user.id, created.data.user.id);
-  const dep = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('4242424242424242') });
+  const dep = await c.post('/api/payments/card', { amount: 50, currency: 'USD' });
   assert.equal(dep.data.user.balances.USD, 50);
   const bet = await c.post('/api/games/limbo/bet', { amount: 1, currency: 'USD', params: { target: 2 } });
   assert.equal(bet.status, 200);
@@ -220,74 +217,59 @@ test('usernames can be changed and stay unique', async () => {
   assert.equal((await client().post('/api/account/username', { username: 'nobody' })).status, 401);
 });
 
-test('card checkout: demo cards succeed, real cards are refused', async () => {
+test('card deposits are instant: no card details, no checks, no declines', async () => {
   const c = await newPlayer(0);
-  const real = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('4111111111111111') });
-  assert.equal(real.status, 400);
-  assert.equal(real.data.code, 'real_card_rejected');
-  const ok = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('5555555555554444'), saveCard: true });
+  const ok = await c.post('/api/payments/card', { amount: 50, currency: 'USD' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
   assert.equal(ok.data.payment.status, 'succeeded');
+  assert.equal(ok.data.transaction.status, 'completed');
   assert.equal(ok.data.user.balances.USD, 50);
-  assert.equal(ok.data.user.cards.length, 1);
-  assert.equal(ok.data.user.cards[0].last4, '4444');
-  assert.equal(ok.data.user.cards[0].demoKey, undefined, 'full card number is not exposed');
-  const saved = await c.post('/api/payments/card', { amount: 25, currency: 'USD', savedCardId: ok.data.user.cards[0].id, cvc: '321' });
-  assert.equal(saved.data.user.balances.USD, 75);
-  const declined = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('4000000000000002') });
-  assert.equal(declined.data.payment.status, 'failed');
-  assert.equal(declined.data.payment.declineCode, 'card_declined');
-  const broke = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('4000000000009995') });
-  assert.equal(broke.data.payment.declineCode, 'insufficient_funds');
-  assert.equal((await c.post('/api/payments/card', { amount: 5, currency: 'USD', card: card('4242424242424242') })).status, 400, 'minimum deposit');
-  const expired = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: { ...card('4242424242424242'), expYear: 2001 } });
-  assert.equal(expired.data.field, 'exp');
+  assert.equal(ok.data.user.cards, undefined, 'no saved cards');
+  // Card details are ignored entirely: a "real" or expired card makes no difference.
+  const any = await c.post('/api/payments/card', { amount: 5, currency: 'USD', card: { number: '4111111111111111', expYear: 2001 } });
+  assert.equal(any.status, 200, 'no minimum and no card validation');
+  assert.equal(any.data.user.balances.USD, 55);
+  assert.equal((await c.post('/api/payments/card', { amount: 0, currency: 'USD' })).status, 400, 'an amount is still needed');
+  assert.equal((await c.post('/api/payments/card', { amount: 100001, currency: 'USD' })).status, 400, 'sanity cap');
+  assert.equal((await c.post('/api/payments/pay_x/authenticate', { code: '123456' })).status, 404, 'no 3-D Secure step');
 });
 
-test('card checkout: 3-D Secure challenge and buying crypto', async () => {
+test('buying crypto with a card is instant', async () => {
   const c = await newPlayer(0);
-  const r = await c.post('/api/payments/card', { amount: 100, currency: 'USD', creditCurrency: 'BTC', card: card('4000002760003184') });
-  assert.equal(r.data.payment.status, 'requires_action');
-  const wrong = await c.post(`/api/payments/${r.data.payment.id}/authenticate`, { code: '000000' });
-  assert.equal(wrong.status, 400);
-  const done = await c.post(`/api/payments/${r.data.payment.id}/authenticate`, { code: '123456' });
-  assert.equal(done.data.payment.status, 'succeeded');
-  assert.ok(Math.abs(done.data.user.balances.BTC - 100 / 62000) < 1e-8);
-  assert.equal((await c.post(`/api/payments/${r.data.payment.id}/authenticate`, { code: '123456' })).status, 404, 'cannot be replayed');
+  const r = await c.post('/api/payments/card', { amount: 100, currency: 'USD', creditCurrency: 'BTC' });
+  assert.equal(r.data.payment.status, 'succeeded');
+  assert.ok(Math.abs(r.data.user.balances.BTC - 100 / 62000) < 1e-8);
 });
 
-test('buy crypto: provider quotes, card checkout, coins arrive on-chain', async () => {
+test('buy crypto: provider quotes, coins arrive at once', async () => {
   const c = await newPlayer(0);
   const q = (await c.get('/api/payments/buy/quotes?coin=LTC&network=litecoin&fiat=USD&amount=100')).data;
   assert.equal(q.quotes.length, 3);
   assert.equal(q.quotes.filter((x) => x.best).length, 1);
   const best = q.quotes.find((x) => x.best);
   assert.ok(best.youGet > 1.3 && best.youGet < 1.4, `≈ $96-97 of LTC at $70: ${best.youGet}`);
-  assert.equal((await c.post('/api/payments/card', { amount: 5, currency: 'USD', creditCurrency: 'LTC', provider: best.provider, card: card('4242424242424242') })).status, 400, '$10 minimum');
-  const r = await c.post('/api/payments/card', { amount: 100, currency: 'USD', creditCurrency: 'LTC', provider: best.provider, network: 'litecoin', card: card('4242424242424242') });
+  assert.equal((await c.post('/api/payments/card', { amount: 5, currency: 'USD', creditCurrency: 'LTC', provider: best.provider })).status, 200, 'no minimum');
+  const r = await c.post('/api/payments/card', { amount: 100, currency: 'USD', creditCurrency: 'LTC', provider: best.provider, network: 'litecoin' });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   assert.equal(r.data.transaction.method, 'buy');
-  assert.equal(r.data.transaction.status, 'pending');
+  assert.equal(r.data.transaction.status, 'completed');
   assert.equal(r.data.transaction.details.provider, best.name);
-  await new Promise((res) => setTimeout(res, 250));
   const me = (await c.get('/api/me')).data.user;
-  assert.equal(me.balances.LTC, r.data.transaction.amount, 'credited after confirmations');
+  assert.ok(me.balances.LTC >= r.data.transaction.amount, 'credited immediately');
 });
-
-test('swap converts between cryptos with a 0.5% fee; explorer and tx details', async () => {
+test('swap converts between cryptos with a 0.5% fee at once; explorer and tx details', async () => {
   const c = await newPlayer(0);
   await c.post('/api/payments/crypto/simulate', { currency: 'LTC', amount: 10 });
-  await new Promise((r) => setTimeout(r, 150));
   const q = (await c.get('/api/payments/swap/quote?from=LTC&to=USDT&amount=2')).data;
   assert.equal(q.fee, 0.01);
   assert.equal(q.toAmount, 139.3);
   assert.equal((await c.post('/api/payments/swap', { from: 'LTC', to: 'LTC', amount: 1 })).status, 400);
-  assert.equal((await c.post('/api/payments/swap', { from: 'LTC', to: 'USDT', amount: 0.001 })).status, 400, 'minimum');
+  assert.equal((await c.post('/api/payments/swap', { from: 'LTC', to: 'USDT', amount: 0.001 })).status, 200, 'no minimum');
   const s = await c.post('/api/payments/swap', { from: 'LTC', to: 'USDT', amount: 2 });
   assert.equal(s.status, 200, JSON.stringify(s.data));
-  assert.equal(s.data.user.balances.LTC, 8);
-  assert.equal(s.data.transaction.status, 'pending');
-  await new Promise((r) => setTimeout(r, 300));
-  assert.equal((await c.get('/api/me')).data.user.balances.USDT, 139.3);
+  assert.equal(s.data.transaction.status, 'completed');
+  assert.ok(Math.abs(s.data.user.balances.LTC - 7.999) < 1e-9);
+  assert.ok(s.data.user.balances.USDT >= 139.3);
   const swaps = (await c.get('/api/wallet/transactions?type=swap')).data.transactions;
   assert.equal(swaps[0].status, 'completed');
   const one = (await c.get(`/api/wallet/transactions/${swaps[0].id}`)).data.transaction;
@@ -298,38 +280,34 @@ test('swap converts between cryptos with a 0.5% fee; explorer and tx details', a
   const deposits = (await c.get('/api/wallet/transactions?type=deposit')).data.transactions;
   assert.ok(deposits.every((t) => t.method !== 'buy'));
 });
-
-test('crypto deposits confirm block by block; withdrawals debit immediately', async () => {
+test('crypto deposits and withdrawals complete instantly, with no address checks', async () => {
   const c = await newPlayer(0);
   const addr = await c.post('/api/payments/crypto/address', { currency: 'LTC' });
   assert.match(addr.data.address, /^fakeltc-litecoin1/);
-  assert.equal(addr.data.minimum, 0.001);
   const sim = await c.post('/api/payments/crypto/simulate', { currency: 'LTC', amount: 2 });
-  assert.equal(sim.data.transaction.status, 'pending');
+  assert.equal(sim.data.transaction.status, 'completed');
+  assert.equal(sim.data.user.balances.LTC, 2);
   const dust = await c.post('/api/payments/crypto/simulate', { currency: 'LTC', amount: 0.0001 });
-  assert.equal(dust.data.transaction.status, 'failed');
-  assert.match(dust.data.transaction.details.reason, /below minimum/);
-  await new Promise((r) => setTimeout(r, 200));
-  const me = await c.get('/api/me');
-  assert.equal(me.data.user.balances.LTC, 2, 'the dust deposit is never credited');
-  const ltc = 'LcHKk2ayiXbHfBGiyM9x5i1PcybPbWRUW3';
-  assert.match((await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 1, address: 'Lsomewhere1234567' })).data.error, /Invalid LTC \(Litecoin\) address/);
-  const tooSmall = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 0.01, address: ltc });
-  assert.match(tooSmall.data.error, /Minimum withdrawal: 0.01857329 LTC/);
-  const w = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 1, address: ltc });
-  assert.equal(w.data.transaction.status, 'pending');
-  assert.equal(w.data.transaction.details.fee, 0.000138);
-  assert.equal(w.data.user.balances.LTC, 1);
-  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(dust.data.transaction.status, 'completed', 'no minimum deposit');
+  // Any address (or none) works and nothing waits.
+  const w = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 1, address: 'anything at all' });
+  assert.equal(w.status, 200, JSON.stringify(w.data));
+  assert.equal(w.data.transaction.status, 'completed');
+  assert.equal(w.data.transaction.details.fee, 0);
+  assert.ok(Math.abs(w.data.user.balances.LTC - 1.0001) < 1e-9);
+  const blank = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 0.0001 });
+  assert.equal(blank.status, 200, 'no address or minimum needed');
+  assert.match(blank.data.transaction.details.address, /^fakeltc-/);
+  assert.equal((await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 50 })).data.code, 'insufficient_balance');
+  const fiat = await c.post('/api/payments/withdraw', { currency: 'USD', amount: 1 });
+  assert.equal(fiat.data.code, 'insufficient_balance', 'fiat withdrawals need no saved card, only a balance');
   const txs = await c.get('/api/wallet/transactions?type=withdrawal');
-  assert.equal(txs.data.transactions[0].status, 'completed');
-  // USDT has several networks, each with its own address format.
+  assert.ok(txs.data.transactions.every((t) => t.status === 'completed'));
+  // USDT has several networks, each with its own deposit address.
   const trc = await c.post('/api/payments/crypto/address', { currency: 'USDT', network: 'trc20' });
   assert.match(trc.data.address, /^fakeusdt-trc201/);
   assert.equal(trc.data.networks.length, 5);
-  assert.match((await c.post('/api/payments/withdraw', { currency: 'USDT', network: 'trc20', amount: 5, address: '0x' + 'a'.repeat(40) })).data.error, /Invalid USDT \(Tron \(TRC20\)\) address/);
 });
-
 test('dice bets are settled server-side and verifiable after rotation', async () => {
   const c = await newPlayer();
   const bets = [];
@@ -693,23 +671,18 @@ test('offers: welcome code once per new wallet, drop codes with wager and claim 
   assert.ok(chat.some((m) => m.code === code), 'DropBot posts the code in chat');
 });
 
-test('bonus wagering: welcome bonus must be wagered 3x before withdrawing or tipping', async () => {
+test('bonuses carry no wagering requirement: withdraw or tip straight away', async () => {
   const c = await newPlayer(0);
   const r = await c.post('/api/offers/redeem', { code: 'WELCOME', currency: 'USD' });
-  assert.deepEqual(r.data.user.wagering, { requiredUsd: 60, remainingUsd: 60 });
-  const w = await c.post('/api/payments/withdraw', { currency: 'USD', amount: 10, cardId: 'x' });
-  assert.equal(w.status, 400);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.user.wagering, undefined);
   const other = await newPlayer(0);
   const tip = await c.post('/api/tips', { to: (await other.get('/api/me')).data.user.username, amount: 1, currency: 'USD' });
-  assert.equal(tip.data.code, 'wager_requirement');
-  for (let i = 0; i < 4; i++) await c.post('/api/games/limbo/bet', { amount: 10, currency: 'USD', params: { target: 1.01 } });
-  assert.equal((await c.get('/api/me')).data.user.wagering.remainingUsd, 20);
-  assert.match((await c.post('/api/tips', { to: (await other.get('/api/me')).data.user.username, amount: 1, currency: 'USD' })).data.error, /Wager \$20\.00 more/);
-  for (let i = 0; i < 2; i++) await c.post('/api/games/limbo/bet', { amount: 10, currency: 'USD', params: { target: 1.01 } });
-  assert.equal((await c.get('/api/me')).data.user.wagering.remainingUsd, 0);
-  assert.equal((await c.post('/api/tips', { to: (await other.get('/api/me')).data.user.username, amount: 1, currency: 'USD' })).status, 200);
+  assert.equal(tip.status, 200, JSON.stringify(tip.data));
+  const w = await c.post('/api/payments/withdraw', { currency: 'USD', amount: 10 });
+  assert.equal(w.status, 200, JSON.stringify(w.data));
+  assert.equal(w.data.transaction.status, 'completed');
 });
-
 test('new coins: XRP deposits use a shared address plus destination tag; USDC, BNB, BCH credit', async () => {
   const a = await newPlayer(0);
   const b = await newPlayer(0);
@@ -725,12 +698,9 @@ test('new coins: XRP deposits use a shared address plus destination tag; USDC, B
     assert.equal(r.status, 200, JSON.stringify(r.data));
     if (currency === 'XRP') assert.equal(r.data.transaction.details.tag, regen.tag);
   }
-  await waitFor(async () => (await a.get('/api/me')).data.user.balances.BNB === 0.05, 20000);
   const me = (await a.get('/api/me')).data.user;
-  assert.deepEqual([me.balances.XRP, me.balances.USDC, me.balances.BCH], [50, 20, 0.05]);
+  assert.deepEqual([me.balances.XRP, me.balances.USDC, me.balances.BNB, me.balances.BCH], [50, 20, 0.05, 0.05]);
   const addr = 'r' + 'a'.repeat(30);
-  assert.equal((await a.post('/api/payments/withdraw', { currency: 'XRP', amount: 10, address: addr, tag: 'abc' })).status, 400);
-  assert.equal((await a.post('/api/payments/withdraw', { currency: 'XRP', amount: 10, address: addr, tag: '99999999999' })).status, 400);
   const w = await a.post('/api/payments/withdraw', { currency: 'XRP', amount: 10, address: addr, tag: '104729' });
   assert.equal(w.status, 200, JSON.stringify(w.data));
   assert.equal(w.data.transaction.details.tag, '104729');
@@ -823,7 +793,7 @@ test('affiliate: campaigns, referral attach, commission on referred play, claim'
   const a = await fan.post('/api/affiliate/attach', { code: 'mystream' });
   assert.equal(a.status, 200, JSON.stringify(a.data));
   assert.equal((await fan.post('/api/affiliate/attach', { code: 'mystream' })).status, 400); // only once
-  await fan.post('/api/payments/card', { amount: 500, currency: 'USD', card: card('4242424242424242') });
+  await fan.post('/api/payments/card', { amount: 500, currency: 'USD' });
   for (let i = 0; i < 4; i++) await fan.post('/api/games/dice/bet', { amount: 100, currency: 'USD', params: { target: 50, condition: 'over' } });
   const view = (await owner.get('/api/affiliate')).data;
   // 4 × $100 on Dice (1% edge): 400 × 0.01 ÷ 2 × 10% = $0.20
@@ -844,26 +814,19 @@ test('affiliate: campaigns, referral attach, commission on referred play, claim'
   assert.match((await late.post('/api/affiliate/attach', { code: 'rivalpage' })).data.error, /Only new wallets/);
 });
 
-test('bank transfer and mobile wallet deposits', async () => {
+test('bank transfer and mobile wallet deposits are instant', async () => {
   const c = await newPlayer(0);
-  const start = await c.post('/api/payments/bank', { amount: 250, currency: 'EUR' });
-  assert.equal(start.status, 200, JSON.stringify(start.data));
-  const t = start.data.transaction;
-  assert.match(t.details.reference, /^FKS-[0-9A-F]{8}$/);
-  assert.match(t.details.account, /^FAKE/);
-  assert.equal(t.status, 'pending');
-  assert.equal((await c.post('/api/payments/bank', { amount: 5, currency: 'USD' })).status, 400);
-  const sim = await c.post('/api/payments/bank/simulate', { id: t.id });
-  assert.equal(sim.data.transaction.details.stage, 'received');
-  assert.equal((await c.post('/api/payments/bank/simulate', { id: t.id })).status, 400);
-  await waitFor(async () => (await c.get('/api/me')).data.user.balances.EUR === 250, 8000);
-  const second = (await c.post('/api/payments/bank', { amount: 40, currency: 'USD' })).data.transaction;
-  assert.equal((await c.post('/api/payments/bank/cancel', { id: second.id })).data.transaction.status, 'failed');
+  const bank = await c.post('/api/payments/bank', { amount: 250, currency: 'EUR' });
+  assert.equal(bank.status, 200, JSON.stringify(bank.data));
+  assert.match(bank.data.transaction.details.reference, /^FKS-[0-9A-F]{8}$/);
+  assert.equal(bank.data.transaction.status, 'completed');
+  assert.equal(bank.data.user.balances.EUR, 250);
+  assert.equal((await c.post('/api/payments/bank', { amount: 5, currency: 'USD' })).status, 200, 'no minimum');
   const m = await c.post('/api/payments/mobile', { amount: 30, currency: 'USD' });
   assert.equal(m.status, 200);
-  assert.equal(m.data.user.balances.USD, 30);
+  assert.equal(m.data.user.balances.USD, 35);
   const deposits = (await c.get('/api/wallet/transactions?type=deposit')).data.transactions.map((x) => `${x.method}:${x.status}`);
-  assert.deepEqual(deposits, ['mobile_wallet:completed', 'bank:failed', 'bank:completed']);
+  assert.deepEqual(deposits, ['mobile_wallet:completed', 'bank:completed', 'bank:completed']);
 });
 
 test('daily race: standings, my position, and prizes paid when the day ends', async () => {
@@ -1003,16 +966,16 @@ test('deposit limits and breaks are enforced server-side', async () => {
   const c = await newPlayer(100);
   assert.equal((await c.post('/api/account/limits', { depositDailyUsd: 5 })).status, 400);
   await c.post('/api/account/limits', { depositDailyUsd: 150 });
-  const over = await c.post('/api/payments/card', { amount: 60, currency: 'USD', card: card('4242424242424242') });
+  const over = await c.post('/api/payments/card', { amount: 60, currency: 'USD' });
   assert.equal(over.data.code, 'deposit_limit', 'the earlier $100 deposit counts toward the limit');
-  assert.equal((await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('4242424242424242') })).status, 200);
+  assert.equal((await c.post('/api/payments/card', { amount: 50, currency: 'USD' })).status, 200);
   const brk = await c.post('/api/account/limits', { breakHours: 24 });
   assert.ok(brk.data.user.limits.breakUntil > Date.now());
   const bet = await c.post('/api/games/dice/bet', { amount: 1, currency: 'USD', params: { target: 50, condition: 'over' } });
   assert.equal(bet.status, 403);
   assert.equal(bet.data.code, 'on_break');
   assert.equal((await c.post('/api/crash/bet', { amount: 1, currency: 'USD' })).status, 403);
-  assert.equal((await c.post('/api/payments/card', { amount: 10, currency: 'USD', card: card('4242424242424242') })).status, 403);
+  assert.equal((await c.post('/api/payments/card', { amount: 10, currency: 'USD' })).status, 403);
 });
 
 test('cross-origin POSTs and non-JSON bodies are rejected', async () => {

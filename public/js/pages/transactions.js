@@ -167,10 +167,10 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
 
 function methodLabel(t) {
   const d = t.details || {};
-  if (t.method === 'buy') return `${coin(t.currency)} Purchased via ${esc(d.provider || 'provider')} <span class="dim" style="font-size:12px">${brandChip(d.brand || 'unknown')} •••• ${esc(d.last4 || '')}</span>`;
+  if (t.method === 'buy') return `${coin(t.currency)} Purchased via ${esc(d.provider || 'provider')}${d.last4 ? ` <span class="dim" style="font-size:12px">${brandChip(d.brand || 'unknown')} •••• ${esc(d.last4)}</span>` : ''}`;
   if (t.method === 'bank') return `${icon('bank', 16)} Bank transfer <span class="dim mono" style="font-size:11px">${esc(d.reference || '')}</span>`;
   if (t.method === 'mobile_wallet') return `${icon('wallet', 16)} ${esc(d.wallet || 'Mobile wallet')}`;
-  if (t.method === 'card') return `${brandChip(d.brand || 'unknown')} •••• ${esc(d.last4 || '')}${d.threeDS ? ' <span class="pill blue">3DS</span>' : ''}`;
+  if (t.method === 'card') return d.last4 ? `${brandChip(d.brand || 'unknown')} •••• ${esc(d.last4)}` : `${icon('card', 16)} Card`;
   if (t.method === 'crypto') return `${coin(t.currency)} ${esc(d.networkLabel || d.network || t.currency)} ${d.address ? `<span class="dim mono" style="font-size:11px">${esc(d.address.slice(0, 14))}…</span>` : ''}`;
   if (t.type === 'swap') return `${coin(d.from)} ${icon('right', 12)} ${coin(t.currency)} ${d.from} → ${t.currency}`;
   if (t.type === 'tip') return `${icon('coins', 16)} ${d.direction === 'out' ? `Tip to @${esc(d.counterparty)}` : `Tip from @${esc(d.counterparty)}`}`;

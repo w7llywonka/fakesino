@@ -91,9 +91,9 @@ function body(t) {
       ${d.tag ? line('Destination tag', `<span class="mono">${esc(d.tag)}</span>`, d.tag) : ''}
       ${d.txHash ? line('Tx hash', `<span class="mono">${esc(short(d.txHash, 8))}</span>`, d.txHash) : ''}
       ${d.required ? line('Confirmations', `${Math.min(d.confirmations ?? 0, d.required)}/${d.required}`) : ''}
-      ${t.method === 'bank' ? line('Bank', `${esc(d.bank)} <span class="dim">(fictional)</span>`) + line('Reference', `<span class="mono">${esc(d.reference)}</span>`, d.reference) : ''}
+      ${t.method === 'bank' ? line('Bank', `${esc(d.bank || 'Fakesino Demo Bank')} <span class="dim">(fictional)</span>`) + (d.reference ? line('Reference', `<span class="mono">${esc(d.reference)}</span>`, d.reference) : '') : ''}
       ${t.method === 'mobile_wallet' ? line('Wallet', `${esc(d.wallet)} •••• ${esc(d.last4)}`) : ''}
-      ${d.brand ? line('Card', `${brandChip(d.brand)} •••• ${esc(d.last4 || '')}${d.threeDS ? ' <span class="pill blue">3DS</span>' : ''}`) : ''}
+      ${d.brand && d.last4 ? line('Card', `${brandChip(d.brand)} •••• ${esc(d.last4)}`) : ''}
       ${d.declineCode ? line('Decline code', `<span class="mono">${esc(d.declineCode)}</span>`) : ''}
       ${d.counterparty ? line(d.direction === 'out' ? 'To' : 'From', `@${esc(d.counterparty)}`) : ''}
       ${d.from && t.type !== 'swap' && typeof d.from === 'string' ? line('From', esc(d.from)) : ''}

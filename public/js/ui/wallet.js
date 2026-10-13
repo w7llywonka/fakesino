@@ -1,16 +1,15 @@
-import { el, esc, on, sleep, copyText } from '../dom.js';
+import { el, esc, on, copyText } from '../dom.js';
 import { icon, coin } from '../icons.js';
 import { api } from '../api.js';
 import { state, bus, currency, balanceOf, setUser, setCurrency } from '../state.js';
 import { CURRENCIES, CURRENCY_CODES, roundDown } from '../shared/currencies.js';
-import { DEMO_CARDS, DEMO_3DS_CODE, luhn, cardBrand, demoCard, formatCardNumber } from '../shared/cards.js';
 import * as fmt from '../format.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toastSuccess, toastError, toast } from './toast.js';
-import { showFieldErrors, twoFactorField, wageringNotice } from './forms.js';
+import { showFieldErrors, twoFactorField } from './forms.js';
 import { qrSvg } from '../shared/qr.js';
-import { networksFor, networkFor, validAddress } from '../shared/networks.js';
+import { networksFor, networkFor } from '../shared/networks.js';
 import { helpTip } from './helptip.js';
 
 const TABS = [
@@ -127,43 +126,36 @@ function depositTab({ body, offs, modal }) {
   render();
 }
 
-function fiatDeposit(container, { fiat, credit, offs, modal, title = null }) {
-  const cards = state.user.cards || [];
+// Play money: pick a method and an amount — it's credited straight away.
+const FIAT_METHODS = [
+  ['card', 'card', 'Credit / Debit card', 'Instant · No fees', () => `${brandChip('visa')}${brandChip('mastercard')}${brandChip('amex')}`],
+  ['mobile', 'wallet', 'Mobile wallet', 'Instant · Demo Pay', () => '<span class="brand-chip demo">PAY</span>'],
+  ['bank', 'bank', 'Bank transfer', 'Instant · No fees', () => '<span class="brand-chip demo">BANK</span>'],
+];
+const DEPOSIT_URL = { card: '/api/payments/card', mobile: '/api/payments/mobile', bank: '/api/payments/bank' };
+const METHOD_NAME = { card: 'Card', mobile_wallet: 'Demo Pay', bank: 'Bank transfer' };
+
+function fiatDeposit(container, { fiat, credit, modal }) {
   const sym = CURRENCIES[fiat].symbol;
   let amount = 100;
-  let method = cards[0]?.id || 'new';
-
+  let method = 'card';
   const view = el(`<div>
-    ${title ? `<div class="muted" style="margin-bottom:10px">${title}</div>` : ''}
     <div class="field"><div class="field-label">Payment method</div><div class="method-list"></div></div>
-    <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="muted">Min ${sym}10 · Max ${sym}100,000</span></div>
+    <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="muted">Max ${sym}100,000</span></div>
       <div class="amount-presets">${[20, 50, 100, 500].map((v) => `<button type="button" data-v="${v}">${sym}${v}</button>`).join('')}</div>
       <div class="input-suffix"><input class="input" inputmode="decimal" value="${amount}"><span class="suffix">${coin(fiat)}</span></div>
       <div class="field-error"></div></div>
     <div class="summary"></div>
-    <button class="btn btn-primary btn-block btn-lg" data-act="continue">Continue</button>
+    <button class="btn btn-primary btn-block btn-lg" data-act="deposit">Deposit</button>
   </div>`);
   container.appendChild(view);
 
   const methods = view.querySelector('.method-list');
   const renderMethods = () => {
-    methods.innerHTML =
-      cards
-        .map(
-          (c) => `<button type="button" class="method ${method === c.id ? 'selected' : ''}" data-m="${c.id}">${icon('card', 20)}
-        <div><div class="m-title">${BRAND_LABEL[c.brand] === 'MC' ? 'Mastercard' : c.brand[0].toUpperCase() + c.brand.slice(1)} •••• ${esc(c.last4)}</div><div class="m-sub">Expires ${String(c.expMonth).padStart(2, '0')}/${String(c.expYear).slice(-2)} · Saved card</div></div>
-        <div class="m-right">${brandChip(c.brand)}</div></button>`,
-        )
-        .join('') +
-      `<button type="button" class="method ${method === 'new' ? 'selected' : ''}" data-m="new">${icon('plus', 20)}
-        <div><div class="m-title">Credit / Debit card</div><div class="m-sub">Instant · No fees · Demo cards only</div></div>
-        <div class="m-right">${brandChip('visa')}${brandChip('mastercard')}${brandChip('amex')}</div></button>` +
-      (title
-        ? ''
-        : `<button type="button" class="method ${method === 'mobile' ? 'selected' : ''}" data-m="mobile">${icon('wallet', 20)}
-        <div><div class="m-title">Mobile wallet</div><div class="m-sub">Instant · Demo Pay</div></div><div class="m-right"><span class="brand-chip demo">PAY</span></div></button>
-      <button type="button" class="method ${method === 'bank' ? 'selected' : ''}" data-m="bank">${icon('bank', 20)}
-        <div><div class="m-title">Bank transfer</div><div class="m-sub">~10 seconds here · No fees</div></div><div class="m-right"><span class="brand-chip demo">BANK</span></div></button>`);
+    methods.innerHTML = FIAT_METHODS.map(
+      ([key, ic, title, sub, chips]) => `<button type="button" class="method ${method === key ? 'selected' : ''}" data-m="${key}">${icon(ic, 20)}
+        <div><div class="m-title">${title}</div><div class="m-sub">${sub}</div></div><div class="m-right">${chips()}</div></button>`,
+    ).join('');
   };
   renderMethods();
   on(methods, 'click', '[data-m]', (e, b) => {
@@ -192,297 +184,39 @@ function fiatDeposit(container, { fiat, credit, offs, modal, title = null }) {
     renderSummary();
   });
 
-  view.querySelector('[data-act=continue]').addEventListener('click', () => {
-    const f = view.querySelector('[data-field=amount]');
-    if (amount < 10 || amount > 100000) {
-      f.classList.add('invalid');
-      f.querySelector('.field-error').textContent = `Enter an amount between ${sym}10 and ${sym}100,000`;
-      return;
-    }
-    f.classList.remove('invalid');
-    view.remove();
-    if (method === 'bank') return bankStep(container, { amount: roundDown(fiat, amount), fiat, offs, modal });
-    if (method === 'mobile') return mobileStep(container, { amount: roundDown(fiat, amount), fiat, modal });
-    cardStep(container, { amount: roundDown(fiat, amount), fiat, credit, savedCard: cards.find((c) => c.id === method) || null, offs, modal });
-  });
-}
-
-function cardStep(container, { amount, fiat, credit, savedCard, modal, extra = null }) {
-  const sym = CURRENCIES[fiat].symbol;
-  const total = `${sym}${fmt.amount(amount, fiat)}`;
-  const demoList = Object.entries(DEMO_CARDS)
-    .map(([num, c]) => `<button type="button" class="demo-card-btn" data-num="${num}">${brandChip(c.brand)}<span class="num">${formatCardNumber(num)}</span><span class="lbl">${esc(c.label.split('·')[1].trim())}</span></button>`)
-    .join('');
-  const exp = new Date();
-  const demoExp = `${String(exp.getMonth() + 1).padStart(2, '0')}/${String((exp.getFullYear() + 3) % 100).padStart(2, '0')}`;
-
-  const view = el(`<form class="card-form" novalidate autocomplete="off">
-    <button type="button" class="btn btn-ghost btn-sm" data-act="back" style="margin:-4px 0 10px -8px">${icon('left', 16)} Back</button>
-    ${
-      savedCard
-        ? `<div class="method selected" style="margin-bottom:14px">${icon('card', 20)}<div><div class="m-title">•••• ${esc(savedCard.last4)}</div><div class="m-sub">${esc(savedCard.name)}</div></div><div class="m-right">${brandChip(savedCard.brand)}</div></div>
-           <div class="field" data-field="cvc"><label class="field-label">Security code (CVC)</label><input class="input" name="cvc" inputmode="numeric" maxlength="${savedCard.brand === 'amex' ? 4 : 3}" placeholder="${savedCard.brand === 'amex' ? '1234' : '123'}"><div class="field-error"></div></div>`
-        : `<div class="demo-notice">${icon('info', 16)}<div><b>Demo checkout.</b> Real cards are refused and never leave your browser. Tap a demo card to fill it in — any future expiry date, any CVC.</div></div>
-      <div class="demo-cards">${demoList}</div>
-      <div class="field" data-field="number"><label class="field-label">Card number</label>
-        <div class="card-number-wrap"><input class="input mono" name="number" inputmode="numeric" placeholder="1234 1234 1234 1234" maxlength="23">${brandChip('unknown')}</div><div class="field-error"></div></div>
-      <div class="row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="field" data-field="exp"><label class="field-label">Expiry</label><input class="input mono" name="exp" inputmode="numeric" placeholder="MM / YY" maxlength="7"><div class="field-error"></div></div>
-        <div class="field" data-field="cvc"><label class="field-label">CVC</label><input class="input mono" name="cvc" inputmode="numeric" placeholder="123" maxlength="4"><div class="field-error"></div></div>
-      </div>
-      <div class="field" data-field="name"><label class="field-label">Name on card</label><input class="input" name="name" placeholder="Full name" value="${esc(state.user.username)}"><div class="field-error"></div></div>
-      <div class="row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="field"><label class="field-label">Country</label><select class="select" name="country">${['United States', 'United Kingdom', 'Canada', 'Germany', 'Australia', 'Other'].map((c) => `<option value="${c}">${c}</option>`).join('')}</select></div>
-        <div class="field"><label class="field-label">ZIP / Postal code</label><input class="input" name="zip" placeholder="12345"></div>
-      </div>
-      <label class="checkbox" style="margin-bottom:14px"><input type="checkbox" name="save" checked><span>Save this card for faster deposits</span></label>`
-    }
-    <div class="field-error form-error" style="margin-bottom:10px"></div>
-    <button class="btn btn-primary btn-block btn-lg" type="submit">${icon('lock', 16)} Pay ${total}</button>
-  </form>`);
-  container.innerHTML = '';
-  container.appendChild(view);
-
-  view.querySelector('[data-act=back]').addEventListener('click', () => {
-    container.innerHTML = '';
-    fiatDeposit(container, { fiat, credit, modal, offs: [] });
-  });
-
-  const num = view.querySelector('[name=number]');
-  const expInput = view.querySelector('[name=exp]');
-  if (num) {
-    const chip = view.querySelector('.card-number-wrap .brand-chip');
-    const updateBrand = () => {
-      const b = cardBrand(num.value);
-      chip.className = `brand-chip ${b}`;
-      chip.textContent = BRAND_LABEL[b];
-    };
-    num.addEventListener('input', () => {
-      const pos = num.selectionStart;
-      const before = num.value.length;
-      num.value = formatCardNumber(num.value.replace(/\D/g, '').slice(0, 16));
-      num.setSelectionRange(pos + (num.value.length - before), pos + (num.value.length - before));
-      updateBrand();
-    });
-    expInput.addEventListener('input', () => {
-      const d = expInput.value.replace(/\D/g, '').slice(0, 4);
-      expInput.value = d.length > 2 ? `${d.slice(0, 2)} / ${d.slice(2)}` : d;
-    });
-    on(view, 'click', '.demo-card-btn', (e, b) => {
-      num.value = formatCardNumber(b.dataset.num);
-      expInput.value = demoExp.replace('/', ' / ');
-      view.querySelector('[name=cvc]').value = cardBrand(b.dataset.num) === 'amex' ? '1234' : '123';
-      if (!view.querySelector('[name=zip]').value) view.querySelector('[name=zip]').value = '10001';
-      updateBrand();
-      view.querySelectorAll('.field.invalid').forEach((f) => f.classList.remove('invalid'));
-    });
-  }
-
-  view.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = Object.fromEntries(new FormData(view));
-    const payload = { amount, currency: fiat, creditCurrency: credit, ...(extra || {}) };
-    if (savedCard) {
-      payload.savedCardId = savedCard.id;
-      payload.cvc = fd.cvc;
-    } else {
-      // Client-side checks: a non-demo card is never sent to the server.
-      const digits = String(fd.number || '').replace(/\D/g, '');
-      const fail = (field, message) => showFieldErrors(view, { field, message });
-      if (digits.length < 13 || !luhn(digits)) return fail('number', 'Your card number is invalid.');
-      if (!demoCard(digits)) return fail('number', 'Real cards are not accepted. This is a play-money casino — use a demo card above.');
-      const [mm, yy] = String(fd.exp || '').split('/').map((s) => s.trim());
-      if (!mm || !yy || Number(mm) < 1 || Number(mm) > 12) return fail('exp', "Your card's expiration date is incomplete.");
-      const cvcLen = cardBrand(digits) === 'amex' ? 4 : 3;
-      if (!new RegExp(`^\\d{${cvcLen}}$`).test(fd.cvc || '')) return fail('cvc', "Your card's security code is incomplete.");
-      if (!String(fd.name || '').trim()) return fail('name', 'Enter the name on the card.');
-      payload.card = { number: digits, expMonth: Number(mm), expYear: Number(yy), cvc: fd.cvc, name: fd.name, zip: fd.zip };
-      payload.saveCard = !!view.querySelector('[name=save]')?.checked;
-    }
-    view.querySelectorAll('.field.invalid').forEach((f) => f.classList.remove('invalid'));
-    const formError = view.querySelector('.form-error');
-    formError.style.display = 'none';
-    container.innerHTML = '';
-    const processing = el(`<div class="processing"><div class="spinner"></div><b>Processing payment…</b><div class="muted" style="margin-top:4px">${total} · Do not close this window</div></div>`);
-    container.appendChild(processing);
-    try {
-      const [res] = await Promise.all([api.post('/api/payments/card', payload), sleep(1100)]);
-      handlePaymentResult(container, res, { amount, fiat, credit, modal, retry: () => cardStep(container, { amount, fiat, credit, savedCard, modal, extra }) });
-    } catch (err) {
-      container.innerHTML = '';
-      cardStep(container, { amount, fiat, credit, savedCard, modal, extra });
-      const form = container.querySelector('form');
-      showFieldErrors(form, err);
-    }
-  });
-}
-
-function handlePaymentResult(container, res, opts) {
-  if (res.user) setUser(res.user);
-  const p = res.payment;
-  if (p.status === 'requires_action') return threeDS(container, p, opts);
-  if (p.status === 'succeeded') return paymentSuccess(container, res, opts);
-  return paymentFailed(container, p, opts);
-}
-
-function threeDS(container, payment, opts) {
-  const sym = CURRENCIES[opts.fiat].symbol;
-  container.innerHTML = '';
-  const view = el(`<div>
-    <div class="muted" style="margin-bottom:10px;font-size:13px">Your bank needs to confirm this payment.</div>
-    <div class="threeds">
-      <div class="threeds-head"><span>${icon('shield', 18)} DemoBank SecureCode</span>${brandChip(payment.brand)}</div>
-      <div class="threeds-body">
-        <div style="font-weight:800;font-size:15px;margin-bottom:8px">Verify your purchase</div>
-        <div class="muted" style="display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-bottom:14px">
-          <span>Merchant</span><b style="color:#1c2633">Fakesino (demo)</b>
-          <span>Amount</span><b style="color:#1c2633">${sym}${fmt.amount(payment.amount, opts.fiat)}</b>
-          <span>Card</span><b style="color:#1c2633">•••• ${esc(payment.last4)}</b>
-        </div>
-        <p class="muted" style="margin:0 0 10px">We sent a one-time code to your phone. For this demo, the code is <b style="color:#1c2633">${DEMO_3DS_CODE}</b>.</p>
-        <form><div class="field" data-field="code"><input class="input" name="code" inputmode="numeric" maxlength="6" placeholder="••••••" autocomplete="one-time-code"><div class="field-error"></div></div>
-        <div class="field-error form-error" style="margin-bottom:8px"></div>
-        <button class="btn btn-blue btn-block" type="submit">Submit</button>
-        <button class="btn btn-secondary btn-block" type="button" data-act="cancel" style="margin-top:8px">Cancel payment</button></form>
-      </div>
-    </div></div>`);
-  container.appendChild(view);
-  const form = view.querySelector('form');
-  setTimeout(() => form.querySelector('input').focus(), 30);
-  const submit = async (body) => {
-    const btn = form.querySelector('[type=submit]');
+  view.querySelector('[data-act=deposit]').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
     btn.classList.add('loading');
     try {
-      const res = await api.post(`/api/payments/${payment.id}/authenticate`, body);
-      handlePaymentResult(container, res, opts);
+      const res = await api.post(DEPOSIT_URL[method], { amount: roundDown(fiat, amount), currency: fiat, creditCurrency: credit });
+      paymentSuccess(container, res, { modal });
     } catch (err) {
       btn.classList.remove('loading');
-      if (err.code === 'authentication_failed') return paymentFailed(container, { ...payment, message: err.message }, opts);
-      showFieldErrors(form, err);
+      showFieldErrors(view, err);
     }
-  };
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    submit({ code: form.code.value.trim() });
   });
-  view.querySelector('[data-act=cancel]').addEventListener('click', () => submit({ cancel: true }));
 }
 
 function paymentSuccess(container, res, { modal }) {
+  if (res.user) setUser(res.user);
   const tx = res.transaction;
   container.innerHTML = '';
   if (tx.method === 'buy') return purchaseComplete(container, tx, modal);
+  const paid = tx.fiat || { currency: tx.currency, amount: tx.amount };
   const view = el(`<div class="success-state">
     <div class="check">${icon('check', 34)}</div>
     <h3>Deposit successful</h3>
     <div class="muted">Your play-money balance has been topped up.</div>
     <div class="summary" style="text-align:left;margin-top:16px">
       <div class="line"><span>Credited</span><b style="display:flex;gap:6px;align-items:center">${fmt.amount(tx.amount, tx.currency)} ${coin(tx.currency)}</b></div>
-      <div class="line"><span>Paid</span><b>${CURRENCIES[tx.fiat.currency].symbol}${fmt.amount(tx.fiat.amount, tx.fiat.currency)} · ${brandChip(tx.details.brand)} •••• ${esc(tx.details.last4)}</b></div>
-      <div class="line"><span>Reference</span><b class="mono" style="font-size:12px">${esc(tx.ref.slice(0, 16))}</b></div>
+      <div class="line"><span>Paid</span><b>${CURRENCIES[paid.currency].symbol}${fmt.amount(paid.amount, paid.currency)} · <span>${METHOD_NAME[tx.method] || 'Card'}</span></b></div>
+      <div class="line"><span>Reference</span><b class="mono" style="font-size:12px">${esc(String(tx.ref || '').slice(0, 16))}</b></div>
     </div>
     <button class="btn btn-primary btn-block btn-lg" data-act="play">Start playing</button>
   </div>`);
   container.appendChild(view);
   if (currency() !== tx.currency) setCurrency(tx.currency);
-  toastSuccess('Deposit confirmed', `${fmt.amount(tx.amount, tx.currency)} ${tx.currency} added to your balance`);
   view.querySelector('[data-act=play]').addEventListener('click', () => modal.close());
-}
-
-// Bank transfer: fake account details and a reference; "send" it with a button.
-async function bankStep(container, { amount, fiat, offs, modal }) {
-  const view = el('<div><div class="spinner"></div></div>');
-  container.appendChild(view);
-  let tx;
-  try {
-    ({ transaction: tx } = await api.post('/api/payments/bank', { amount, currency: fiat }));
-  } catch (err) {
-    view.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
-    return;
-  }
-  const d = tx.details;
-  const row = (label, value, copy = value) => `<div class="line"><span>${label}</span><span class="row" style="gap:6px"><b class="mono">${esc(value)}</b><button class="icon-btn" data-copy="${esc(copy)}" aria-label="Copy ${label}">${icon('copy', 14)}</button></span></div>`;
-  view.innerHTML = `<div class="muted" style="margin-bottom:10px">Send exactly <b>${CURRENCIES[fiat].symbol}${fmt.amount(amount, fiat)}</b> to this account and include the reference.</div>
-    <div class="summary bank-details">${row('Bank', d.bank)}${row('Account name', d.accountName)}${row('Account', d.account)}${row('Routing', d.routing)}${row('Reference', d.reference)}${row('Amount', `${fmt.amount(amount, fiat)} ${fiat}`, String(amount))}</div>
-    <div class="demo-notice warn" style="margin:12px 0">${icon('alert', 16)}<div>This bank and account are fictional. Nothing is ever sent — press the button below to simulate the transfer.</div></div>
-    <button class="btn btn-primary btn-block btn-lg" data-act="sent">I’ve sent it (simulate)</button>
-    <button class="btn btn-secondary btn-block" data-act="cancel" style="margin-top:8px">Cancel transfer</button>`;
-  on(view, 'click', '[data-copy]', async (e, b) => {
-    await copyText(b.dataset.copy);
-    toast({ type: 'success', title: 'Copied' });
-  });
-  view.querySelector('[data-act=cancel]').addEventListener('click', async () => {
-    await api.post('/api/payments/bank/cancel', { id: tx.id }).catch(() => {});
-    container.innerHTML = '';
-    fiatDeposit(container, { fiat, credit: fiat, offs, modal });
-  });
-  view.querySelector('[data-act=sent]').addEventListener('click', async (e) => {
-    e.currentTarget.classList.add('loading');
-    try {
-      await api.post('/api/payments/bank/simulate', { id: tx.id });
-    } catch (err) {
-      toastError(err);
-      return;
-    }
-    view.innerHTML = `<div class="success-state"><div class="check pending">${icon('bank', 30)}</div><h3>Transfer on its way</h3>
-      <div class="muted">Reference <b class="mono">${esc(d.reference)}</b>. It’s credited as soon as it arrives.</div>
-      <div class="tx-progress" style="justify-content:space-between"><span>Status</span><span class="pill yellow status">Processing</span></div></div>`;
-  });
-  offs.push(
-    bus.on('live:tx', (t) => {
-      if (t.id !== tx.id || t.status !== 'completed') return;
-      container.innerHTML = '';
-      const done = el(`<div class="success-state"><div class="check">${icon('check', 34)}</div><h3>Deposit received</h3>
-        <div class="muted">${CURRENCIES[fiat].symbol}${fmt.amount(t.amount, fiat)} has been added to your balance.</div>
-        <button class="btn btn-primary btn-block btn-lg" data-act="play" style="margin-top:16px">Start playing</button></div>`);
-      container.appendChild(done);
-      if (currency() !== t.currency) setCurrency(t.currency);
-      done.querySelector('[data-act=play]').addEventListener('click', () => modal.close());
-    }),
-  );
-}
-
-// Mobile wallet: a one-tap "Demo Pay" sheet.
-function mobileStep(container, { amount, fiat, modal }) {
-  const sym = CURRENCIES[fiat].symbol;
-  const view = el(`<div class="demo-pay">
-    <div class="dp-head">${icon('wallet', 18)} <b>Demo Pay</b><span class="dim" style="margin-left:auto">Play money</span></div>
-    <div class="dp-card"><span class="brand-chip demo">PAY</span><div><div class="m-title">Demo card</div><div class="m-sub">•••• 4242</div></div></div>
-    <div class="summary"><div class="line"><span>Pay Fakesino (play money)</span><b>${sym}${fmt.amount(amount, fiat)}</b></div></div>
-    <button class="btn btn-primary btn-block btn-lg" data-act="pay">Pay ${sym}${fmt.amount(amount, fiat)}</button>
-    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">Demo Pay is fictional. Nothing is charged.</div></div>`);
-  container.appendChild(view);
-  view.querySelector('[data-act=pay]').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
-    btn.classList.add('loading');
-    try {
-      const res = await api.post('/api/payments/mobile', { amount, currency: fiat });
-      setUser(res.user);
-      container.innerHTML = '';
-      const done = el(`<div class="success-state"><div class="check">${icon('check', 34)}</div><h3>Deposit successful</h3>
-        <div class="muted">${sym}${fmt.amount(amount, fiat)} paid with Demo Pay.</div>
-        <button class="btn btn-primary btn-block btn-lg" data-act="play" style="margin-top:16px">Start playing</button></div>`);
-      container.appendChild(done);
-      if (currency() !== fiat) setCurrency(fiat);
-      done.querySelector('[data-act=play]').addEventListener('click', () => modal.close());
-    } catch (err) {
-      btn.classList.remove('loading');
-      toastError(err);
-    }
-  });
-}
-
-function paymentFailed(container, payment, opts) {
-  container.innerHTML = '';
-  const view = el(`<div class="success-state fail">
-    <div class="check">${icon('close', 30)}</div>
-    <h3>Payment declined</h3>
-    <div class="muted">${esc(payment.message || 'Your card was declined.')}</div>
-    ${payment.declineCode ? `<div class="pill red" style="margin-top:10px">${esc(payment.declineCode)}</div>` : ''}
-    <button class="btn btn-secondary btn-block btn-lg" data-act="retry" style="margin-top:18px">Try another card</button>
-  </div>`);
-  container.appendChild(view);
-  view.querySelector('[data-act=retry]').addEventListener('click', () => opts.retry());
 }
 
 // --- crypto deposit -----------------------------------------------------------
@@ -511,17 +245,15 @@ function cryptoDeposit(container, code, offs) {
           <div class="address-box"><span style="flex:1" class="addr">${esc(info.address)}</span><button class="btn btn-secondary btn-sm" data-act="copy">${icon('copy', 14)} Copy</button></div></div>
         ${
           info.tag
-            ? `<div class="field"><div class="field-label"><span>Destination tag <span class="pill red" style="margin-left:4px">Required</span></span>${helpTip('Destination tag')}</div>
-          <div class="address-box"><span style="flex:1" class="addr">${esc(info.tag)}</span><button class="btn btn-secondary btn-sm" data-copy-tag>${icon('copy', 14)} Copy</button></div></div>
-          <div class="demo-notice warn" style="margin:0 0 14px">${icon('alert', 16)}<div>Both the address and the destination tag are required. A ${code} deposit without the tag can't be matched to your wallet.</div></div>`
+            ? `<div class="field"><div class="field-label"><span>Destination tag</span>${helpTip('Destination tag')}</div>
+          <div class="address-box"><span style="flex:1" class="addr">${esc(info.tag)}</span><button class="btn btn-secondary btn-sm" data-copy-tag>${icon('copy', 14)} Copy</button></div></div>`
             : ''
         }
-        <div class="qr-wrap">${qrSvg(info.address)}<div class="muted" style="font-size:12.5px">Only send <b>${code}</b> via <b>${esc(net.label)}</b> to this address. Other coins or networks will be lost. ${info.confirmations} confirmation${info.confirmations > 1 ? 's' : ''} required.
-          <div style="margin-top:8px">Minimum deposit: <b>${fmt.amount(info.minimum, code)} ${code}</b></div>
-          <div class="demo-notice warn" style="margin:10px 0 0">${icon('alert', 16)}<div>This is a fake address that exists on no blockchain. Never send real crypto to it — it would be lost.</div></div></div></div>
+        <div class="qr-wrap">${qrSvg(info.address)}<div class="muted" style="font-size:12.5px">
+          <div class="demo-notice warn" style="margin:0">${icon('alert', 16)}<div>This is a fake address that exists on no blockchain. Never send real crypto to it — it would be lost.</div></div></div></div>
         <div class="divider"></div>
         <div style="font-weight:800;margin-bottom:8px">Simulate an incoming transfer</div>
-        <div class="muted" style="font-size:13px;margin-bottom:10px">Pretend you sent ${code} from another wallet. It shows up as pending and confirms block by block, just like a real deposit.</div>
+        <div class="muted" style="font-size:13px;margin-bottom:10px">Pretend you sent coins from another wallet. They’re added to your balance straight away.</div>
         <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux muted"></span></div>
           <div class="input-group"><div class="input-icon"><input class="input" inputmode="decimal" value="${fmt.inputAmount(roundDown(code, 100 / CURRENCIES[code].usd), code)}"><span class="suffix">${coin(code)}</span></div>
           ${[100, 1000].map((u) => `<button class="addon" data-usd="${u}">$${u >= 1000 ? `${u / 1000}k` : u}</button>`).join('')}</div><div class="field-error"></div></div>
@@ -559,21 +291,16 @@ function cryptoDeposit(container, code, offs) {
         const btn = e.currentTarget;
         btn.classList.add('loading');
         try {
-          const { transaction } = await api.post('/api/payments/crypto/simulate', { currency: code, network: net.id, amount: Number(amountInput.value) });
+          const { transaction, user } = await api.post('/api/payments/crypto/simulate', { currency: code, network: net.id, amount: Number(amountInput.value) });
+          if (user) setUser(user);
           txList.prepend(txRow(transaction));
+          toastSuccess('Deposit received', `${fmt.amount(transaction.amount, transaction.currency)} ${transaction.currency} credited`);
         } catch (err) {
           showFieldErrors(view, err);
         } finally {
           btn.classList.remove('loading');
         }
       });
-      offs.push(
-        bus.on('live:tx', (tx) => {
-          const row = txList.querySelector(`[data-tx="${tx.id}"]`);
-          if (row) row.replaceWith(txRow(tx));
-          if (tx.status === 'completed' && tx.type === 'deposit') toastSuccess('Deposit confirmed', `${fmt.amount(tx.amount, tx.currency)} ${tx.currency} credited`);
-        }),
-      );
     })
     .catch((err) => (view.innerHTML = `<div class="empty">${esc(err.message)}</div>`));
 }
@@ -583,7 +310,7 @@ function txRow(tx) {
   const pct = d.required ? Math.min(100, (d.confirmations / d.required) * 100) : 100;
   return el(`<div class="tx-progress" data-tx="${tx.id}">${coin(tx.currency, 22)}
     <div style="flex:1;min-width:0"><div class="row between"><b>${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b>
-      ${tx.status === 'completed' ? '<span class="pill green">Confirmed</span>' : tx.status === 'failed' ? `<span class="pill red">${esc(d.reason || 'Failed')}</span>` : `<span class="pill yellow">${d.confirmations}/${d.required} confirmations</span>`}</div>
+      ${tx.status === 'failed' ? `<span class="pill red">${esc(d.reason || 'Failed')}</span>` : '<span class="pill green">Credited</span>'}</div>
       <div class="progress" style="margin-top:8px"><div style="width:${pct}%"></div></div></div></div>`);
 }
 
@@ -616,11 +343,11 @@ function buyTab({ body, offs, modal }) {
     const sym = CURRENCIES[fiat].symbol;
     const view = el(`<form novalidate>
       ${networkSelect(coin, network)}
-      <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="muted">Min ${sym}10</span></div>
+      <div class="field" data-field="amount"><div class="field-label"><span>Amount</span></div>
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${amount}"><span class="suffix">${coinFiat(fiat)}</span></div></div><div class="field-error"></div></div>
       <div class="field"><div class="field-label">Pay with</div><div class="segmented">${['USD', 'EUR'].map((f) => `<button type="button" data-f="${f}" class="${f === fiat ? 'active' : ''}">${f}</button>`).join('')}</div></div>
       <button class="btn btn-primary btn-block btn-lg" type="submit">Next</button>
-      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Compare play-money quotes from on-ramp providers. Demo cards only.</div></form>`);
+      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Compare play-money quotes from on-ramp providers.</div></form>`);
     content.appendChild(view);
     view.querySelector('select[name=network]')?.addEventListener('change', (e) => {
       network = lastNetwork[coin] = e.target.value;
@@ -633,16 +360,13 @@ function buyTab({ body, offs, modal }) {
     view.addEventListener('submit', (e) => {
       e.preventDefault();
       amount = Number(view.amount.value) || 0;
-      if (amount * CURRENCIES[fiat].usd < 10) return showFieldErrors(view, { field: 'amount', message: `Enter at least ${sym}10` });
+      if (!(amount > 0)) return showFieldErrors(view, { field: 'amount', message: 'Enter an amount' });
       providers();
     });
   }
 
-  // Step 2: provider quotes, refreshed every 15 seconds.
-  let timer = null;
-  offs.push(() => clearInterval(timer));
+  // Step 2: provider quotes; buying credits the coins at once.
   async function providers(selected = null) {
-    clearInterval(timer);
     top.hidden = true;
     content.innerHTML = '<div class="spinner"></div>';
     let q;
@@ -658,7 +382,7 @@ function buyTab({ body, offs, modal }) {
     content.innerHTML = '';
     const view = el(`<div>
       <button class="link" data-act="back" style="margin-bottom:10px">${icon('left', 14)} Back</button>
-      <div class="row between" style="margin-bottom:10px"><b>Buy ${coin} with ${sym}${fmt.amount(amount, fiat)}</b><span class="dim" style="font-size:12px" data-refresh></span></div>
+      <div class="row between" style="margin-bottom:10px"><b>Buy ${coin} with ${sym}${fmt.amount(amount, fiat)}</b></div>
       <div class="method-list">${q.quotes
         .map(
           (x) => `<button type="button" class="method ramp ${x.provider === pick ? 'selected' : ''}" data-p="${x.provider}"><span class="ramp-logo" style="background:${x.color}">${esc(x.name[0])}</span>
@@ -668,42 +392,24 @@ function buyTab({ body, offs, modal }) {
         )
         .join('')}</div>
       <div class="muted" style="font-size:12px;margin:8px 0 12px">Sent to your ${coin} address on ${esc(net.label)}.</div>
-      <button class="btn btn-primary btn-block btn-lg" data-act="go">Continue</button></div>`);
+      <button class="btn btn-primary btn-block btn-lg" data-act="go">Buy</button></div>`);
     content.appendChild(view);
     on(view, 'click', '[data-p]', (e, b) => {
       pick = b.dataset.p;
       view.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('selected', x === b));
     });
-    view.querySelector('[data-act=back]').addEventListener('click', () => {
-      clearInterval(timer);
-      form();
+    view.querySelector('[data-act=back]').addEventListener('click', () => form());
+    view.querySelector('[data-act=go]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.classList.add('loading');
+      try {
+        const res = await api.post('/api/payments/card', { amount, currency: fiat, creditCurrency: coin, provider: pick, network });
+        paymentSuccess(content, res, { modal });
+      } catch (err) {
+        btn.classList.remove('loading');
+        toastError(err);
+      }
     });
-    view.querySelector('[data-act=go]').addEventListener('click', () => {
-      clearInterval(timer);
-      checkout(q.quotes.find((x) => x.provider === pick));
-    });
-    let left = Math.ceil(q.refreshIn / 1000);
-    const refreshEl = view.querySelector('[data-refresh]');
-    refreshEl.textContent = `Quotes refresh in ${left}s`;
-    timer = setInterval(() => {
-      left--;
-      if (left <= 0) return providers(pick);
-      refreshEl.textContent = `Quotes refresh in ${left}s`;
-    }, 1000);
-  }
-
-  // Step 3: redirect to the provider's own (light) checkout.
-  async function checkout(p) {
-    content.innerHTML = `<div class="processing"><div class="spinner"></div><b>Redirecting you to ${esc(p.name)}…</b><div class="muted" style="margin-top:4px">A play-money demo checkout</div></div>`;
-    await sleep(1100);
-    const sym = CURRENCIES[fiat].symbol;
-    content.innerHTML = '';
-    const shell = el(`<div class="ramp-checkout" style="--ramp:${p.color}">
-      <div class="ramp-head"><span class="ramp-logo" style="background:${p.color}">${esc(p.name[0])}</span><b>${esc(p.name)}</b><span class="ramp-secure">${icon('lock', 13)} Demo checkout</span></div>
-      <div class="ramp-order"><span>You pay</span><b>${sym}${fmt.amount(amount, fiat)}</b><span>You get ≈</span><b>${fmt.amount(p.youGet, coin)} ${coin}</b></div>
-      <div class="ramp-body"></div></div>`);
-    content.appendChild(shell);
-    cardStep(shell.querySelector('.ramp-body'), { amount, fiat, credit: coin, savedCard: null, modal, extra: { provider: p.provider, network } });
   }
 
   form();
@@ -711,44 +417,30 @@ function buyTab({ body, offs, modal }) {
 
 const coinFiat = (f) => `<span style="font-weight:800;font-size:12px">${f}</span>`;
 
-// Step 4: the order is paid; the coins arrive as an on-chain deposit.
+// The order is done and the coins are already in the wallet.
 function purchaseComplete(container, tx, modal) {
   const d = tx.details;
   const view = el(`<div class="success-state">
     <div class="check">${icon('check', 34)}</div>
     <h3>Order complete</h3>
-    <div class="muted">${esc(d.provider)} is sending ${fmt.amount(tx.amount, tx.currency)} ${tx.currency} to your wallet on ${esc(d.networkLabel)}.</div>
+    <div class="muted">${esc(d.provider)} added ${fmt.amount(tx.amount, tx.currency)} ${tx.currency} to your wallet on ${esc(d.networkLabel)}.</div>
     <div class="summary" style="text-align:left;margin-top:16px">
-      <div class="line"><span>Paid</span><b>${CURRENCIES[d.fiatCurrency].symbol}${fmt.amount(d.fiatAmount, d.fiatCurrency)} · ${brandChip(d.brand)} •••• ${esc(d.last4)}</b></div>
+      <div class="line"><span>Paid</span><b>${CURRENCIES[d.fiatCurrency].symbol}${fmt.amount(d.fiatAmount, d.fiatCurrency)}</b></div>
       <div class="line"><span>Provider fee</span><b>${CURRENCIES[d.fiatCurrency].symbol}${fmt.amount(d.fee, d.fiatCurrency)}</b></div>
-      <div class="line"><span>Arriving</span><b>${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b></div>
+      <div class="line"><span>Received</span><b>${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b></div>
     </div>
     <div class="tx-list" style="text-align:left"></div>
     <button class="btn btn-primary btn-block btn-lg" data-act="done" style="margin-top:12px">Done</button></div>`);
   container.appendChild(view);
-  const list = view.querySelector('.tx-list');
-  list.appendChild(txRow(tx));
-  const off = bus.on('live:tx', (t) => {
-    if (t.id !== tx.id) return;
-    list.innerHTML = '';
-    list.appendChild(txRow(t));
-    if (t.status === 'completed') {
-      toastSuccess('Purchase arrived', `${fmt.amount(t.amount, t.currency)} ${t.currency} credited`);
-      off();
-    }
-  });
-  const prev = modal.onClose;
-  modal.onClose = () => {
-    off();
-    prev?.();
-  };
+  view.querySelector('.tx-list').appendChild(txRow(tx));
+  if (currency() !== tx.currency) setCurrency(tx.currency);
   view.querySelector('[data-act=done]').addEventListener('click', () => modal.close());
 }
 
 // ---------------------------------------------------------------------------
 // Withdraw
 
-function withdrawTab({ body, offs }) {
+function withdrawTab({ body }) {
   let code = currency();
   const top = el('<div></div>');
   const content = el('<div></div>');
@@ -760,88 +452,50 @@ function withdrawTab({ body, offs }) {
       render();
     },
   });
-  async function render() {
+  function render() {
     content.innerHTML = '';
-    const cfg = state.config.payments;
     const isCrypto = CURRENCIES[code].type === 'crypto';
     const net = isCrypto ? networkFor(code, lastNetwork[code]) : null;
-    const fee = isCrypto ? net.withdrawFee : 0;
-    const cards = state.user.cards || [];
     const view = el(`<form novalidate>
-      ${wageringNotice(state.user, 'withdraw')}
       ${
         isCrypto
-          ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(net.label)}</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>
-            ${net.tag ? `<div class="field" data-field="tag"><label class="field-label"><span>Destination tag</span>${helpTip('Destination tag')}<span class="muted">Optional — required by most exchanges</span></label><input class="input mono" name="tag" inputmode="numeric" placeholder="e.g. 104729" autocomplete="off"><div class="field-error"></div></div>` : ''}`
-          : cards.length
-            ? `<div class="field" data-field="card"><div class="field-label">Withdraw to</div><div class="method-list">${cards
-                .map((c, i) => `<label class="method ${i === 0 ? 'selected' : ''}"><input type="radio" name="cardId" value="${c.id}" ${i === 0 ? 'checked' : ''} hidden>${icon('card', 20)}<div><div class="m-title">•••• ${esc(c.last4)}</div><div class="m-sub">${esc(c.name)}</div></div><div class="m-right">${brandChip(c.brand)}</div></label>`)
-                .join('')}</div><div class="field-error"></div></div>`
-            : `<div class="demo-notice">${icon('info', 16)}<div>Make a card deposit first — fiat withdrawals go back to a card you've used.</div></div>`
+          ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label"><span>${code} address</span><span class="muted">Optional</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>`
+          : ''
       }
       <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="muted aux"></span></div>
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div>
         <div class="field-error"></div></div>
-      <div class="summary"></div>
       ${twoFactorField(state.user)}
       <div class="field-error form-error" style="margin-bottom:10px"></div>
-      <button class="btn btn-primary btn-block btn-lg" type="submit" ${!isCrypto && !cards.length ? 'disabled' : ''}>Withdraw</button>
-      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">${isCrypto ? `Minimum withdrawal: ${fmt.amount(net.withdrawMin, code)} ${code} · Network fee: ${fmt.amount(net.withdrawFee, code)} ${code}` : `Minimum withdrawal $${cfg.withdrawMinUsd} equivalent`}. Play money leaves your balance and lands nowhere real.</div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Withdraw</button>
+      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Play money leaves your balance and lands nowhere real.</div>
     </form>`);
     content.appendChild(view);
     const amountInput = view.querySelector('[name=amount]');
-    const summary = view.querySelector('.summary');
     view.querySelector('select[name=network]')?.addEventListener('change', (e) => {
       lastNetwork[code] = e.target.value;
       render();
     });
-    // Flag a malformed address as you type.
-    view.querySelector('[name=address]')?.addEventListener('input', (e) => {
-      const f = view.querySelector('[data-field=address]');
-      const v = e.target.value.trim();
-      const bad = v.length > 6 && !validAddress(code, net.id, v);
-      f.classList.toggle('invalid', bad);
-      f.querySelector('.field-error').textContent = bad ? `Invalid ${code} (${net.label}) address` : '';
-    });
-    const update = () => {
-      const a = Number(amountInput.value) || 0;
-      view.querySelector('.aux').textContent = `Balance ${fmt.amount(balanceOf(code), code)}`;
-      summary.innerHTML = `<div class="line"><span>Amount</span><b>${fmt.amount(a, code)} ${code}</b></div>
-        ${isCrypto ? `<div class="line"><span>Network fee</span><b>${fmt.amount(fee, code)} ${code}</b></div>` : '<div class="line"><span>Processing time</span><b>~5 seconds (simulated)</b></div>'}
-        <div class="line total"><span>You receive</span><b>${fmt.amount(Math.max(0, a - fee), code)} ${code}</b></div>`;
-    };
+    const update = () => (view.querySelector('.aux').textContent = `Balance ${fmt.amount(balanceOf(code), code)}`);
     update();
-    amountInput.addEventListener('input', update);
     view.querySelector('[data-act=max]').addEventListener('click', () => {
       amountInput.value = fmt.inputAmount(balanceOf(code), code);
-      update();
     });
-    on(view, 'change', 'input[name=cardId]', () => view.querySelectorAll('label.method').forEach((l) => l.classList.toggle('selected', l.querySelector('input').checked)));
     view.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = view.querySelector('[type=submit]');
       btn.classList.add('loading');
       const fd = Object.fromEntries(new FormData(view));
       try {
-        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, tag: fd.tag, cardId: fd.cardId, code: fd.code });
+        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, code: fd.code });
         setUser(user);
         picker.refresh();
         content.innerHTML = '';
-        const done = el(`<div class="success-state"><div class="check">${icon('arrowUp', 30)}</div><h3>Withdrawal requested</h3>
-          <div class="muted">${fmt.amount(transaction.amount, code)} ${code} is on its way to ${isCrypto ? 'your address' : 'your card'}.</div>
-          <div class="tx-progress" style="justify-content:space-between"><span>Status</span><span class="pill yellow status">Pending</span></div>
+        const done = el(`<div class="success-state"><div class="check">${icon('check', 34)}</div><h3>Withdrawal complete</h3>
+          <div class="muted"><b>${fmt.amount(transaction.amount, code)} ${code}</b> <span>has left your play-money balance.</span></div>
           <button class="btn btn-secondary btn-block" style="margin-top:16px" data-act="again">Make another withdrawal</button></div>`);
         content.appendChild(done);
         done.querySelector('[data-act=again]').addEventListener('click', render);
-        offs.push(
-          bus.on('live:tx', (tx) => {
-            if (tx.id === transaction.id && tx.status === 'completed') {
-              const s = done.querySelector('.status');
-              s.className = 'pill green status';
-              s.textContent = 'Completed';
-            }
-          }),
-        );
       } catch (err) {
         showFieldErrors(view, err);
       } finally {
@@ -853,7 +507,7 @@ function withdrawTab({ body, offs }) {
 }
 
 // ---------------------------------------------------------------------------
-// Swap one crypto for another (0.5% fee, settles on the target network)
+// Swap one crypto for another (0.5% fee, instant)
 
 let swapPair = null;
 function swapTab({ body, offs }) {
@@ -882,11 +536,10 @@ function swapTab({ body, offs }) {
       <div class="to-slot"></div>
       <div class="summary swap-quote"><div class="line"><span>You receive</span><b class="q-out">—</b></div>
         <div class="line"><span>Rate</span><span class="q-rate">1 ${from} ≈ —</span></div>
-        <div class="line"><span>Fee (0.5%)</span><span class="q-fee">—</span></div>
-        <div class="line"><span>Minimum</span><span class="q-min">—</span></div></div>
+        <div class="line"><span>Fee (0.5%)</span><span class="q-fee">—</span></div></div>
       <div class="field-error form-error" style="margin-bottom:10px"></div>
       <button class="btn btn-primary btn-block btn-lg" type="submit">Swap</button>
-      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Play-money swap. The ${to} arrives after the ${esc(networkFor(to).label)} confirmations.</div></form>`);
+      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Play-money swap. The new coin is in your wallet straight away.</div></form>`);
     view.append(fromBox, form);
     form.querySelector('.to-slot').appendChild(toBox);
     const fromPicker = currencyPicker(fromBox, {
@@ -924,7 +577,6 @@ function swapTab({ body, offs }) {
         q('.q-out').innerHTML = amount > 0 ? `${fmt.amount(res.toAmount, to)} ${coin(to)}` : '—';
         q('.q-rate').textContent = `1 ${from} ≈ ${fmt.rate(res.rate)} ${to}`;
         q('.q-fee').textContent = `${fmt.amount(res.fee, from)} ${from}`;
-        q('.q-min').textContent = `${fmt.amount(res.minimum, from)} ${from}`;
       } catch {
         /* quote is informational */
       }
@@ -948,7 +600,7 @@ function swapTab({ body, offs }) {
         const { transaction, user } = await api.post('/api/payments/swap', { from, to, amount: Number(input.value) });
         setUser(user);
         list.prepend(swapRow(transaction));
-        toast({ type: 'info', title: 'Swap submitted', message: `${fmt.amount(transaction.details.fromAmount, from)} ${from} → ${fmt.amount(transaction.amount, to)} ${to}` });
+        toastSuccess('Swap complete', `${fmt.amount(transaction.details.fromAmount, from)} ${from} → ${fmt.amount(transaction.amount, to)} ${to}`);
         amountValue = '';
         render();
       } catch (err) {
@@ -961,22 +613,12 @@ function swapTab({ body, offs }) {
 
   function swapRow(tx) {
     const d = tx.details || {};
-    const pct = d.required ? Math.min(100, (d.confirmations / d.required) * 100) : 100;
     return el(`<div class="tx-progress" data-tx="${tx.id}">${coin(d.from, 22)}${icon('right', 14)}${coin(tx.currency, 22)}
       <div style="flex:1;min-width:0"><div class="row between"><b>${fmt.amount(d.fromAmount, d.from)} ${d.from} → ${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b>
-        ${tx.status === 'completed' ? '<span class="pill green">Completed</span>' : `<span class="pill yellow">${d.confirmations}/${d.required}</span>`}</div>
-        <div class="progress" style="margin-top:8px"><div style="width:${pct}%"></div></div></div></div>`);
+        <span class="pill green">Completed</span></div></div></div>`);
   }
 
-  offs.push(
-    bus.on('live:tx', (tx) => {
-      if (tx.type !== 'swap') return;
-      const row = list.querySelector(`[data-tx="${tx.id}"]`);
-      if (row) row.replaceWith(swapRow(tx));
-      if (tx.status === 'completed') toastSuccess('Swap complete', `${fmt.amount(tx.amount, tx.currency)} ${tx.currency} credited`);
-    }),
-    bus.on('balance', () => pickers.forEach((p) => p.refresh())),
-  );
+  offs.push(bus.on('balance', () => pickers.forEach((p) => p.refresh())));
   render();
 }
 
@@ -1057,7 +699,6 @@ function tipTab({ body }) {
   function render() {
     content.innerHTML = '';
     const view = el(`<form novalidate>
-      ${wageringNotice(state.user, 'tip')}
       <div class="field" data-field="to"><div class="field-label">Username</div><input class="input" name="to" autocomplete="off" placeholder="Who are you tipping?" value="${esc(pre.username || '')}"><div class="field-error"></div></div>
       <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux dim"></span></div>
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(pre.amount || 0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div><div class="field-error"></div></div>

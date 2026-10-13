@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { HttpError, badRequest, rateLimiter } from '../http.js';
-import { parseCurrency, credit, addWagerRequirement, WAGER_TIMES } from '../accounts.js';
+import { parseCurrency, credit } from '../accounts.js';
 import { roundDown, fromUsd } from '../../public/js/shared/currencies.js';
 import { amountText } from '../notify.js';
 import { postSystem } from '../chatlog.js';
@@ -42,12 +42,11 @@ export default function register({ router, store, live, payments, notify, authed
     promo.claimedBy.push(user.id);
     if (promo.kind === 'welcome') user.welcomeCode = promo.code;
     credit(user, currency, amount);
-    addWagerRequirement(user, promo.valueUsd, promo.kind);
-    payments.addTx(user, { type: 'bonus', method: promo.kind === 'welcome' ? 'welcome' : 'drop', status: 'completed', currency, amount, details: { code: promo.code, wagerTimes: WAGER_TIMES[promo.kind] } });
+    payments.addTx(user, { type: 'bonus', method: promo.kind === 'welcome' ? 'welcome' : 'drop', status: 'completed', currency, amount, details: { code: promo.code } });
     store.save();
     live.toUser(user.id, 'balance', { currency, amount: user.balances[currency] });
     notify(user.id, { kind: 'bonus', category: 'rewards', title: promo.kind === 'welcome' ? 'Welcome bonus claimed' : 'Bonus drop claimed', message: `${amountText(amount, currency)} play money added to your wallet.`, link: '/transactions/bonuses' });
-    return { amount, currency, balance: { currency, amount: user.balances[currency] }, wagering: user.wagering, user: publicUser(user) };
+    return { amount, currency, balance: { currency, amount: user.balances[currency] }, user: publicUser(user) };
   }
 
   router.post(

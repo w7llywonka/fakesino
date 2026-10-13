@@ -24,8 +24,7 @@ export function openRedeem(code = '', { onDone } = {}) {
       const r = await api.post('/api/offers/redeem', { code: body.code.value.trim(), currency });
       setBalance(r.balance.currency, r.balance.amount);
       if (r.user) setUser(r.user);
-      const wager = r.user?.wagering?.remainingUsd > 0 ? ` Wager $${r.user.wagering.remainingUsd.toFixed(2)} before withdrawing.` : '';
-      toastSuccess('Bonus redeemed', `${fmt.money(r.amount, r.currency)}${CURRENCIES[r.currency].type === 'crypto' ? ` ${r.currency}` : ''} added to your wallet.${wager}`);
+      toastSuccess('Bonus redeemed', `${fmt.money(r.amount, r.currency)}${CURRENCIES[r.currency].type === 'crypto' ? ` ${r.currency}` : ''} added to your wallet.`);
       modal.close();
       onDone?.(r);
     } catch (err) {
