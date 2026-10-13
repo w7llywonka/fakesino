@@ -17,7 +17,7 @@ import * as slots from '../public/js/shared/games/slots.js';
 import { GameRuleError } from '../public/js/shared/games/util.js';
 import { createRng, takeNonce, revealedSeed } from './fair.js';
 import { HttpError, badRequest } from './http.js';
-import { parseCurrency, parseAmount, credit, debit, recordWagerStats } from './accounts.js';
+import { parseCurrency, parseAmount, credit, debit, recordWagerStats, assertNotOnBreak } from './accounts.js';
 
 export const GAMES = {
   dice: { name: 'Dice', module: dice, edge: 0.01 },
@@ -110,6 +110,7 @@ export function createEngine({ store, live }) {
 
   function playInstant(user, slug, body) {
     const g = getGame(slug);
+    assertNotOnBreak(user);
     if (g.module.stateful) return startStateful(user, slug, body);
     const params = rules(() => g.module.normalize(body.params || {}));
     const { currency, amount } = wagerFor(user, g, body, params);
@@ -168,6 +169,7 @@ export function createEngine({ store, live }) {
 
   function startStateful(user, slug, body) {
     const g = getGame(slug);
+    assertNotOnBreak(user);
     if (user.active[slug]) throw new HttpError(409, 'You already have a game in progress', { code: 'game_active', game: activeView(g, user.active[slug]) });
     const params = rules(() => g.module.normalize(body.params || {}));
     const { currency, amount } = wagerFor(user, g, body, params);

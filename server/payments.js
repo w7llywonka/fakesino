@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
-import { parseCurrency, parseAmount, credit, debit, vipInfo, DAILY_BONUS_COOLDOWN } from './accounts.js';
+import { parseCurrency, parseAmount, credit, debit, vipInfo, DAILY_BONUS_COOLDOWN, assertNotOnBreak, assertDepositLimit } from './accounts.js';
 
 export const DEPOSIT_LIMITS = { min: 10, max: 100000 }; // in fiat units
 export const WITHDRAW_MIN_USD = 5;
@@ -123,6 +123,8 @@ export function createPayments({ store, live, publicUser }) {
     if (amount < DEPOSIT_LIMITS.min) throw badRequest(`Minimum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.min}`, { field: 'amount' });
     if (amount > DEPOSIT_LIMITS.max) throw badRequest(`Maximum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.max.toLocaleString('en-US')}`, { field: 'amount' });
     const creditCurrency = parseCurrency(user, body.creditCurrency || fiat);
+    assertNotOnBreak(user);
+    assertDepositLimit(store, user, toUsd(fiat, amount));
     const card = resolveCard(user, body);
     const payment = {
       id: `pay_${crypto.randomBytes(12).toString('hex')}`,
@@ -242,6 +244,8 @@ export function createPayments({ store, live, publicUser }) {
     const amount = parseAmount(currency, body.amount);
     if (amount <= 0) throw badRequest('Enter an amount');
     if (toUsd(currency, amount) > 1_000_000) throw badRequest('Maximum simulated deposit is $1,000,000 equivalent');
+    assertNotOnBreak(user);
+    assertDepositLimit(store, user, toUsd(currency, amount));
     const required = CONFIRMATIONS[currency];
     const tx = addTx(user, {
       type: 'deposit',

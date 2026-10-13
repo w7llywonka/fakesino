@@ -132,6 +132,31 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   );
 
   router.post(
+    '/api/account/limits',
+    authed((ctx) => {
+      const u = ctx.user;
+      u.limits ||= { depositDailyUsd: null, breakUntil: 0 };
+      if ('depositDailyUsd' in ctx.body) {
+        const v = ctx.body.depositDailyUsd;
+        if (v === null || v === '') u.limits.depositDailyUsd = null;
+        else {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < 10 || n > 1_000_000) throw badRequest('Daily limit must be between $10 and $1,000,000', { field: 'depositDailyUsd' });
+          u.limits.depositDailyUsd = Math.floor(n);
+        }
+      }
+      if (ctx.body.breakHours != null) {
+        const h = Number(ctx.body.breakHours);
+        if (![24, 168, 720].includes(h)) throw badRequest('Choose 24 hours, 7 days or 30 days');
+        if (Object.keys(u.active || {}).length) throw badRequest('Finish your active games before taking a break');
+        u.limits.breakUntil = Math.max(u.limits.breakUntil || 0, Date.now() + h * 3600 * 1000);
+      }
+      store.save();
+      return { user: publicUser(u) };
+    }),
+  );
+
+  router.post(
     '/api/wallet/currency',
     authed((ctx) => {
       if (!isCurrency(ctx.body.currency)) throw badRequest('Unsupported currency');
@@ -281,7 +306,15 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
       if (req.method === 'POST') {
         // Same-origin check for state-changing requests.
         const origin = req.headers.origin;
-        if (origin && new URL(origin).host !== req.headers.host) throw new HttpError(403, 'Cross-origin request blocked');
+        if (origin) {
+          let host = null;
+          try {
+            host = new URL(origin).host;
+          } catch {
+            /* "null" or malformed origin */
+          }
+          if (host !== req.headers.host) throw new HttpError(403, 'Cross-origin request blocked');
+        }
         ctx.body = await readJson(req);
       }
       const result = await match.handler(ctx);

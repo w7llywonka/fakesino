@@ -12,6 +12,7 @@ const TABS = [
   ['security', 'Security'],
   ['preferences', 'Preferences'],
   ['payments', 'Saved cards'],
+  ['limits', 'Responsible Gaming'],
 ];
 
 export default function settingsPage(page, { tab = 'general' }) {
@@ -81,6 +82,61 @@ export default function settingsPage(page, { tab = 'general' }) {
         toastError(err);
       }
     });
+  } else if (tab === 'limits') {
+    const render = () => {
+      const l = state.user.limits || {};
+      const onBreak = l.breakUntil > Date.now();
+      body.innerHTML = `<h3 style="margin-top:0">Deposit limit</h3>
+        <p class="muted" style="margin-top:0">Cap how much play money you can deposit in any 24 hours.</p>
+        <form class="limit-form" novalidate style="max-width:420px">
+          <div class="field" data-field="depositDailyUsd"><label class="field-label">Daily limit (USD)</label>
+            <div class="input-group"><input class="input" name="limit" inputmode="numeric" placeholder="No limit" value="${l.depositDailyUsd ?? ''}"><button class="addon" type="submit" style="padding:0 16px">Save</button></div>
+            <div class="field-error"></div></div>
+          ${l.depositDailyUsd != null ? '<button type="button" class="btn btn-ghost btn-sm" data-act="remove">Remove limit</button>' : ''}
+        </form>
+        <div class="divider"></div>
+        <h3>Take a break</h3>
+        ${
+          onBreak
+            ? `<div class="demo-notice warn">${icon('clock', 16)}<div>You're on a break until <b>${esc(fmt.dateTime(l.breakUntil))}</b>. Betting and deposits are paused until then.</div></div>`
+            : `<p class="muted" style="margin-top:0">Pause betting and deposits for a while. A break can't be cancelled early.</p>
+          <div class="row" style="flex-wrap:wrap;gap:8px">${[
+            [24, '24 hours'],
+            [168, '7 days'],
+            [720, '30 days'],
+          ]
+            .map(([h, l2]) => `<button class="btn btn-secondary" data-break="${h}">${l2}</button>`)
+            .join('')}</div>`
+        }`;
+      const form = body.querySelector('.limit-form');
+      const save = async (value) => {
+        try {
+          const { user } = await api.post('/api/account/limits', { depositDailyUsd: value });
+          setUser(user);
+          toastSuccess(value == null ? 'Deposit limit removed' : 'Deposit limit saved');
+          render();
+        } catch (err) {
+          showFieldErrors(form, err);
+        }
+      };
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const v = form.limit.value.trim();
+        save(v === '' ? null : Number(v));
+      });
+      form.querySelector('[data-act=remove]')?.addEventListener('click', () => save(null));
+      on(body, 'click', '[data-break]', async (e, b) => {
+        if (!confirm(`Take a break for ${b.textContent}? You won't be able to bet or deposit until it ends.`)) return;
+        try {
+          const { user } = await api.post('/api/account/limits', { breakHours: Number(b.dataset.break) });
+          setUser(user);
+          render();
+        } catch (err) {
+          toastError(err);
+        }
+      });
+    };
+    render();
   } else if (tab === 'payments') {
     const render = () => {
       const cards = state.user.cards || [];

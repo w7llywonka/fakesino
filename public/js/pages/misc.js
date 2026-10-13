@@ -55,6 +55,7 @@ export function responsiblePage(page) {
   page.innerHTML = `<div class="page-title">${icon('support', 22)} Responsible Gaming</div><div class="card doc">
     <p>Fakesino is a <b>play-money simulation</b>. Balances have no cash value, deposits use demo cards that are never charged, and nothing can be withdrawn to the real world.</p>
     <p>That said, casino games are designed so the house wins over time — every game here shows its RTP, and the long-run result of playing is always a loss. Real-money gambling works the same way, with real consequences.</p>
+    <p>You can set a daily deposit limit or take a break from <a class="link" href="/settings/limits">Settings → Responsible Gaming</a>.</p>
     <h2>If gambling stops being fun</h2>
     <ul><li>Set limits on time and money before you start, and stick to them.</li><li>Never chase losses.</li><li>Don't gamble when you are upset, stressed or have been drinking.</li><li>Take regular breaks.</li></ul>
     <p>If you or someone you know has a gambling problem, free and confidential help is available: <b>1-800-GAMBLER</b> (US), <b>GamCare 0808 8020 133</b> (UK), or <b>Gambling Help Online</b> (AU).</p></div>`;

@@ -3,7 +3,7 @@ import { crashPointFromHex, crashMultiplierAt, crashTimeFor } from '../public/js
 import { roundDown } from '../public/js/shared/currencies.js';
 import { sha256, randomHex } from './fair.js';
 import { HttpError, badRequest } from './http.js';
-import { parseCurrency, parseAmount, credit, debit } from './accounts.js';
+import { parseCurrency, parseAmount, credit, debit, assertNotOnBreak } from './accounts.js';
 
 export const BETTING_MS = 6000;
 export const CRASHED_MS = 3000;
@@ -212,6 +212,7 @@ export class CrashGame {
   }
 
   placeBet(user, body) {
+    assertNotOnBreak(user);
     const currency = parseCurrency(user, body.currency);
     const amount = parseAmount(currency, body.amount ?? 0);
     let autoCashout = body.autoCashout == null || body.autoCashout === '' ? null : Number(body.autoCashout);

@@ -125,7 +125,7 @@ function verifyTab(body, prefill) {
   body.innerHTML = `<form class="vf">
     <div class="field"><div class="field-label">Game</div><select class="select" name="game">${games}</select></div>
     <div class="field"><div class="field-label">Server Seed</div><input class="input mono" name="serverSeed" value="${esc(p.serverSeed || '')}" placeholder="Revealed after you rotate your seed pair"></div>
-    <div class="field-label" style="margin:-6px 0 12px"><span class="dim" style="font-size:12px" data-hash></span></div>
+    <div class="field-label" style="margin:-6px 0 12px"><span class="dim mono" style="font-size:11.5px;word-break:break-all" data-hash></span></div>
     <div class="two-col" style="gap:12px"><div class="field"><div class="field-label">Client Seed</div><input class="input mono" name="clientSeed" value="${esc(p.clientSeed || '')}"></div>
     <div class="field"><div class="field-label">Nonce</div><input class="input" name="nonce" inputmode="numeric" value="${esc(p.nonce ?? 0)}"></div></div>
     <div class="params"></div>

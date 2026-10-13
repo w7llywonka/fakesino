@@ -77,6 +77,7 @@ export function createUser(store, { username, email, password }) {
     active: {},
     cards: [],
     addresses: {},
+    limits: { depositDailyUsd: null, breakUntil: 0 },
   };
   d.users[id] = user;
   d.usernames[username.toLowerCase()] = id;
@@ -125,6 +126,7 @@ export function publicUser(user) {
     dailyBonusAt: user.dailyBonusAt,
     seeds: publicSeeds(user),
     activeGames: Object.keys(user.active || {}),
+    limits: user.limits || { depositDailyUsd: null, breakUntil: 0 },
     cards: (user.cards || []).map(({ id, brand, last4, expMonth, expYear, name }) => ({ id, brand, last4, expMonth, expYear, name })),
   };
 }
@@ -175,4 +177,28 @@ export function recordWagerStats(user, { game, currency, amount, payout, edge })
   c.wagered = roundDown(currency, c.wagered + amount);
   c.profit = Math.round((c.profit + payout - amount) * 10 ** CURRENCIES[currency].decimals) / 10 ** CURRENCIES[currency].decimals;
   user.rakeback[currency] = (user.rakeback[currency] || 0) + amount * (edge ?? 0.01) * RAKEBACK_SHARE;
+}
+
+// --- Responsible gaming ---------------------------------------------------------
+
+export function assertNotOnBreak(user) {
+  const until = user.limits?.breakUntil || 0;
+  if (until > Date.now()) {
+    throw new HttpError(403, `You're taking a break until ${new Date(until).toUTCString()}. Betting and deposits are paused.`, { code: 'on_break', until });
+  }
+}
+
+export function assertDepositLimit(store, user, usd) {
+  const limit = user.limits?.depositDailyUsd;
+  if (limit == null) return;
+  const since = Date.now() - 24 * 3600 * 1000;
+  let used = 0;
+  for (let i = store.data.transactions.length - 1; i >= 0; i--) {
+    const t = store.data.transactions[i];
+    if (t.createdAt < since) break;
+    if (t.userId === user.id && t.type === 'deposit' && t.status !== 'failed') used += toUsd(t.currency, t.amount);
+  }
+  if (used + usd > limit + 1e-9) {
+    throw new HttpError(400, `This deposit would exceed your daily deposit limit of $${limit.toLocaleString('en-US')} ($${Math.max(0, limit - used).toFixed(2)} left today).`, { code: 'deposit_limit', field: 'amount' });
+  }
 }
