@@ -186,6 +186,7 @@ function fiatDeposit(container, { fiat, credit, modal }) {
 
   view.querySelector('[data-act=deposit]').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
+    if (btn.classList.contains('loading')) return;
     btn.classList.add('loading');
     try {
       const res = await api.post(DEPOSIT_URL[method], { amount: roundDown(fiat, amount), currency: fiat, creditCurrency: credit });
@@ -289,6 +290,7 @@ function cryptoDeposit(container, code, offs) {
       const txList = view.querySelector('.tx-list');
       view.querySelector('[data-act=send]').addEventListener('click', async (e) => {
         const btn = e.currentTarget;
+        if (btn.classList.contains('loading')) return;
         btn.classList.add('loading');
         try {
           const { transaction, user } = await api.post('/api/payments/crypto/simulate', { currency: code, network: net.id, amount: Number(amountInput.value) });
@@ -401,6 +403,7 @@ function buyTab({ body, offs, modal }) {
     view.querySelector('[data-act=back]').addEventListener('click', () => form());
     view.querySelector('[data-act=go]').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
+      if (btn.classList.contains('loading')) return;
       btn.classList.add('loading');
       try {
         const res = await api.post('/api/payments/card', { amount, currency: fiat, creditCurrency: coin, provider: pick, network });
@@ -484,6 +487,7 @@ function withdrawTab({ body }) {
     view.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = view.querySelector('[type=submit]');
+      if (btn.classList.contains('loading')) return;
       btn.classList.add('loading');
       const fd = Object.fromEntries(new FormData(view));
       try {
@@ -595,6 +599,7 @@ function swapTab({ body, offs }) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = form.querySelector('[type=submit]');
+      if (btn.classList.contains('loading')) return;
       btn.classList.add('loading');
       try {
         const { transaction, user } = await api.post('/api/payments/swap', { from, to, amount: Number(input.value) });

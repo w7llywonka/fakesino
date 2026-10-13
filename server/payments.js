@@ -135,7 +135,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     const coin = CURRENCIES[params.coin]?.type === 'crypto' ? params.coin : 'BTC';
     const fiatAmount = Math.max(0, Number(params.amount) || 0);
     const network = networkFor(coin, params.network).id;
-    return { fiat, coin, network, fiatAmount, minimum: 0, quotes: quotes({ fiat, fiatAmount, coin, network }), refreshIn: 15000 - (Date.now() % 15000) };
+    return { fiat, coin, network, fiatAmount, minimum: 0, quotes: quotes({ fiat, fiatAmount, coin, network }) };
   }
 
   function cardDeposit(user, body) {

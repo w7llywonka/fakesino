@@ -72,7 +72,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
 
   const router = new Router();
   const authed = (fn) => (ctx) => {
-    if (!ctx.user) throw new HttpError(401, 'Reconnecting your wallet…', { code: 'auth_required' });
+    if (!ctx.user) throw new HttpError(401, 'Couldn’t reach your wallet. Please try again.', { code: 'auth_required' });
     return fn(ctx);
   };
 
