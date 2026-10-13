@@ -56,23 +56,13 @@ export function createLiveBets(container, { game = null } = {}) {
   }
 
   async function renderRace() {
-    thead.innerHTML = '<tr><th>Rank</th><th>User</th><th class="r">Bets</th><th class="r">Wagered</th><th class="r">Prize</th></tr>';
+    thead.innerHTML = '<tr><th>Rank</th><th>User</th><th class="r hide-mobile">Bets</th><th class="r">Wagered</th><th class="r">Prize</th></tr>';
     tbody.innerHTML = '<tr><td colspan="5"><div class="spinner"></div></td></tr>';
     try {
-      const { leaders } = await api.get('/api/leaderboard?period=day');
-      const prizes = [1000, 500, 250, 100, 50, 25, 25, 10, 10, 10];
-      tbody.innerHTML = leaders.length
-        ? leaders
-            .slice(0, size)
-            .map(
-              (l, i) => `<tr><td>${i < 3 ? icon('trophy', 16, `style="color:${['#f5b83d', '#b8c4d1', '#c47a3a'][i]}"`) : ''} ${i + 1}</td>
-          <td>${l.username ? esc(l.username) : `<span class="user-hidden">${icon('eyeOff', 14)} Hidden</span>`}</td><td class="r">${l.bets}</td>
-          <td class="r">${fmt.fiat(l.wageredUsd)}</td><td class="r win-text">${prizes[i] ? fmt.fiat(prizes[i]) : '—'}</td></tr>`,
-            )
-            .join('')
-        : '<tr><td colspan="5"><div class="empty">No wagers in the last 24 hours yet.</div></td></tr>';
+      const race = await api.get('/api/race');
+      tbody.innerHTML = raceRows(race, size);
     } catch {
-      tbody.innerHTML = '<tr><td colspan="5"><div class="empty">Leaderboard unavailable</div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty">Race unavailable</div></td></tr>';
     }
   }
 
@@ -135,4 +125,18 @@ export function createLiveBets(container, { game = null } = {}) {
       root.remove();
     },
   };
+}
+
+// Daily race rows (top N, then your own position), shared with the leaderboard page.
+export function raceRows(race, size = 10) {
+  const medal = (i) => (i < 3 ? icon('trophy', 16, `style="color:${['#f5b83d', '#b8c4d1', '#c47a3a'][i]}"`) : '');
+  const name = (u) => (u ? esc(u) : `<span class="user-hidden">${icon('eyeOff', 14)} Hidden</span>`);
+  const rows = race.leaders.slice(0, size).map(
+    (l, i) => `<tr><td>${medal(i)} ${l.rank}</td><td>${name(l.username)}</td><td class="r hide-mobile">${l.bets.toLocaleString()}</td>
+      <td class="r">${fmt.fiat(l.wageredUsd)}</td><td class="r win-text">${l.prizeUsd ? fmt.fiat(l.prizeUsd) : '—'}</td></tr>`,
+  );
+  const me = race.me;
+  if (me && (!me.rank || me.rank > size))
+    rows.push(`<tr class="race-me"><td>${me.rank ?? '—'}</td><td>You</td><td class="hide-mobile"></td><td class="r">${fmt.fiat(me.wageredUsd)}</td><td class="r">${me.prizeUsd ? fmt.fiat(me.prizeUsd) : '—'}</td></tr>`);
+  return rows.length ? rows.join('') : '<tr><td colspan="5"><div class="empty">No wagers in today’s race yet — be the first.</div></td></tr>';
 }

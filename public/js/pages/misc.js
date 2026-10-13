@@ -1,3 +1,4 @@
+import { raceRows } from '../ui/livebets.js';
 import { el, esc, on } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
@@ -28,15 +29,44 @@ export function promotionsPage(page) {
 
 export async function leaderboardPage(page) {
   document.title = 'Leaderboard — Fakesino';
-  let period = 'day';
+  let period = 'race';
   const root = el(`<div><div class="page-title">${icon('trophy', 22)} Leaderboard</div>
-    <div class="tabs" style="margin-bottom:16px"><button class="tab active" data-p="day">24 hours</button><button class="tab" data-p="week">7 days</button><button class="tab" data-p="all">All time</button></div>
-    <div class="table-wrap"><table class="table"><thead><tr><th>Rank</th><th>Player</th><th class="r">Bets</th><th class="r">Wagered</th></tr></thead><tbody></tbody></table></div></div>`);
+    <div class="tabs" style="margin-bottom:16px"><button class="tab active" data-p="race">Daily Race</button><button class="tab" data-p="day">24 hours</button><button class="tab" data-p="week">7 days</button><button class="tab" data-p="all">All time</button></div>
+    <div class="race-head" hidden></div>
+    <div class="table-wrap"><table class="table"><thead></thead><tbody></tbody></table></div>
+    <div class="race-prev" hidden></div></div>`);
   page.appendChild(root);
+  const thead = root.querySelector('thead');
   const tbody = root.querySelector('tbody');
+  const head = root.querySelector('.race-head');
+  const prev = root.querySelector('.race-prev');
+  let tick = null;
   const load = async () => {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="spinner"></div></td></tr>';
+    clearInterval(tick);
+    tbody.innerHTML = '<tr><td colspan="5"><div class="spinner"></div></td></tr>';
+    head.hidden = prev.hidden = period !== 'race';
+    if (period === 'race') {
+      const race = await api.get('/api/race');
+      head.innerHTML = `<div class="race-card"><div><div class="race-title">${icon('trophy', 18)} $${race.poolUsd.toLocaleString()} Daily Race</div>
+        <div class="muted" style="font-size:13px">Top 10 by wager in the UTC day share the play-money prize pool, paid automatically when it ends.</div></div>
+        <div class="race-timer"><div class="dim" style="font-size:12px">Ends in</div><b class="race-left"></b></div>
+        ${race.me ? `<div class="race-mine"><div class="dim" style="font-size:12px">Your position</div><b>${race.me.rank ? `#${race.me.rank}` : '—'}</b><span class="dim" style="font-size:12px">${fmt.fiat(race.me.wageredUsd)} wagered</span></div>` : ''}</div>`;
+      const left = head.querySelector('.race-left');
+      const upd = () => (left.textContent = fmt.duration(race.endsAt - Date.now()));
+      upd();
+      tick = setInterval(() => (race.endsAt <= Date.now() ? load() : upd()), 1000);
+      thead.innerHTML = '<tr><th>Rank</th><th>Player</th><th class="r hide-mobile">Bets</th><th class="r">Wagered</th><th class="r">Prize</th></tr>';
+      tbody.innerHTML = raceRows(race, 10);
+      prev.innerHTML = race.previous
+        ? `<h3>Previous race · ${esc(race.previous.id)}</h3><div class="table-wrap"><table class="table"><tbody>${race.previous.leaders
+            .map((l) => `<tr><td>${l.rank}</td><td>${l.username ? esc(l.username) : `<span class="user-hidden">${icon('eyeOff', 14)} Hidden</span>`}</td><td class="r">${fmt.fiat(l.wageredUsd)}</td><td class="r win-text">${fmt.fiat(l.prizeUsd)}</td></tr>`)
+            .join('')}</tbody></table></div>`
+        : '';
+      prev.hidden = !race.previous;
+      return;
+    }
     const { leaders } = await api.get(`/api/leaderboard?period=${period}`);
+    thead.innerHTML = '<tr><th>Rank</th><th>Player</th><th class="r">Bets</th><th class="r">Wagered</th></tr>';
     tbody.innerHTML = leaders.length
       ? leaders
           .map(
@@ -52,6 +82,7 @@ export async function leaderboardPage(page) {
     load();
   });
   load();
+  return () => clearInterval(tick);
 }
 
 export function responsiblePage(page) {

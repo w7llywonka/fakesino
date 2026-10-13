@@ -832,6 +832,30 @@ test('bank transfer and mobile wallet deposits', async () => {
   assert.deepEqual(deposits, ['mobile_wallet:completed', 'bank:failed', 'bank:completed']);
 });
 
+test('daily race: standings, my position, and prizes paid when the day ends', async () => {
+  const a = await newPlayer(1000);
+  const b = await newPlayer(1000);
+  // Outwager everyone else in this test run.
+  for (let i = 0; i < 3; i++) await a.post('/api/games/limbo/bet', { amount: 300, currency: 'USD', params: { target: 1.01 } });
+  await b.post('/api/games/limbo/bet', { amount: 280, currency: 'USD', params: { target: 1.01 } });
+  const race = (await a.get('/api/race')).data;
+  assert.equal(race.poolUsd, 2000);
+  assert.ok(race.endsAt > Date.now() && race.endsAt - Date.now() <= 86400000);
+  assert.equal(race.me.rank, 1);
+  assert.equal(race.me.wageredUsd, 900);
+  assert.equal(race.leaders[0].prizeUsd, 800);
+  const before = (await a.get('/api/me')).data.user.balances.USD;
+  app.plugins.race.settle(Date.now() + 86400000);
+  const after = (await a.get('/api/me')).data.user.balances.USD;
+  assert.equal(Math.round((after - before) * 100) / 100, 800);
+  const tx = (await a.get('/api/wallet/transactions?type=bonus')).data.transactions[0];
+  assert.equal(tx.method, 'race');
+  assert.equal(tx.details.rank, 1);
+  // Settling again pays nothing more.
+  app.plugins.race.settle(Date.now() + 86400000);
+  assert.equal((await a.get('/api/me')).data.user.balances.USD, after);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');
