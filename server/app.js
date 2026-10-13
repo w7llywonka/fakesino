@@ -235,6 +235,10 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
 
   // --- Payments ---------------------------------------------------------------------
   router.post('/api/payments/card', authed((ctx) => payments.cardDeposit(ctx.user, ctx.body)));
+  router.post('/api/payments/bank', authed((ctx) => payments.bankStart(ctx.user, ctx.body)));
+  router.post('/api/payments/bank/simulate', authed((ctx) => payments.bankSimulate(ctx.user, ctx.body)));
+  router.post('/api/payments/bank/cancel', authed((ctx) => payments.bankCancel(ctx.user, ctx.body)));
+  router.post('/api/payments/mobile', authed((ctx) => payments.mobilePay(ctx.user, ctx.body)));
   router.post('/api/payments/:id/authenticate', authed((ctx) => payments.authenticate(ctx.user, ctx.params.id, ctx.body)));
   router.post('/api/payments/crypto/address', authed((ctx) => payments.depositAddress(ctx.user, ctx.body)));
   router.post('/api/payments/crypto/simulate', authed((ctx) => payments.simulateCryptoDeposit(ctx.user, ctx.body)));

@@ -810,6 +810,28 @@ test('affiliate: campaigns, referral attach, commission on referred play, claim'
   assert.match((await late.post('/api/affiliate/attach', { code: 'rivalpage' })).data.error, /Only new wallets/);
 });
 
+test('bank transfer and mobile wallet deposits', async () => {
+  const c = await newPlayer(0);
+  const start = await c.post('/api/payments/bank', { amount: 250, currency: 'EUR' });
+  assert.equal(start.status, 200, JSON.stringify(start.data));
+  const t = start.data.transaction;
+  assert.match(t.details.reference, /^FKS-[0-9A-F]{8}$/);
+  assert.match(t.details.account, /^FAKE/);
+  assert.equal(t.status, 'pending');
+  assert.equal((await c.post('/api/payments/bank', { amount: 5, currency: 'USD' })).status, 400);
+  const sim = await c.post('/api/payments/bank/simulate', { id: t.id });
+  assert.equal(sim.data.transaction.details.stage, 'received');
+  assert.equal((await c.post('/api/payments/bank/simulate', { id: t.id })).status, 400);
+  await waitFor(async () => (await c.get('/api/me')).data.user.balances.EUR === 250, 8000);
+  const second = (await c.post('/api/payments/bank', { amount: 40, currency: 'USD' })).data.transaction;
+  assert.equal((await c.post('/api/payments/bank/cancel', { id: second.id })).data.transaction.status, 'failed');
+  const m = await c.post('/api/payments/mobile', { amount: 30, currency: 'USD' });
+  assert.equal(m.status, 200);
+  assert.equal(m.data.user.balances.USD, 30);
+  const deposits = (await c.get('/api/wallet/transactions?type=deposit')).data.transactions.map((x) => `${x.method}:${x.status}`);
+  assert.deepEqual(deposits, ['mobile_wallet:completed', 'bank:failed', 'bank:completed']);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');

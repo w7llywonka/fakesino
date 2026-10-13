@@ -485,6 +485,78 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     return out;
   }
 
+  // ---- other fiat methods (fictional providers, no bank log-in) ----
+  function fiatAmount(user, body) {
+    const fiat = body.currency === 'EUR' ? 'EUR' : 'USD';
+    const amount = parseAmount(fiat, body.amount);
+    if (amount < DEPOSIT_LIMITS.min) throw badRequest(`Minimum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.min}`, { field: 'amount' });
+    if (amount > DEPOSIT_LIMITS.max) throw badRequest(`Maximum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.max.toLocaleString('en-US')}`, { field: 'amount' });
+    assertNotOnBreak(user);
+    assertDepositLimit(store, user, toUsd(fiat, amount));
+    return { fiat, amount };
+  }
+
+  // Bank transfer: we show (fake) account details and a reference; the
+  // player "sends" it with a button and it lands after a short delay.
+  function bankStart(user, body) {
+    const { fiat, amount } = fiatAmount(user, body);
+    const reference = `FKS-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const tx = addTx(user, {
+      type: 'deposit',
+      method: 'bank',
+      status: 'pending',
+      currency: fiat,
+      amount,
+      details: { stage: 'awaiting', reference, bank: 'Fakesino Demo Bank', accountName: 'Fakesino Play Money Ltd', account: `FAKE00 DEMO ${String(user.id).padStart(4, '0')} 0000 0000`, routing: 'DEMO0000' },
+    });
+    store.save();
+    return { transaction: publicTx(tx) };
+  }
+
+  function pendingBank(user, id) {
+    const tx = store.data.transactions.find((t) => t.id === Number(id) && t.userId === user.id && t.method === 'bank');
+    if (!tx) throw new HttpError(404, 'Transfer not found');
+    if (tx.status !== 'pending' || tx.details.stage !== 'awaiting') throw badRequest('This transfer is no longer waiting');
+    return tx;
+  }
+
+  function bankSimulate(user, body) {
+    const tx = pendingBank(user, body.id);
+    tx.details.stage = 'received';
+    tx.updatedAt = Date.now();
+    store.save();
+    live.toUser(user.id, 'tx', publicTx(tx));
+    later(Number(process.env.FAKESINO_WITHDRAW_MS ?? 4000), () => {
+      tx.status = 'completed';
+      tx.details.stage = 'credited';
+      tx.updatedAt = Date.now();
+      credit(user, tx.currency, tx.amount);
+      store.save();
+      pushTx(user, tx);
+    });
+    return { transaction: publicTx(tx) };
+  }
+
+  function bankCancel(user, body) {
+    const tx = pendingBank(user, body.id);
+    tx.status = 'failed';
+    tx.details.stage = 'cancelled';
+    tx.details.reason = 'Cancelled';
+    tx.updatedAt = Date.now();
+    store.save();
+    return { transaction: publicTx(tx) };
+  }
+
+  // Mobile wallet ("Demo Pay"): a one-tap payment sheet, settled instantly.
+  function mobilePay(user, body) {
+    const { fiat, amount } = fiatAmount(user, body);
+    credit(user, fiat, amount);
+    const tx = addTx(user, { type: 'deposit', method: 'mobile_wallet', status: 'completed', currency: fiat, amount, details: { wallet: 'Demo Pay', last4: '4242' } });
+    store.save();
+    pushTx(user, tx);
+    return { transaction: publicTx(tx), user: publicUser(user) };
+  }
+
   function transaction(user, id) {
     const t = store.data.transactions.find((x) => x.id === Number(id) && x.userId === user.id);
     if (!t) throw new HttpError(404, 'Transaction not found');
@@ -564,7 +636,8 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       if (tx.status !== 'pending') continue;
       const user = store.data.users[tx.userId];
       if (!user) continue;
-      if ((tx.type === 'deposit' && (tx.method === 'crypto' || tx.method === 'buy')) || tx.type === 'swap') {
+      if ((tx.type === 'deposit' && (tx.method === 'crypto' || tx.method === 'buy' || (tx.method === 'bank' && tx.details.stage === 'received'))) || tx.type === 'swap') {
+        if (tx.method === 'bank') tx.details.stage = 'credited';
         tx.status = 'completed';
         tx.details.confirmations = tx.details.required;
         credit(user, tx.currency, tx.amount);
@@ -584,6 +657,10 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     addTx,
     buyQuotes,
     transaction,
+    bankStart,
+    bankSimulate,
+    bankCancel,
+    mobilePay,
     swap,
     swapQuote: (q) => swapQuote(q.from, q.to, Number(q.amount) || 0),
     explorerTx,

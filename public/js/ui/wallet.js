@@ -156,7 +156,13 @@ function fiatDeposit(container, { fiat, credit, offs, modal, title = null }) {
         .join('') +
       `<button type="button" class="method ${method === 'new' ? 'selected' : ''}" data-m="new">${icon('plus', 20)}
         <div><div class="m-title">Credit / Debit card</div><div class="m-sub">Instant · No fees · Demo cards only</div></div>
-        <div class="m-right">${brandChip('visa')}${brandChip('mastercard')}${brandChip('amex')}</div></button>`;
+        <div class="m-right">${brandChip('visa')}${brandChip('mastercard')}${brandChip('amex')}</div></button>` +
+      (title
+        ? ''
+        : `<button type="button" class="method ${method === 'mobile' ? 'selected' : ''}" data-m="mobile">${icon('wallet', 20)}
+        <div><div class="m-title">Mobile wallet</div><div class="m-sub">Instant · Demo Pay</div></div><div class="m-right"><span class="brand-chip demo">PAY</span></div></button>
+      <button type="button" class="method ${method === 'bank' ? 'selected' : ''}" data-m="bank">${icon('bank', 20)}
+        <div><div class="m-title">Bank transfer</div><div class="m-sub">~10 seconds here · No fees</div></div><div class="m-right"><span class="brand-chip demo">BANK</span></div></button>`);
   };
   renderMethods();
   on(methods, 'click', '[data-m]', (e, b) => {
@@ -194,6 +200,8 @@ function fiatDeposit(container, { fiat, credit, offs, modal, title = null }) {
     }
     f.classList.remove('invalid');
     view.remove();
+    if (method === 'bank') return bankStep(container, { amount: roundDown(fiat, amount), fiat, offs, modal });
+    if (method === 'mobile') return mobileStep(container, { amount: roundDown(fiat, amount), fiat, modal });
     cardStep(container, { amount: roundDown(fiat, amount), fiat, credit, savedCard: cards.find((c) => c.id === method) || null, offs, modal });
   });
 }
@@ -378,6 +386,89 @@ function paymentSuccess(container, res, { modal }) {
   if (currency() !== tx.currency) setCurrency(tx.currency);
   toastSuccess('Deposit confirmed', `${fmt.amount(tx.amount, tx.currency)} ${tx.currency} added to your balance`);
   view.querySelector('[data-act=play]').addEventListener('click', () => modal.close());
+}
+
+// Bank transfer: fake account details and a reference; "send" it with a button.
+async function bankStep(container, { amount, fiat, offs, modal }) {
+  const view = el('<div><div class="spinner"></div></div>');
+  container.appendChild(view);
+  let tx;
+  try {
+    ({ transaction: tx } = await api.post('/api/payments/bank', { amount, currency: fiat }));
+  } catch (err) {
+    view.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+    return;
+  }
+  const d = tx.details;
+  const row = (label, value, copy = value) => `<div class="line"><span>${label}</span><span class="row" style="gap:6px"><b class="mono">${esc(value)}</b><button class="icon-btn" data-copy="${esc(copy)}" aria-label="Copy ${label}">${icon('copy', 14)}</button></span></div>`;
+  view.innerHTML = `<div class="muted" style="margin-bottom:10px">Send exactly <b>${CURRENCIES[fiat].symbol}${fmt.amount(amount, fiat)}</b> to this account and include the reference.</div>
+    <div class="summary bank-details">${row('Bank', d.bank)}${row('Account name', d.accountName)}${row('Account', d.account)}${row('Routing', d.routing)}${row('Reference', d.reference)}${row('Amount', `${fmt.amount(amount, fiat)} ${fiat}`, String(amount))}</div>
+    <div class="demo-notice warn" style="margin:12px 0">${icon('alert', 16)}<div>This bank and account are fictional. Nothing is ever sent — press the button below to simulate the transfer.</div></div>
+    <button class="btn btn-primary btn-block btn-lg" data-act="sent">I’ve sent it (simulate)</button>
+    <button class="btn btn-secondary btn-block" data-act="cancel" style="margin-top:8px">Cancel transfer</button>`;
+  on(view, 'click', '[data-copy]', async (e, b) => {
+    await copyText(b.dataset.copy);
+    toast({ type: 'success', title: 'Copied' });
+  });
+  view.querySelector('[data-act=cancel]').addEventListener('click', async () => {
+    await api.post('/api/payments/bank/cancel', { id: tx.id }).catch(() => {});
+    container.innerHTML = '';
+    fiatDeposit(container, { fiat, credit: fiat, offs, modal });
+  });
+  view.querySelector('[data-act=sent]').addEventListener('click', async (e) => {
+    e.currentTarget.classList.add('loading');
+    try {
+      await api.post('/api/payments/bank/simulate', { id: tx.id });
+    } catch (err) {
+      toastError(err);
+      return;
+    }
+    view.innerHTML = `<div class="success-state"><div class="check pending">${icon('bank', 30)}</div><h3>Transfer on its way</h3>
+      <div class="muted">Reference <b class="mono">${esc(d.reference)}</b>. It’s credited as soon as it arrives.</div>
+      <div class="tx-progress" style="justify-content:space-between"><span>Status</span><span class="pill yellow status">Processing</span></div></div>`;
+  });
+  offs.push(
+    bus.on('live:tx', (t) => {
+      if (t.id !== tx.id || t.status !== 'completed') return;
+      container.innerHTML = '';
+      const done = el(`<div class="success-state"><div class="check">${icon('check', 34)}</div><h3>Deposit received</h3>
+        <div class="muted">${CURRENCIES[fiat].symbol}${fmt.amount(t.amount, fiat)} has been added to your balance.</div>
+        <button class="btn btn-primary btn-block btn-lg" data-act="play" style="margin-top:16px">Start playing</button></div>`);
+      container.appendChild(done);
+      if (currency() !== t.currency) setCurrency(t.currency);
+      done.querySelector('[data-act=play]').addEventListener('click', () => modal.close());
+    }),
+  );
+}
+
+// Mobile wallet: a one-tap "Demo Pay" sheet.
+function mobileStep(container, { amount, fiat, modal }) {
+  const sym = CURRENCIES[fiat].symbol;
+  const view = el(`<div class="demo-pay">
+    <div class="dp-head">${icon('wallet', 18)} <b>Demo Pay</b><span class="dim" style="margin-left:auto">Play money</span></div>
+    <div class="dp-card"><span class="brand-chip demo">PAY</span><div><div class="m-title">Demo card</div><div class="m-sub">•••• 4242</div></div></div>
+    <div class="summary"><div class="line"><span>Pay Fakesino (play money)</span><b>${sym}${fmt.amount(amount, fiat)}</b></div></div>
+    <button class="btn btn-primary btn-block btn-lg" data-act="pay">Pay ${sym}${fmt.amount(amount, fiat)}</button>
+    <div class="muted" style="font-size:12px;text-align:center;margin-top:8px">Demo Pay is fictional. Nothing is charged.</div></div>`);
+  container.appendChild(view);
+  view.querySelector('[data-act=pay]').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.classList.add('loading');
+    try {
+      const res = await api.post('/api/payments/mobile', { amount, currency: fiat });
+      setUser(res.user);
+      container.innerHTML = '';
+      const done = el(`<div class="success-state"><div class="check">${icon('check', 34)}</div><h3>Deposit successful</h3>
+        <div class="muted">${sym}${fmt.amount(amount, fiat)} paid with Demo Pay.</div>
+        <button class="btn btn-primary btn-block btn-lg" data-act="play" style="margin-top:16px">Start playing</button></div>`);
+      container.appendChild(done);
+      if (currency() !== fiat) setCurrency(fiat);
+      done.querySelector('[data-act=play]').addEventListener('click', () => modal.close());
+    } catch (err) {
+      btn.classList.remove('loading');
+      toastError(err);
+    }
+  });
 }
 
 function paymentFailed(container, payment, opts) {

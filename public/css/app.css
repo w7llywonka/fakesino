@@ -3718,3 +3718,31 @@ textarea.input {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Bank transfer / Demo Pay */
+.brand-chip.demo {
+  background: var(--surface-4);
+  color: var(--text);
+}
+.bank-details .line {
+  align-items: center;
+}
+.success-state .check.pending {
+  background: color-mix(in srgb, var(--gold) 25%, transparent);
+  color: var(--gold);
+}
+.demo-pay .dp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.demo-pay .dp-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 12px;
+}
