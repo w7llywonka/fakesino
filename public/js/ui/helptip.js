@@ -28,6 +28,13 @@ export const HELP = {
   'Stop on Loss': 'Auto stops once this run is down by this much. 0 means no limit.',
   Strategy: 'A betting system that changes your bet after each result. Pick one or build your own.',
   Cards: 'How many cards to deal. Every card must be different for the bet to win.',
+  Network: 'The blockchain the coin moves on. Deposit and withdraw on the same network — on a real site, the wrong one loses the funds.',
+  'Destination tag': 'XRP addresses are shared, so the tag tells the site which wallet a transfer belongs to. Always include it.',
+  'Client Seed': 'Your own random input. It mixes with the server seed to make each result, and you can change it any time.',
+  'Server Seed (Hashed)': 'The SHA-256 hash of our secret seed, shown before you bet. The seed itself is revealed when you rotate the pair.',
+  'Server Seed': 'The secret seed, revealed once you rotate the pair. Hash it to check it matches the hash you were shown.',
+  'Next Server Seed (Hashed)': 'The seed that takes over when you rotate, committed in advance so it can’t be swapped.',
+  Nonce: 'Counts your bets with this seed pair, so every bet gets a fresh result.',
 };
 
 export const helpFor = (label) => HELP[String(label || '').replace(/\s*\(.*\)\s*$/, '').trim()] || '';

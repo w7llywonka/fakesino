@@ -11,6 +11,7 @@ import { renderResult, renderResultAsync } from './betpreview.js';
 import { bySlug, GAMES } from '../games/registry.js';
 import { createArrayRng } from '../shared/fair.js';
 import { markStep } from './onboarding.js';
+import { helpTip } from './helptip.js';
 import { cardFromFloat } from '../shared/games/util.js';
 import * as fmt from '../format.js';
 
@@ -20,8 +21,8 @@ const randomSeed = () => {
   return [...a].map((b) => 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 57]).join('');
 };
 
-function copyField(label, value, extra = '') {
-  return `<div class="field"><div class="field-label"><span>${label}</span>${extra}</div>
+function copyField(label, value, extra = '', tip = null) {
+  return `<div class="field"><div class="field-label"><span>${label}</span>${tip ? helpTip(tip) : ''}${extra}</div>
     <div class="input-group"><input class="input mono" readonly value="${esc(value)}" style="font-size:12.5px"><button type="button" class="addon" data-copy="${esc(value)}">${icon('copy', 14)}</button></div></div>`;
 }
 
@@ -63,16 +64,16 @@ async function seedsTab(body, show) {
   }
   const a = data.active;
   body.innerHTML = `
-    ${copyField('Active Client Seed', a.clientSeed)}
-    ${copyField('Active Server Seed (Hashed)', a.serverSeedHash)}
-    <div class="field"><div class="field-label">Total bets made with pair</div><input class="input" readonly value="${a.nonce}"></div>
+    ${copyField('Active Client Seed', a.clientSeed, '', 'Client Seed')}
+    ${copyField('Active Server Seed (Hashed)', a.serverSeedHash, '', 'Server Seed (Hashed)')}
+    <div class="field"><div class="field-label"><span>Total bets made with pair</span>${helpTip('Nonce')}</div><input class="input" readonly value="${a.nonce}"></div>
     <div class="divider"></div>
     <div style="font-weight:800;margin-bottom:10px">Rotate Seed Pair</div>
     ${data.locked.length ? `<div class="demo-notice warn">${icon('alert', 16)}<div>Finish your active ${data.locked.map((s) => esc(bySlug[s]?.name || s)).join(', ')} game before rotating seeds.</div></div>` : ''}
     <form class="field" data-field="clientSeed"><div class="field-label">New Client Seed<span class="req">*</span></div>
       <div class="input-group"><input class="input mono" name="clientSeed" value="${randomSeed()}" maxlength="64"><button class="addon" type="submit" style="background:var(--accent);color:var(--accent-text);padding:0 16px" ${data.locked.length ? 'disabled' : ''}>Change</button></div>
       <div class="field-error"></div></form>
-    ${copyField('Next Server Seed (Hashed)', a.nextServerSeedHash)}
+    ${copyField('Next Server Seed (Hashed)', a.nextServerSeedHash, '', 'Next Server Seed (Hashed)')}
     ${
       data.history.length
         ? `<div class="divider"></div><div style="font-weight:800;margin-bottom:10px">Previous seeds</div>
@@ -106,10 +107,10 @@ export function verifyTab(body, prefill) {
   const games = verifiable.map((g) => `<option value="${g.slug}" ${p.game === g.slug ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
   body.innerHTML = `<form class="vf">
     <div class="field"><div class="field-label">Game</div><select class="select" name="game">${games}</select></div>
-    <div class="field"><div class="field-label">Server Seed</div><input class="input mono" name="serverSeed" value="${esc(p.serverSeed || '')}" placeholder="Revealed after you rotate your seed pair"></div>
+    <div class="field"><div class="field-label"><span>Server Seed</span>${helpTip('Server Seed')}</div><input class="input mono" name="serverSeed" value="${esc(p.serverSeed || '')}" placeholder="Revealed after you rotate your seed pair"></div>
     <div class="field-label" style="margin:-6px 0 12px"><span class="dim mono" style="font-size:11.5px;word-break:break-all" data-hash></span></div>
-    <div class="two-col" style="gap:12px"><div class="field"><div class="field-label">Client Seed</div><input class="input mono" name="clientSeed" value="${esc(p.clientSeed || '')}"></div>
-    <div class="field"><div class="field-label">Nonce</div><input class="input" name="nonce" inputmode="numeric" value="${esc(p.nonce ?? 0)}"></div></div>
+    <div class="two-col" style="gap:12px"><div class="field"><div class="field-label"><span>Client Seed</span>${helpTip('Client Seed')}</div><input class="input mono" name="clientSeed" value="${esc(p.clientSeed || '')}"></div>
+    <div class="field"><div class="field-label"><span>Nonce</span>${helpTip('Nonce')}</div><input class="input" name="nonce" inputmode="numeric" value="${esc(p.nonce ?? 0)}"></div></div>
     <div class="params"></div>
     <div class="field version-field" style="display:none"><div class="field-label"><span>Rules version</span><span class="dim" style="font-size:12px">Use the version the bet was placed under</span></div><select class="select" name="rulesVersion"></select></div>
   </form><div class="vf-out"></div>`;
@@ -123,7 +124,7 @@ export function verifyTab(body, prefill) {
     paramsEl.innerHTML = fields
       .map(([k, label, type, def]) => {
         const v = pv[k] ?? def;
-        if (Array.isArray(type)) return `<div class="field"><div class="field-label">${esc(label)}</div><select class="select" name="p_${k}">${type.map((o) => `<option ${String(o) === String(pv[k] ?? type[0]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
+        if (Array.isArray(type)) return `<div class="field"><div class="field-label">${esc(label)}</div><select class="select" name="p_${k}">${type.map((o) => `<option value="${esc(o)}" ${String(o) === String(pv[k] ?? type[0]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
         return `<div class="field"><div class="field-label">${esc(label)}</div><input class="input" name="p_${k}" value="${esc(Array.isArray(v) ? v.join(',') : v)}"></div>`;
       })
       .join('');

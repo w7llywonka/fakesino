@@ -15,7 +15,7 @@ export function promotionsPage(page) {
   const promos = [
     ['p1', 'VIP bonuses', 'From Bronze up: weekly, monthly, daily and level-up bonuses based on what you play, plus reloads from Platinum.', '/vip?tab=bonuses', 'View bonuses'],
     ['p2', 'Rakeback', '5% of the house edge on every bet you place comes back to you. Claim it whenever you like.', '/vip', 'View rakeback'],
-    ['p3', 'Daily Race', 'Wager the most in 24 hours to climb the leaderboard. Prizes are bragging rights — it is all play money after all.', '/leaderboard', 'See the race'],
+    ['p3', 'Daily Race', 'The top 10 by wager each UTC day share $2,000 of play money, paid out automatically.', '/leaderboard', 'See the race'],
     ['p1', 'Welcome offer', 'New wallet? Redeem the code WELCOME within 24 hours for $20 of play money (3× wagering).', '/settings/offers', 'Redeem'],
     ['p2', 'Bonus drops', 'DropBot posts a limited code in chat every four hours. Be quick: 50 claims each, gone in an hour.', '/settings/offers', 'Redeem a code'],
     ['p3', 'Challenges', 'Be the first to hit the target multiplier on a game and win a play-money prize. New challenges every Monday.', '/challenges', 'View challenges'],

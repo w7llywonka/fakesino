@@ -4411,7 +4411,7 @@ textarea.input {
 .help-tip::after {
   content: '';
   position: absolute;
-  inset: -7px;
+  inset: -8px -3px;
 }
 .help-tip:hover,
 .help-tip:focus-visible {
@@ -4835,6 +4835,12 @@ textarea.input {
   .game-tip:not(.expanded) [data-gt-act='expand'] {
     display: inline-flex;
   }
+  .game-tip:not(.expanded) .gt-body {
+    min-width: max-content;
+  }
+  .game-tip:not(.expanded) .gt-actions {
+    margin-left: auto;
+  }
   .game-tip.expanded .gt-actions {
     width: 100%;
     justify-content: flex-end;
@@ -5078,4 +5084,28 @@ textarea.input {
 .table .empty,
 .table .skeleton-rows {
   white-space: normal;
+}
+
+/* Long translations: sidebar items wrap, tight bet labels shorten */
+.sidebar .nav-item {
+  white-space: normal;
+  height: auto;
+  min-height: 42px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 1.25;
+}
+.sidebar .nav-sub .nav-item {
+  min-height: 38px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.bp-label {
+  min-width: 0;
+}
+.bp-label > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

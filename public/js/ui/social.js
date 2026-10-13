@@ -64,7 +64,7 @@ export function openRain(prefill = {}) {
   let code = prefill.currency && CURRENCIES[prefill.currency] ? prefill.currency : currency();
   const body = el(`<form class="rain" novalidate>
     <div class="demo-notice">${icon('coins', 16)}<div>Amount will be shared evenly with all users in the Rain — the most recent chatters in this room over the last 30 minutes.</div></div>
-    <div class="field" data-field="currency"><div class="field-label">Currency</div><select class="select" name="currency">${CURRENCY_CODES.map((c) => `<option ${c === code ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+    <div class="field" data-field="currency"><div class="field-label">Currency</div><select class="select" name="currency">${CURRENCY_CODES.map((c) => `<option value="${c}" ${c === code ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
     <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux dim"></span></div><input class="input" name="amount" inputmode="decimal" value="${esc(prefill.amount ?? '')}"><div class="field-error"></div></div>
     <div class="field" data-field="users"><div class="field-label">Number of users (1–50)</div><input class="input" name="users" inputmode="numeric" value="${esc(prefill.users ?? 10)}"><div class="field-error"></div></div>
     ${twoFactorField(state.user)}

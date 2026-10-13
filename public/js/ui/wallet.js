@@ -11,6 +11,7 @@ import { toastSuccess, toastError, toast } from './toast.js';
 import { showFieldErrors, twoFactorField, wageringNotice } from './forms.js';
 import { qrSvg } from '../shared/qr.js';
 import { networksFor, networkFor, validAddress } from '../shared/networks.js';
+import { helpTip } from './helptip.js';
 
 const TABS = [
   ['deposit', 'Deposit'],
@@ -231,7 +232,7 @@ function cardStep(container, { amount, fiat, credit, savedCard, modal, extra = n
       </div>
       <div class="field" data-field="name"><label class="field-label">Name on card</label><input class="input" name="name" placeholder="Full name" value="${esc(state.user.username)}"><div class="field-error"></div></div>
       <div class="row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="field"><label class="field-label">Country</label><select class="select" name="country"><option>United States</option><option>United Kingdom</option><option>Canada</option><option>Germany</option><option>Australia</option><option>Other</option></select></div>
+        <div class="field"><label class="field-label">Country</label><select class="select" name="country">${['United States', 'United Kingdom', 'Canada', 'Germany', 'Australia', 'Other'].map((c) => `<option value="${c}">${c}</option>`).join('')}</select></div>
         <div class="field"><label class="field-label">ZIP / Postal code</label><input class="input" name="zip" placeholder="12345"></div>
       </div>
       <label class="checkbox" style="margin-bottom:14px"><input type="checkbox" name="save" checked><span>Save this card for faster deposits</span></label>`
@@ -492,8 +493,8 @@ const lastNetwork = {};
 
 function networkSelect(code, selected, name = 'network') {
   const list = networksFor(code);
-  if (list.length < 2) return `<div class="field"><div class="field-label"><span>Network</span></div><div class="input" style="display:flex;align-items:center">${esc(list[0]?.label || '')}</div></div>`;
-  return `<div class="field"><div class="field-label"><span>Choose network</span></div><select class="select" name="${name}">${list.map((n) => `<option value="${n.id}" ${n.id === selected ? 'selected' : ''}>${esc(n.label)}</option>`).join('')}</select></div>`;
+  if (list.length < 2) return `<div class="field"><div class="field-label"><span>Network</span>${helpTip('Network')}</div><div class="input" style="display:flex;align-items:center">${esc(list[0]?.label || '')}</div></div>`;
+  return `<div class="field"><div class="field-label"><span>Choose network</span>${helpTip('Network')}</div><select class="select" name="${name}">${list.map((n) => `<option value="${n.id}" ${n.id === selected ? 'selected' : ''}>${esc(n.label)}</option>`).join('')}</select></div>`;
 }
 
 function cryptoDeposit(container, code, offs) {
@@ -510,7 +511,7 @@ function cryptoDeposit(container, code, offs) {
           <div class="address-box"><span style="flex:1" class="addr">${esc(info.address)}</span><button class="btn btn-secondary btn-sm" data-act="copy">${icon('copy', 14)} Copy</button></div></div>
         ${
           info.tag
-            ? `<div class="field"><div class="field-label"><span>Destination tag <span class="pill red" style="margin-left:4px">Required</span></span></div>
+            ? `<div class="field"><div class="field-label"><span>Destination tag <span class="pill red" style="margin-left:4px">Required</span></span>${helpTip('Destination tag')}</div>
           <div class="address-box"><span style="flex:1" class="addr">${esc(info.tag)}</span><button class="btn btn-secondary btn-sm" data-copy-tag>${icon('copy', 14)} Copy</button></div></div>
           <div class="demo-notice warn" style="margin:0 0 14px">${icon('alert', 16)}<div>Both the address and the destination tag are required. A ${code} deposit without the tag can't be matched to your wallet.</div></div>`
             : ''
@@ -771,7 +772,7 @@ function withdrawTab({ body, offs }) {
       ${
         isCrypto
           ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(net.label)}</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>
-            ${net.tag ? '<div class="field" data-field="tag"><label class="field-label"><span>Destination tag</span><span class="muted">Optional — required by most exchanges</span></label><input class="input mono" name="tag" inputmode="numeric" placeholder="e.g. 104729" autocomplete="off"><div class="field-error"></div></div>' : ''}`
+            ${net.tag ? `<div class="field" data-field="tag"><label class="field-label"><span>Destination tag</span>${helpTip('Destination tag')}<span class="muted">Optional — required by most exchanges</span></label><input class="input mono" name="tag" inputmode="numeric" placeholder="e.g. 104729" autocomplete="off"><div class="field-error"></div></div>` : ''}`
           : cards.length
             ? `<div class="field" data-field="card"><div class="field-label">Withdraw to</div><div class="method-list">${cards
                 .map((c, i) => `<label class="method ${i === 0 ? 'selected' : ''}"><input type="radio" name="cardId" value="${c.id}" ${i === 0 ? 'checked' : ''} hidden>${icon('card', 20)}<div><div class="m-title">•••• ${esc(c.last4)}</div><div class="m-sub">${esc(c.name)}</div></div><div class="m-right">${brandChip(c.brand)}</div></label>`)
