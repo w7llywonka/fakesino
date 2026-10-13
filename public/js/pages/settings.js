@@ -10,6 +10,7 @@ import * as fmt from '../format.js';
 const TABS = [
   ['general', 'General'],
   ['preferences', 'Preferences'],
+  ['offers', 'Offers'],
   ['payments', 'Saved cards'],
   ['limits', 'Responsible Gaming'],
 ];
@@ -102,7 +103,16 @@ export default function settingsPage(page, { tab = 'general' }) {
         const v = where === 'server' ? u.settings[k] : state.prefs[k] !== false && (k !== 'hotkeys' || state.prefs.hotkeys);
         return `<label class="setting-row"><div><div class="t">${t}</div><div class="d">${d}</div></div><input type="checkbox" class="toggle" data-k="${k}" data-where="${where}" ${v ? 'checked' : ''}></label>`;
       })
-      .join('')}`;
+      .join('')}
+      <h3 style="margin-top:24px">Ignored users</h3><div class="ignored-list">${
+        (state.prefs.ignored || []).length
+          ? state.prefs.ignored.map((n) => `<span class="sr-chip"><button>${esc(n)}</button><button data-unignore="${esc(n)}" aria-label="Unignore">${icon('close', 12)}</button></span>`).join('')
+          : '<div class="muted" style="font-size:13px">Nobody. Ignore players from their name in chat.</div>'
+      }</div>`;
+    on(body, 'click', '[data-unignore]', (e, b) => {
+      savePrefs({ ignored: (state.prefs.ignored || []).filter((n) => n !== b.dataset.unignore) });
+      b.parentElement.remove();
+    });
     on(body, 'change', 'input[data-k]', async (e, input) => {
       const k = input.dataset.k;
       if (input.dataset.where === 'local') {
@@ -173,6 +183,37 @@ export default function settingsPage(page, { tab = 'general' }) {
       });
     };
     render();
+  } else if (tab === 'offers') {
+    const loadOffers = () => {
+    body.innerHTML = '<div class="spinner"></div>';
+    api
+      .get('/api/offers')
+      .then(({ welcome }) => {
+        const left = welcome.endsAt - Date.now();
+        body.innerHTML = `<h3 style="margin-top:0">Offers</h3>
+          ${
+            welcome.available
+              ? `<div class="offer-card"><div><div class="t">${icon('gift', 18)} Welcome offer</div><div class="d">New wallets can claim ${fmt.fiat(welcome.valueUsd)} of play money once, within 24 hours. Code: <b class="mono">WELCOME</b> · ${Math.max(1, Math.floor(left / 3600000))}h left</div></div><button class="btn btn-primary" data-redeem="WELCOME">Claim</button></div>`
+              : welcome.claimed
+                ? `<div class="offer-card claimed"><div><div class="t">${icon('check', 18)} Welcome offer claimed</div><div class="d">You used the code ${esc(welcome.claimed)}.</div></div></div>`
+                : ''
+          }
+          <form class="offer-form" novalidate><div class="field"><div class="field-label">Redeem bonus drop</div>
+            <div class="input-group"><input class="input mono" name="code" placeholder="Enter a code" autocomplete="off"><button class="btn btn-primary" type="submit">Redeem</button></div></div>
+            <div class="muted" style="font-size:12px">Bonus drops are posted in chat by DropBot every few hours — you can also type <span class="kbd">/drop CODE</span> in chat.</div></form>`;
+        on(body, 'click', '[data-redeem]', async (e, b) => {
+          const { openRedeem } = await import('../ui/offers.js');
+          openRedeem(b.dataset.redeem, { onDone: loadOffers });
+        });
+        body.querySelector('.offer-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const { openRedeem } = await import('../ui/offers.js');
+          openRedeem(e.target.code.value.trim());
+        });
+      })
+      .catch((err) => (body.innerHTML = `<div class="empty">${esc(err.message)}</div>`));
+    };
+    loadOffers();
   } else if (tab === 'payments') {
     const render = () => {
       const cards = state.user.cards || [];

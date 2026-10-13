@@ -14,6 +14,7 @@ import { createRng, sha256 } from '../server/fair.js';
 
 process.env.FAKESINO_CONFIRM_MS = '20';
 process.env.FAKESINO_WITHDRAW_MS = '20';
+process.env.FAKESINO_GUEST_LIMIT = '500';
 
 let app;
 let base;
@@ -517,6 +518,58 @@ test('challenges: the first qualifying bet wins the prize', async () => {
   assert.equal(mine[0].winner.me, true);
   const txs = (await c.get('/api/wallet/transactions?type=bonus')).data;
   assert.ok(JSON.stringify(txs).includes('challenge'));
+});
+
+test('tips move play money between wallets; rain splits among recent chatters', async () => {
+  const a = await newPlayer(100);
+  const b = await newPlayer(0);
+  const c = await newPlayer(0);
+  const nameB = (await b.get('/api/me')).data.user.username;
+  const nameA = (await a.get('/api/me')).data.user.username;
+  assert.equal((await a.post('/api/tips', { to: nameA, amount: 1, currency: 'USD' })).status, 400, 'no self-tips');
+  assert.equal((await a.post('/api/tips', { to: 'nobody_here', amount: 1, currency: 'USD' })).status, 400);
+  const tip = await a.post('/api/tips', { to: nameB, amount: 5, currency: 'USD', public: true });
+  assert.equal(tip.status, 200, JSON.stringify(tip.data));
+  assert.equal(tip.data.balance.amount, 95);
+  assert.equal((await b.get('/api/me')).data.user.balances.USD, 5);
+  const notes = (await b.get('/api/notifications')).data;
+  assert.equal(notes.notifications[0].kind, 'tip');
+  const chat = (await a.get('/api/chat?room=en')).data.messages;
+  assert.match(chat.at(-1).text, /tipped/);
+  assert.equal((await a.post('/api/tips', { to: nameB, amount: 2000, currency: 'USD' })).status, 400, 'over balance / daily cap');
+  // Rain needs recent chatters in the room.
+  await b.post('/api/chat', { text: `hello @${nameA}`, room: 'es' });
+  await new Promise((r) => setTimeout(r, 30));
+  await c.post('/api/chat', { text: 'hola', room: 'es' });
+  const mention = (await a.get('/api/notifications')).data.notifications.find((n) => n.kind === 'mention');
+  assert.ok(mention, 'mentioned user is notified');
+  const rain = await a.post('/api/rain', { amount: 10, currency: 'USD', users: 5, room: 'es' });
+  assert.equal(rain.status, 200, JSON.stringify(rain.data));
+  assert.equal(rain.data.users, 2);
+  assert.equal(rain.data.share, 5);
+  assert.equal((await c.get('/api/me')).data.user.balances.USD, 5);
+  const profile = (await c.get(`/api/users/${nameB}`)).data.user;
+  assert.equal(profile.username, nameB);
+});
+
+test('offers: welcome code once per new wallet, drop codes with wager and claim limits', async () => {
+  const c = await newPlayer(0);
+  const r = await c.post('/api/offers/redeem', { code: 'WELCOME', currency: 'USD' });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.amount, 20);
+  assert.equal((await c.post('/api/offers/redeem', { code: 'WELCOME', currency: 'USD' })).data.error, 'You already claimed the bonus.');
+  assert.equal((await c.post('/api/offers/redeem', { code: 'NOPE', currency: 'USD' })).data.error, 'The bonus cannot be found or is unavailable.');
+  const code = app.plugins.offers.drop();
+  assert.equal((await c.post('/api/offers/redeem', { code, currency: 'USD' })).data.error, 'You have not met the weekly wager requirement to redeem this code.');
+  for (let i = 0; i < 2; i++) await c.post('/api/games/dice/bet', { amount: 6, currency: 'USD', params: { target: 50.5, condition: 'over' } });
+  const ok = await c.post('/api/offers/redeem', { code, currency: 'BTC' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
+  assert.equal(ok.data.currency, 'BTC');
+  app.plugins.offers.codes[code].claims = 50;
+  const d = await newPlayer(0);
+  assert.equal((await d.post('/api/offers/redeem', { code, currency: 'USD' })).status, 400);
+  const chat = (await c.get('/api/chat?room=en')).data.messages;
+  assert.ok(chat.some((m) => m.code === code), 'DropBot posts the code in chat');
 });
 
 test('vault, rakeback and daily reload', async () => {

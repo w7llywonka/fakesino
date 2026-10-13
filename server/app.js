@@ -63,9 +63,8 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   const payments = createPayments({ store, live, publicUser, notify: notifier.notify });
   payments.recover();
 
-  const guestLimit = rateLimiter({ windowMs: 60_000, max: 30 });
+  const guestLimit = rateLimiter({ windowMs: 60_000, max: Number(process.env.FAKESINO_GUEST_LIMIT) || 30 });
   const betLimit = rateLimiter({ windowMs: 1000, max: 40 });
-  const chatLimit = rateLimiter({ windowMs: 2000, max: 1 });
 
   const router = new Router();
   const authed = (fn) => (ctx) => {
@@ -273,30 +272,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     return { period, leaders: [...totals.values()].sort((a, b) => b.wageredUsd - a.wageredUsd).slice(0, 20) };
   });
 
-  // --- Chat --------------------------------------------------------------------------
-  router.get('/api/chat', () => ({ messages: store.data.chat.slice(-60) }));
-  router.post(
-    '/api/chat',
-    authed((ctx) => {
-      chatLimit(`chat:${ctx.user.id}`);
-      const text = String(ctx.body.text || '')
-        .replace(/[\u0000-\u001f\u007f]/g, ' ')
-        .trim()
-        .slice(0, 200);
-      if (!text) throw badRequest('Message is empty');
-      const msg = { id: store.nextId('msg'), username: ctx.user.username, vip: vipInfo(ctx.user.stats.wageredUsd).level, text, at: Date.now() };
-      // A shared bet travels as a card (only public fields).
-      if (ctx.body.betId != null) {
-        const b = store.findBet(Number(ctx.body.betId));
-        if (b) msg.bet = { id: b.id, game: b.game, currency: b.currency, amount: b.amount, payout: b.payout, multiplier: b.multiplier };
-      }
-      store.data.chat.push(msg);
-      if (store.data.chat.length > 200) store.data.chat.splice(0, store.data.chat.length - 200);
-      store.save();
-      live.broadcast('chat', msg);
-      return { message: msg };
-    }),
-  );
+  // Chat, tips and rain live in server/plugins/social.js.
 
   router.get('/api/live', (ctx) => {
     const t = liveTickets.get(ctx.query.get('ticket') || '');

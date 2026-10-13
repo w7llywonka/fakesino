@@ -15,7 +15,14 @@ const TABS = [
   ['buy', 'Buy Crypto'],
   ['withdraw', 'Withdraw'],
   ['vault', 'Vault'],
+  ['tip', 'Tip'],
 ];
+
+// Username to pre-fill when the Tip tab opens (from chat menus or /tip).
+let tipPrefill = null;
+export function prefillTip(username, amount = null) {
+  tipPrefill = { username, amount };
+}
 
 const BRAND_LABEL = { visa: 'VISA', mastercard: 'MC', amex: 'AMEX', discover: 'DISC', unknown: 'CARD' };
 export const brandChip = (b) => `<span class="brand-chip ${b}">${BRAND_LABEL[b] || 'CARD'}</span>`;
@@ -45,6 +52,7 @@ export function openWalletModal(tab = 'deposit') {
     else if (t === 'buy') buyTab(ctx);
     else if (t === 'withdraw') withdrawTab(ctx);
     else if (t === 'vault') vaultTab(ctx);
+    else if (t === 'tip') tipTab(ctx);
   }
   on(root, 'click', '.wallet-tabs .tab', (e, b) => show(b.dataset.tab));
   show(tab);
@@ -647,3 +655,61 @@ function vaultTab({ body }) {
 }
 
 export { toastError };
+
+// ---------------------------------------------------------------------------
+// Tip another player (play money)
+
+function tipTab({ body }) {
+  let code = currency();
+  const pre = tipPrefill || {};
+  tipPrefill = null;
+  const top = el('<div></div>');
+  const content = el('<div></div>');
+  body.append(top, content);
+  const picker = currencyPicker(top, {
+    value: code,
+    onChange: (c) => {
+      code = c;
+      render();
+    },
+  });
+  function render() {
+    content.innerHTML = '';
+    const view = el(`<form novalidate>
+      <div class="field" data-field="to"><div class="field-label">Username</div><input class="input" name="to" autocomplete="off" placeholder="Who are you tipping?" value="${esc(pre.username || '')}"><div class="field-error"></div></div>
+      <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux dim"></span></div>
+        <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(pre.amount || 0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div><div class="field-error"></div></div>
+      <label class="check-row" style="margin-bottom:14px"><input type="checkbox" name="public"> Show in chat</label>
+      <div class="field-error form-error" style="margin-bottom:10px"></div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Send Tip</button>
+      <div class="muted" style="font-size:12px;margin-top:10px">Tips are play money and can't be reversed. Daily limit: $1,000 sent and received.</div></form>`);
+    content.appendChild(view);
+    const aux = view.querySelector('.aux');
+    const updateAux = () => (aux.textContent = CURRENCIES[code].type === 'crypto' ? `≈ ${fmt.fiat(fmt.usdOf(Number(view.amount.value) || 0, code))}` : '');
+    view.amount.addEventListener('input', updateAux);
+    updateAux();
+    view.querySelector('[data-act=max]').addEventListener('click', () => {
+      view.amount.value = fmt.inputAmount(balanceOf(code), code);
+      updateAux();
+    });
+    view.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = view.querySelector('[type=submit]');
+      btn.disabled = true;
+      try {
+        await api.post('/api/tips', { to: view.to.value.trim(), amount: Number(view.amount.value), currency: code, public: view.public.checked, room: state.prefs.chatRoom || 'en' });
+        toastSuccess('Tip sent', `${fmt.money(Number(view.amount.value), code)} to ${view.to.value.trim()}`);
+        picker.refresh();
+        pre.username = '';
+        pre.amount = 0;
+        render();
+      } catch (err) {
+        btn.disabled = false;
+        showFieldErrors(view, err);
+      }
+    });
+    if (!pre.username) view.to.focus();
+  }
+  render();
+}
+
