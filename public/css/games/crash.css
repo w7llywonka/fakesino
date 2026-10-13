@@ -485,3 +485,105 @@
     padding: 4px 12px 10px;
   }
 }
+
+/* Trenball */
+.tb {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+.tb-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.tb-head .dim {
+  font-size: 11.5px;
+}
+.tb-btns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.tb-btn {
+  --c: #ff4d5e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c) 18%, var(--surface-3));
+  border: 2px solid transparent;
+  color: var(--text);
+  font-size: 11px;
+  min-width: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tb-btn.green {
+  --c: #22d36b;
+}
+.tb-btn.moon {
+  --c: #f5b83d;
+}
+.tb-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c) 30%, var(--surface-3));
+}
+.tb-btn:disabled {
+  cursor: default;
+}
+.tb-btn .tb-name {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--c);
+}
+.tb-btn .tb-cond {
+  font-weight: 700;
+}
+.tb-btn .tb-pay {
+  color: var(--text-2);
+}
+.tb-btn .tb-state {
+  min-height: 14px;
+  font-weight: 700;
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.tb-btn.placed {
+  border-color: var(--c);
+}
+.tb-btn.won {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 40%, var(--surface-3));
+}
+.tb-btn.lost {
+  opacity: 0.55;
+}
+.tb-totals {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+  flex-wrap: wrap;
+}
+.tb-totals i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 4px;
+  background: #ff4d5e;
+}
+.tb-totals .green i {
+  background: #22d36b;
+}
+.tb-totals .moon i {
+  background: #f5b83d;
+}

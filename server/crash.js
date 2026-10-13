@@ -12,6 +12,10 @@ export const TICK_MS = 50;
 const CHAIN_LENGTH = 20000;
 const MAX_AUTO = 1000000;
 
+// Trenball side bets on the same round: Red wins below 2×, Green at 2× or
+// more, Moon at 10× or more. Payouts keep the ~1% edge (P(≥ m) = 0.99 ÷ m).
+export const TRENBALL = { red: { pays: 1.96, below: 2 }, green: { pays: 2, at: 2 }, moon: { pays: 10, at: 10 } };
+
 // The salt for new chains is fixed and public, so it is chosen independently
 // of the (secret) chain seed: sha256 of a published phrase.
 export const CRASH_SALT = crypto.createHash('sha256').update('fakesino crash salt · 2026-10-13').digest('hex');
@@ -34,6 +38,8 @@ export class CrashGame {
     this.history = [];
     this.players = new Map(); // userId → player
     this.queue = new Map(); // bets for the next round
+    this.tren = new Map(); // `${userId}:${side}` → Trenball bet
+    this.trenQueue = new Map();
     this.timer = null;
     this.ensureChain();
   }
@@ -84,10 +90,16 @@ export class CrashGame {
       const user = this.store.data.users[p.userId];
       if (user) credit(user, p.currency, p.amount);
     };
-    if (this.round?.phase !== 'crashed') for (const p of this.players.values()) if (!p.cashedAt) refund(p);
+    if (this.round?.phase !== 'crashed') {
+      for (const p of this.players.values()) if (!p.cashedAt) refund(p);
+      for (const t of this.tren.values()) if (!t.settled) refund(t);
+    }
     for (const p of this.queue.values()) refund(p);
+    for (const t of this.trenQueue.values()) refund(t);
     this.players.clear();
     this.queue.clear();
+    this.tren.clear();
+    this.trenQueue.clear();
     this.store.save();
   }
 
@@ -106,6 +118,8 @@ export class CrashGame {
     };
     this.players = this.queue;
     this.queue = new Map();
+    this.tren = this.trenQueue;
+    this.trenQueue = new Map();
     this.live.broadcast('crash', this.snapshot());
     this.timer = setTimeout(() => this.beginRunning(), this.bettingMs);
   }
@@ -133,6 +147,7 @@ export class CrashGame {
     for (const p of this.players.values()) {
       if (!p.cashedAt && p.autoCashout && p.autoCashout <= m) this.cashoutPlayer(p, p.autoCashout);
     }
+    for (const t of this.tren.values()) if (!t.settled && TRENBALL[t.side].at && m >= TRENBALL[t.side].at) this.settleTren(t, true);
     if (m >= r.crashPoint || elapsed >= crashTimeFor(r.crashPoint)) this.crash();
   }
 
@@ -154,6 +169,20 @@ export class CrashGame {
         seed: { roundId: r.id, hash: r.hash, salt: r.salt, formulaVersion: r.formulaVersion },
       });
     }
+    for (const t of this.tren.values()) {
+      if (!t.settled) this.settleTren(t, t.side === 'red' && r.crashPoint < TRENBALL.red.below);
+      const user = this.store.data.users[t.userId];
+      if (!user) continue;
+      t.bet = this.engine.recordBet(user, {
+        game: 'crash',
+        currency: t.currency,
+        amount: t.amount,
+        payout: t.payout,
+        params: { trenball: t.side },
+        result: { crashPoint: r.crashPoint, side: t.side, won: t.won, multiplier: t.won ? TRENBALL[t.side].pays : 0 },
+        seed: { roundId: r.id, hash: r.hash, salt: r.salt, formulaVersion: r.formulaVersion },
+      });
+    }
     this.history.unshift({ id: r.id, crashPoint: r.crashPoint, hash: r.hash, at: r.crashedAt });
     this.history.length = Math.min(this.history.length, 100);
     this.store.data.crash.history = this.history;
@@ -172,6 +201,54 @@ export class CrashGame {
     }
     this.store.save();
     this.live.broadcast('crash:cashout', { roundId: this.round.id, userId: p.userId, username: p.publicName, cashedAt: at, payout: p.payout, currency: p.currency });
+  }
+
+  settleTren(t, won) {
+    t.settled = true;
+    t.won = won;
+    t.payout = won ? capPayout(t.currency, t.amount, roundDown(t.currency, t.amount * TRENBALL[t.side].pays)) : 0;
+    const user = this.store.data.users[t.userId];
+    if (won && user) {
+      credit(user, t.currency, t.payout);
+      this.live.toUser(user.id, 'balance', { currency: t.currency, amount: user.balances[t.currency] });
+    }
+    this.store.save();
+    this.live.broadcast('crash:tren', { roundId: this.round.id, bet: this.publicTren(t) });
+  }
+
+  publicTren(t) {
+    return { userId: t.userId, username: t.publicName, side: t.side, currency: t.currency, amount: t.amount, settled: !!t.settled, won: !!t.won, payout: t.payout || 0 };
+  }
+
+  placeTrenball(user, body) {
+    assertNotOnBreak(user);
+    const side = String(body.side || '');
+    if (!TRENBALL[side]) throw badRequest('Choose Red, Green or Moon');
+    const currency = parseCurrency(user, body.currency);
+    const amount = parseAmount(currency, body.amount ?? 0);
+    assertStake(currency, amount, TRENBALL[side].pays);
+    const joinNow = this.round?.phase === 'betting';
+    const target = joinNow ? this.tren : this.trenQueue;
+    const key = `${user.id}:${side}`;
+    if (target.has(key)) throw badRequest(`You already have a ${side} bet ${joinNow ? 'in this round' : 'for the next round'}`);
+    debit(user, currency, amount);
+    const t = { userId: user.id, publicName: user.settings.privateMode ? null : user.username, side, currency, amount, settled: false, won: false, payout: 0 };
+    target.set(key, t);
+    this.store.save();
+    if (joinNow) this.live.broadcast('crash:tren', { roundId: this.round.id, bet: this.publicTren(t) });
+    return { queued: !joinNow, balance: { currency, amount: user.balances[currency] }, state: this.stateFor(user) };
+  }
+
+  cancelTrenball(user, body) {
+    const key = `${user.id}:${body.side}`;
+    let from = this.trenQueue.has(key) ? this.trenQueue : this.round?.phase === 'betting' && this.tren.has(key) ? this.tren : null;
+    if (!from) throw badRequest('No Trenball bet to cancel');
+    const t = from.get(key);
+    from.delete(key);
+    credit(user, t.currency, t.amount);
+    this.store.save();
+    if (from === this.tren) this.live.broadcast('crash:tren', { roundId: this.round.id, cancel: { userId: user.id, side: t.side } });
+    return { balance: { currency: t.currency, amount: user.balances[t.currency] }, state: this.stateFor(user) };
   }
 
   publicPlayer(p) {
@@ -200,6 +277,7 @@ export class CrashGame {
         hash: r.phase === 'crashed' ? r.hash : null,
       },
       players: [...this.players.values()].map((p) => this.publicPlayer(p)),
+      tren: [...this.tren.values()].map((t) => this.publicTren(t)),
       queued: this.queue.size,
       history: this.history.slice(0, 30).map(({ id, crashPoint, hash }) => ({ id, crashPoint, hash })),
     };
@@ -214,6 +292,8 @@ export class CrashGame {
         bet: mine ? this.publicPlayer(mine) : null,
         autoCashout: mine?.autoCashout || null,
         queued: queued ? { amount: queued.amount, currency: queued.currency, autoCashout: queued.autoCashout } : null,
+        tren: [...this.tren.values()].filter((t) => t.userId === user.id).map((t) => this.publicTren(t)),
+        trenQueued: [...this.trenQueue.values()].filter((t) => t.userId === user.id).map((t) => this.publicTren(t)),
       };
     }
     return snap;

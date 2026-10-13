@@ -460,6 +460,47 @@ test('crash: bet, auto cashout, queueing and recorded bets', async () => {
   assert.equal((await c.post('/api/crash/cashout')).status, 400);
 });
 
+test('crash trenball: red below 2x, green at 2x, moon at 10x', async () => {
+  const { crashTimeFor } = await import('../public/js/shared/fair.js');
+  const c = await newPlayer(1000);
+  const betting = async () => {
+    for (let i = 0; i < 300; i++) {
+      const r = app.crash.round;
+      if (r.phase === 'betting' && r.bettingEndsAt - Date.now() > 150) return r;
+      if (r.phase === 'running') app.crash.crash();
+      await new Promise((res) => setTimeout(res, 15));
+    }
+    assert.fail('no betting phase');
+  };
+  // Round 1: rigged to bust at 1.00× — Red wins, Green and Moon lose.
+  let r = await betting();
+  for (const side of ['red', 'green', 'moon']) assert.equal((await c.post('/api/crash/trenball', { side, amount: 10, currency: 'USD' })).status, 200);
+  assert.equal((await c.post('/api/crash/trenball', { side: 'red', amount: 10, currency: 'USD' })).status, 400);
+  assert.equal((await c.post('/api/crash/trenball', { side: 'blue', amount: 10, currency: 'USD' })).status, 400);
+  assert.equal((await c.get('/api/me')).data.user.balances.USD, 970);
+  r.crashPoint = 1;
+  for (let i = 0; i < 200 && app.crash.round.id === r.id && app.crash.round.phase !== 'crashed'; i++) await new Promise((res) => setTimeout(res, 15));
+  assert.equal((await c.get('/api/me')).data.user.balances.USD, 989.6);
+  // Round 2: rigged to 10.5×, jumped forward so the multiplier passes 10× at once.
+  r = await betting();
+  for (const side of ['red', 'green', 'moon']) await c.post('/api/crash/trenball', { side, amount: 10, currency: 'USD' });
+  r.crashPoint = 10.5;
+  for (let i = 0; i < 200 && app.crash.round.phase !== 'running'; i++) await new Promise((res) => setTimeout(res, 10));
+  app.crash.round.startedAt = Date.now() - crashTimeFor(10.2);
+  for (let i = 0; i < 200 && app.crash.round.phase === 'running'; i++) await new Promise((res) => setTimeout(res, 15));
+  // 989.6 − 30 + 20 (green) + 100 (moon)
+  assert.equal((await c.get('/api/me')).data.user.balances.USD, 1079.6);
+  const bets = (await c.get('/api/bets/mine?game=crash&limit=10')).data.bets;
+  assert.equal(bets.length, 6);
+  assert.deepEqual(bets.map((b) => `${b.params.trenball}:${b.payout}`).sort(), ['green:0', 'green:20', 'moon:0', 'moon:100', 'red:0', 'red:19.6']);
+  // Queued for the next round and cancelled.
+  await new Promise((res) => setTimeout(res, 20));
+  if (app.crash.round.phase !== 'betting') {
+    assert.equal((await c.post('/api/crash/trenball', { side: 'moon', amount: 5, currency: 'USD' })).data.queued, true);
+    assert.equal((await c.post('/api/crash/trenball/cancel', { side: 'moon' })).status, 200);
+  }
+});
+
 // Wait for a shared-round game to reach a phase with at least `ms` left.
 async function phaseOf(slug, phase, ms = 120) {
   for (let i = 0; i < 200; i++) {
@@ -778,6 +819,12 @@ test('wallet display settings: hide zero, display fiat currency', async () => {
   assert.equal((await c.post('/api/account/settings', { displayFiatCurrency: 'XYZ' })).status, 400);
   assert.equal((await c.post('/api/account/settings', { displayFiatCurrency: '__proto__' })).status, 400);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'JPY');
+  // Privacy: hiding statistics hides them from others, not from yourself.
+  const name = (await c.get('/api/me')).data.user.username;
+  await c.post('/api/account/settings', { hideStats: true });
+  const viewer = await newPlayer(0);
+  assert.equal((await viewer.get(`/api/users/${name}`)).data.user.stats, null);
+  assert.ok((await c.get(`/api/users/${name}`)).data.user.stats);
 });
 
 test('vault, rakeback and daily reload', async () => {

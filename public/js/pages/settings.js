@@ -93,6 +93,8 @@ export default function settingsPage(page, { tab = 'general' }) {
   } else if (tab === 'preferences') {
     const rows = [
       ['privateMode', 'Ghost mode', 'Hide your username in public bet feeds, leaderboards, big wins and live rounds.', 'server'],
+      ['hideStats', 'Hide all your statistics', 'Other players can’t see your bets, wins, losses or wagered total on your profile.', 'server'],
+      ['hideRaceStats', 'Hide all your race statistics', 'Show you as Hidden on the leaderboard.', 'server'],
       ['hideZero', 'Hide zero balances', 'Only show currencies with a balance in the wallet dropdown.', 'server'],
       ['displayFiat', 'Display crypto in fiat', 'Show crypto balances and bet amounts in your display currency (choose it in Wallet settings).', 'server'],
       ['sound', 'Game sounds', 'Play sound effects in games.', 'local'],

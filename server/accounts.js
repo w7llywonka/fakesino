@@ -42,7 +42,7 @@ export function vipInfo(wageredUsd) {
 const USERNAME_RE = /^[A-Za-z0-9_]{3,14}$/;
 export const DEVICE_RE = /^[a-f0-9]{32,128}$/;
 const RESTORE_CAP_USD = 10_000_000; // per currency, when rebuilding a wallet from a browser snapshot
-const SETTING_KEYS = ['hideZero', 'displayFiat', 'privateMode', 'sound', 'animations', 'maxBetWarning'];
+const SETTING_KEYS = ['hideZero', 'displayFiat', 'privateMode', 'hideStats', 'hideRaceStats', 'sound', 'animations', 'maxBetWarning'];
 
 export const deviceKey = (deviceId) => crypto.createHash('sha256').update(`device:${deviceId}`).digest('hex');
 
@@ -101,7 +101,7 @@ export function createGuest(store, snapshot = null) {
     balances: emptyBalances(),
     vault: emptyBalances(),
     currency: 'USD',
-    settings: { hideZero: false, displayFiat: false, displayFiatCurrency: 'USD', privateMode: false, sound: true, animations: true, maxBetWarning: true },
+    settings: { hideZero: false, displayFiat: false, displayFiatCurrency: 'USD', privateMode: false, hideStats: false, hideRaceStats: false, sound: true, animations: true, maxBetWarning: true },
     stats: { bets: 0, wins: 0, losses: 0, wageredUsd: 0, profitUsd: 0, byGame: {}, byCurrency: {} },
     rakeback: emptyBalances(),
     seeds: initialSeeds(),

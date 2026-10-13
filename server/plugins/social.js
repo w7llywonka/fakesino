@@ -72,7 +72,7 @@ export default function register({ router, store, live, engine, payments, notify
   router.get('/api/users/:name', (ctx) => {
     const u = userByName(ctx.params.name);
     if (!u) throw new HttpError(404, 'User not found');
-    const hidden = u.settings?.privateMode && ctx.user?.id !== u.id;
+    const hidden = !!(u.settings?.privateMode || u.settings?.hideStats) && ctx.user?.id !== u.id;
     const vip = vipInfo(u.stats.wageredUsd);
     return {
       user: {

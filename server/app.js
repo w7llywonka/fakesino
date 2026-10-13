@@ -175,7 +175,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.post(
     '/api/account/settings',
     authed((ctx) => {
-      const allowed = ['hideZero', 'displayFiat', 'privateMode', 'sound', 'animations', 'maxBetWarning'];
+      const allowed = ['hideZero', 'displayFiat', 'privateMode', 'hideStats', 'hideRaceStats', 'sound', 'animations', 'maxBetWarning'];
       for (const k of allowed) if (k in ctx.body) ctx.user.settings[k] = !!ctx.body[k];
       if ('displayFiatCurrency' in ctx.body) {
         if (!isDisplayFiat(ctx.body.displayFiatCurrency)) throw badRequest('Unsupported display currency', { field: 'displayFiatCurrency' });
@@ -308,6 +308,8 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.post('/api/crash/bet', authed((ctx) => crash.placeBet(ctx.user, ctx.body)));
   router.post('/api/crash/cashout', authed((ctx) => crash.cashout(ctx.user)));
   router.post('/api/crash/cancel', authed((ctx) => crash.cancelBet(ctx.user)));
+  router.post('/api/crash/trenball', authed((ctx) => crash.placeTrenball(ctx.user, ctx.body)));
+  router.post('/api/crash/trenball/cancel', authed((ctx) => crash.cancelTrenball(ctx.user, ctx.body)));
 
   // --- Bets & stats -------------------------------------------------------------------
   router.get(
@@ -338,7 +340,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
       if (b.createdAt < since) break;
       const u = store.data.users[b.userId];
       if (!u) continue;
-      const e = totals.get(b.userId) || { username: u.settings.privateMode ? null : u.username, wageredUsd: 0, bets: 0 };
+      const e = totals.get(b.userId) || { username: u.settings.privateMode || u.settings.hideRaceStats ? null : u.username, wageredUsd: 0, bets: 0 };
       e.wageredUsd += b.amountUsd || 0;
       e.bets++;
       totals.set(b.userId, e);

@@ -27,6 +27,11 @@ export function renderResult(game, result, params = {}) {
     case 'limbo':
       return box(`<div style="text-align:center">${big(fmt.multiplier(result.result), winColor(result.win))}<div class="muted">Target ${fmt.multiplier(params.target)}</div></div>`);
     case 'crash':
+      if (result.side) {
+        const TB = { red: ['Red', 'below 2×', '#ff4d5e'], green: ['Green', '2× or more', '#22d36b'], moon: ['Moon', '10× or more', '#f5b83d'] };
+        const [name, cond, color] = TB[result.side] || [result.side, '', 'var(--text)'];
+        return box(`<div style="text-align:center">${big(fmt.multiplier(result.crashPoint), 'var(--red)')}<div class="muted">Trenball <b style="color:${color}">${name}</b> (${cond}) · ${result.won ? 'won' : 'lost'}</div></div>`);
+      }
       return box(`<div style="text-align:center">${big(fmt.multiplier(result.crashPoint), 'var(--red)')}<div class="muted">${result.cashedAt ? `Cashed out at ${fmt.multiplier(result.cashedAt)}` : 'Did not cash out'}</div></div>`);
     case 'coinflip':
       if (result.side) return box(`<div style="text-align:center">${big(result.side.toUpperCase(), winColor(result.win))}<div class="muted">Picked ${esc(params.side)}</div></div>`); // rules v1

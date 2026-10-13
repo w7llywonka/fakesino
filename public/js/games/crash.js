@@ -103,6 +103,88 @@ export default function mountCrash(ctx) {
   const totalEl = listWrap.querySelector('.cr-total');
   const bodyEl = listWrap.querySelector('.cr-players-body');
 
+  // ---- Trenball: side bets on how the round ends ----
+  const TB = { red: ['Red', '< 2×', 1.96], green: ['Green', '≥ 2×', 2], moon: ['Moon', '≥ 10×', 10] };
+  let tren = new Map(); // `${userId}:${side}` → bet in the current round
+  let trenQueued = new Set(); // my sides queued for the next round
+  let trenBusy = null;
+  let trenDirty = true;
+  const tbEl = el(`<div class="tb"><div class="tb-head"><b>Trenball</b><span class="dim">Bet on how this round ends</span></div>
+    <div class="tb-btns">${Object.entries(TB)
+      .map(([k, [name, cond, pays]]) => `<button type="button" class="tb-btn ${k}" data-side="${k}"><span class="tb-name">${name}</span><span class="tb-cond">${cond}</span><span class="tb-pay">pays ${pays}×</span><span class="tb-state"></span></button>`)
+      .join('')}</div><div class="tb-totals"></div></div>`);
+  panel.extra.appendChild(tbEl);
+
+  function renderTren() {
+    trenDirty = false;
+    const uid = myId();
+    const phase = round?.phase;
+    const totals = { red: [0, 0], green: [0, 0], moon: [0, 0] };
+    for (const t of tren.values()) {
+      totals[t.side][0]++;
+      totals[t.side][1] += fmt.usdOf(t.amount, t.currency);
+    }
+    for (const side of Object.keys(TB)) {
+      const b = tbEl.querySelector(`[data-side=${side}]`);
+      const mine = uid != null ? tren.get(`${uid}:${side}`) : null;
+      let st = '';
+      let cls = '';
+      if (mine && mine.settled) [st, cls] = mine.won ? [`Won ${fmt.money(mine.payout, mine.currency)}`, 'won'] : ['Lost', 'lost'];
+      else if (mine && phase === 'crashed') [st, cls] = ['Lost', 'lost'];
+      else if (mine) [st, cls] = [fmt.money(mine.amount, mine.currency), phase === 'betting' ? 'placed' : 'placed live'];
+      else if (trenQueued.has(side)) [st, cls] = ['Next round', 'placed'];
+      b.className = `tb-btn ${side} ${cls}`;
+      b.title = cls === 'placed' ? 'Tap to cancel' : '';
+      b.querySelector('.tb-state').textContent = st;
+      b.disabled = !!trenBusy || (!!mine && phase !== 'betting');
+    }
+    tbEl.querySelector('.tb-totals').innerHTML = Object.keys(TB)
+      .map((k) => `<span class="${k}"><i></i>${TB[k][0]} ${totals[k][0]} · ${esc(fmt.fiat(totals[k][1]))}</span>`)
+      .join('');
+  }
+
+  on(tbEl, 'click', '[data-side]', async (e, b) => {
+    if (b.disabled || trenBusy || !ctx.requireAuth()) return;
+    const side = b.dataset.side;
+    const uid = myId();
+    const mine = tren.get(`${uid}:${side}`);
+    trenBusy = side;
+    trenDirty = true;
+    try {
+      if ((mine && round?.phase === 'betting') || (!mine && trenQueued.has(side))) {
+        const res = await api.post('/api/crash/trenball/cancel', { side });
+        ctx.setBalance(res.balance);
+        tren.delete(`${uid}:${side}`);
+        trenQueued.delete(side);
+        sound.click();
+      } else {
+        const amount = panel.get('amount');
+        if (!panel.checkBalance(amount)) return;
+        const res = await api.post('/api/crash/trenball', { side, amount, currency: ctx.currency() });
+        ctx.setBalance(res.balance);
+        sound.bet();
+        if (res.queued) trenQueued.add(side);
+        applySnapshot(res.state);
+      }
+    } catch (err) {
+      ctx.toast({ type: 'error', title: 'Trenball', message: err.message });
+    } finally {
+      trenBusy = null;
+      trenDirty = true;
+    }
+  });
+
+  ctx.on('live:crash:tren', ({ roundId, bet, cancel }) => {
+    if (!round || roundId !== round.id) return;
+    if (cancel) tren.delete(`${cancel.userId}:${cancel.side}`);
+    if (bet) {
+      const prev = tren.get(`${bet.userId}:${bet.side}`);
+      tren.set(`${bet.userId}:${bet.side}`, bet);
+      if (bet.userId === myId() && bet.settled && !prev?.settled && bet.won) sound.win();
+    }
+    trenDirty = true;
+  });
+
   // ---- stage ----
   const stage = el(`<div class="cr-stage">
     <div class="history-strip cr-history" aria-label="Previous rounds"></div>
@@ -174,6 +256,7 @@ export default function mountCrash(ctx) {
     if (s.me.bet && uid && round && s.round.id === round.id && !players.has(uid)) players.set(uid, s.me.bet);
     if (s.me.bet && s.me.autoCashout) myAuto = { value: s.me.autoCashout, roundId: s.round.id };
     queued = s.me.queued ? { ...s.me.queued, after: s.round.id } : null;
+    trenQueued = new Set((s.me.trenQueued || []).map((t) => t.side));
     if (s.me.queued?.autoCashout && !(s.me.bet && !s.me.bet.cashedAt)) myAuto = { value: s.me.queued.autoCashout, roundId: null, after: s.round.id };
   }
 
@@ -192,6 +275,8 @@ export default function mountCrash(ctx) {
     const prev = round;
     round = s.round;
     players = new Map((s.players || []).map((p) => [p.userId, { ...p }]));
+    tren = new Map((s.tren || []).map((t) => [`${t.userId}:${t.side}`, t]));
+    trenDirty = true;
     mergeMe(s);
     resolveLazyRounds();
     if (queued && queued.after !== round.id) queued = null; // promoted into this round
@@ -945,6 +1030,7 @@ export default function mountCrash(ctx) {
     renderOverlay(v, now);
     renderButton(v);
     if (playersDirty) renderPlayers();
+    if (trenDirty) renderTren();
   }
   raf = requestAnimationFrame(frame);
 
