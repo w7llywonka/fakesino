@@ -175,7 +175,7 @@ export function gameArt(slug, name) {
     <rect width="300" height="400" fill="url(#${id})"/>
     <rect width="300" height="400" fill="url(#${id}-v)"/>
     ${a.glyph}
-    <text x="150" y="352" text-anchor="middle" font-size="34" font-weight="900" fill="#fff" font-style="italic" letter-spacing="1" style="text-transform:uppercase">${name.toUpperCase()}</text>
+    <text x="150" y="352" text-anchor="middle" font-size="${Math.min(34, Math.floor(470 / name.length))}" font-weight="900" fill="#fff" font-style="italic" letter-spacing="1" style="text-transform:uppercase">${name.toUpperCase()}</text>
     <text x="150" y="380" text-anchor="middle" font-size="13" font-weight="800" fill="#fff" opacity=".7" letter-spacing="3">FAKESINO ORIGINALS</text>
   </svg>`;
 }

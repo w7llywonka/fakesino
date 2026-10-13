@@ -1,0 +1,176 @@
+/* ---------- Floor Is Lava ---------- */
+
+.lv-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: radial-gradient(ellipse at 50% 60%, #3b1608 0%, var(--bg) 70%);
+}
+
+.lv-top {
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+.lv-level {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.lv-pip {
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.lv-pip.cur {
+  background: #ff7a1a;
+  color: #2b0d00;
+}
+
+.lv-pip.done {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.lv-round {
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.lv-floor {
+  --cell: min(52px, calc((100vw - 64px) / 7.6));
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, var(--cell));
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: radial-gradient(circle at 50% 50%, #ff9a3c, #d9480f 60%, #7a1f00);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.45), 0 0 40px rgba(255, 106, 26, 0.25);
+  animation: lvglow 3s ease-in-out infinite;
+}
+
+@keyframes lvglow {
+  50% {
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.45), 0 0 60px rgba(255, 106, 26, 0.4);
+  }
+}
+
+.lv-tile {
+  width: var(--cell);
+  height: var(--cell);
+  border-radius: 8px;
+  border: 0;
+  padding: 0;
+  background: linear-gradient(160deg, #6c7a89, #44505d);
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.15);
+  transition: transform 0.25s, opacity 0.25s, background 0.25s;
+  cursor: default;
+}
+
+.lv-floor.live .lv-tile:not(.lava) {
+  cursor: pointer;
+}
+
+.lv-floor.live .lv-tile:not(.lava):hover {
+  background: linear-gradient(160deg, #8796a6, #56636f);
+  transform: translateY(-2px);
+}
+
+.lv-tile.mine {
+  background: linear-gradient(160deg, #79c2ff, #3a7bd5);
+}
+
+.lv-tile.lava {
+  transform: scale(0.82);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lv-tile.sinking {
+  animation: lvsink 0.35s ease-in forwards;
+}
+
+@keyframes lvsink {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    background: linear-gradient(160deg, #ffb26b, #ff6a1a);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.75) translateY(4px);
+  }
+}
+
+.lv-me {
+  position: absolute;
+  left: calc(12px + var(--x, 0) * (var(--cell) + 6px));
+  top: calc(12px + var(--y, 0) * (var(--cell) + 6px));
+  width: var(--cell);
+  height: var(--cell);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transition: left 0.22s cubic-bezier(0.3, 0.7, 0.4, 1), top 0.22s cubic-bezier(0.3, 0.7, 0.4, 1);
+  z-index: 2;
+}
+
+.lv-me[hidden] {
+  display: none;
+}
+
+.lv-player {
+  width: 80%;
+  height: 80%;
+}
+
+.lv-floor.live .lv-player {
+  animation: lvhop 1s ease-in-out infinite;
+}
+
+@keyframes lvhop {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.lv-me.sink .lv-player {
+  animation: lvdown 0.5s ease-in forwards;
+}
+
+@keyframes lvdown {
+  to {
+    transform: translateY(10px) scale(0.4);
+    opacity: 0;
+    filter: hue-rotate(160deg);
+  }
+}
+
+.lv-floor.lost {
+  animation: lvshake 0.4s;
+}
+
+@keyframes lvshake {
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.lv-caption {
+  padding: 0 16px;
+}

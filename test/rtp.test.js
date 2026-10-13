@@ -137,3 +137,93 @@ test('slot RTP is ~96.3% (exact line + scatter + free-spin calculation)', () => 
   const rtp = base + pTrigger * spins * slots.FREE_SPIN_MULTIPLIER * base;
   near(rtp, 0.963, 0.006, 'slots');
 });
+
+// ---- Newer originals ----
+import * as chicken from '../public/js/shared/games/chicken.js';
+import * as pump from '../public/js/shared/games/pump.js';
+import * as diamonds from '../public/js/shared/games/diamonds.js';
+import * as rps from '../public/js/shared/games/rps.js';
+import * as moles from '../public/js/shared/games/moles.js';
+import * as darts from '../public/js/shared/games/darts.js';
+import * as tarot from '../public/js/shared/games/tarot.js';
+import * as blitz from '../public/js/shared/games/blitz.js';
+import * as lava from '../public/js/shared/games/lava.js';
+
+test('chicken and pump ladders are 0.98 ÷ P(safe), rounded half up', () => {
+  for (const [game, N] of [[chicken, 20], [pump, 25]])
+    for (const d of game.DIFFICULTIES) {
+      const B = { easy: 1, medium: 3, hard: 5, expert: 10 }[d];
+      game.ladder(d).forEach((m, i) => {
+        const p = C(N - B, i + 1) / C(N, i + 1);
+        assert.ok(Math.abs(p * m - 0.98) <= p * 0.005 + 1e-12, `${d} step ${i + 1}: ${m}`);
+      });
+    }
+  assert.deepEqual(chicken.DIFFICULTIES.map((d) => chicken.ladder(d).at(-1)), [19.6, 1117.2, 15193.92, 181060.88]);
+  assert.deepEqual(pump.DIFFICULTIES.map((d) => pump.ladder(d).at(-1)), [24.5, 2254, 52067.4, 3203384.8]);
+  assert.deepEqual(chicken.ladder('easy').slice(0, 3), [1.03, 1.09, 1.15]);
+});
+
+test('diamonds: paytable ways cover 7^5 and return 98.29%', () => {
+  assert.equal(diamonds.PAYTABLE.reduce((a, r) => a + r.ways, 0), 7 ** 5);
+  // Count every outcome rather than trusting the ways column.
+  const counts = {};
+  for (let i = 0; i < 7 ** 5; i++) {
+    const gems = Array.from({ length: 5 }, (_, k) => diamonds.GEMS[Math.floor(i / 7 ** k) % 7]);
+    const key = diamonds.classify(gems).row.key;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  for (const r of diamonds.PAYTABLE) assert.equal(counts[r.key], r.ways, r.key);
+  near(diamonds.PAYTABLE.reduce((a, r) => a + r.pays * r.ways, 0) / 7 ** 5, 0.9829, 0.0001, 'diamonds');
+});
+
+test('rock paper scissors pays 0.98 × 2^wins (draws replay)', () => {
+  for (let w = 1; w <= rps.MAX_WINS; w++) near(rps.multiplierFor(w) / 2 ** w, 0.98, 0.005 / 2 ** w + 1e-12, `rps ${w}`);
+  assert.equal(rps.multiplierFor(20), 1027604.48);
+  assert.equal(rps.judge('rock', 'scissors'), 'win');
+  assert.equal(rps.judge('rock', 'paper'), 'loss');
+  assert.equal(rps.judge('paper', 'paper'), 'draw');
+});
+
+test('moles ladder is floor2(0.98 × (7/m)^h)', () => {
+  for (let m = 1; m <= 6; m++)
+    for (let h = 1; h <= moles.maxHits(m); h++) {
+      const ev = (m / 7) ** h * moles.multiplierFor(m, h);
+      assert.ok(ev <= 0.98 + 1e-9 && ev > 0.97, `moles ${m}/${h}: ${ev}`);
+    }
+  assert.equal(moles.multiplierFor(1, 8), 5649504.98);
+  assert.equal(moles.multiplierFor(3, 9), 2009.17);
+});
+
+test('darts and tarot return exactly 98% on every difficulty', () => {
+  for (const d of darts.DIFFICULTIES) {
+    const { mult, prob } = darts.TABLES[d];
+    near(prob.reduce((a, b) => a + b, 0), 100, 1e-6, `darts ${d} probabilities`);
+    // Easy's thirds are published to 4 decimals.
+    near(mult.reduce((a, m, i) => a + (m * prob[i]) / 100, 0), 0.98, 1e-5, `darts ${d}`);
+  }
+  for (const d of tarot.DIFFICULTIES) {
+    const t = tarot.TABLES[d];
+    const e = (rows) => rows.reduce((a, [m, p]) => a + (m * p) / 100, 0);
+    for (const k of ['minor', 'major']) near(t[k].reduce((a, [, p]) => a + p, 0), 100, 1e-9, `tarot ${d} ${k}`);
+    near(e(t.minor) ** 2 * e(t.major), 0.98, 1e-9, `tarot ${d}`);
+  }
+});
+
+test('blitz multipliers are 0.98 ÷ P(all cards unique)', () => {
+  for (let n = blitz.MIN_TARGET; n <= blitz.MAX_TARGET; n++) near(blitz.chanceFor(n) * blitz.multiplierFor(n), 0.98, blitz.chanceFor(n) * 0.005 + 1e-12, `blitz ${n}`);
+  assert.equal(blitz.multiplierFor(5), 1.19);
+  assert.equal(blitz.multiplierFor(36), 15181603.62);
+});
+
+test('floor is lava: each round pays 0.98 ÷ P(survive), levels compound', () => {
+  for (const [d, { drop, rounds }] of Object.entries(lava.DIFFICULTIES)) {
+    let p = 1;
+    for (let level = 1; level <= lava.LEVELS; level++)
+      for (let r = 1; r <= rounds; r++) {
+        p *= (lava.TILES - r * drop) / (lava.TILES - (r - 1) * drop);
+        const ev = p * lava.multiplierFor(d, level, r);
+        assert.ok(ev <= 0.98 + 1e-9 && ev > 0.975, `lava ${d} L${level}R${r}: ${ev}`);
+      }
+  }
+  assert.deepEqual(Object.keys(lava.DIFFICULTIES).map((d) => lava.multiplierFor(d, 3, lava.DIFFICULTIES[d].rounds)), [336.14, 922.36, 4270.22, 115296.02]);
+});

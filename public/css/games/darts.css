@@ -1,0 +1,94 @@
+/* ---------- Darts ---------- */
+
+.dt-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dt-wrap {
+  width: min(100%, 400px);
+  aspect-ratio: 1;
+}
+
+.dt-board {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.dt-wrap.thud .dt-board {
+  animation: dtthud 0.18s ease-out;
+}
+
+@keyframes dtthud {
+  40% {
+    transform: scale(0.985) translateY(1px);
+  }
+}
+
+.dt-rings circle {
+  transition: filter 0.25s;
+}
+
+.dt-rings circle.hit {
+  filter: brightness(1.35) saturate(1.2);
+}
+
+.dt-thrown.old {
+  opacity: 0.35;
+  transition: opacity 0.3s;
+}
+
+.dt-dart {
+  transform-box: view-box;
+}
+
+.dt-tiers {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+
+.dt-tier {
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  border-bottom: 4px solid var(--ring);
+  padding: 8px 4px 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.dt-tier .m {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.dt-tier .c {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.dt-tier.hit {
+  box-shadow: 0 0 0 2px var(--accent);
+  background: var(--ring);
+  color: var(--ink);
+  transform: translateY(-3px);
+}
+
+.dt-tier.hit .c {
+  color: inherit;
+  opacity: 0.8;
+}
+
+@media (max-width: 640px) {
+  .dt-tiers {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

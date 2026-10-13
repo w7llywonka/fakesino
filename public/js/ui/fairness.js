@@ -165,7 +165,9 @@ function verifyTab(body, prefill) {
 async function renderVerification(game, serverSeed, clientSeed, nonce, params, actions, rulesVersion) {
   const cardsRow = (cards) => `<div style="display:flex;gap:6px;overflow-x:auto;padding:4px">${cards.map((c) => playingCard(c)).join('')}</div>`;
   const mod = await loadRules(game, rulesVersion);
-  if (mod.stateful && !actions?.length) {
+  // Auto rounds play out from their params (autoTarget, autoHands, …), so they have an outcome.
+  const autoRound = Object.entries(params || {}).some(([k, v]) => k.startsWith('auto') && v != null && v !== '');
+  if (mod.stateful && !actions?.length && !autoRound) {
     const fl = await floats(serverSeed, clientSeed, nonce, 1024);
     const rng = () => createArrayRng(fl);
     const label = (t) => `<div class="field-label" style="margin-bottom:6px">${t}</div>`;

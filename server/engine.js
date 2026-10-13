@@ -32,7 +32,10 @@ export function createEngine({ store, live }) {
   }
 
   function recordBet(user, { game, currency, amount, payout, params, result, seed, meta = {} }) {
-    const multiplier = amount > 0 ? Math.round((payout / amount) * 10000) / 10000 : (result?.multiplier ?? 0);
+    // The game's own multiplier, not payout ÷ stake: payouts are rounded down
+    // to the currency's precision, which would understate small bets.
+    const exact = result && result.payout == null && Number.isFinite(result.multiplier) ? result.multiplier : null;
+    const multiplier = Math.round((exact ?? (amount > 0 ? payout / amount : 0)) * 10000) / 10000;
     const bet = {
       id: store.nextId('bet'),
       game,

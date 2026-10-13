@@ -41,6 +41,11 @@
   box-sizing: border-box;
 }
 
+/* The hidden attribute always wins over component display rules. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;

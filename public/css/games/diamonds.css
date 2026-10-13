@@ -1,0 +1,152 @@
+/* ---------- Diamonds ---------- */
+
+.dm-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dm-board {
+  display: grid;
+  gap: 22px;
+  justify-items: center;
+  width: min(100%, 560px);
+}
+
+.dm-slots {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+.dm-slot {
+  display: grid;
+  justify-items: center;
+  align-items: end;
+  gap: 0;
+  position: relative;
+}
+
+.dm-gem-wrap {
+  height: 72px;
+  display: grid;
+  place-items: end center;
+  position: relative;
+  z-index: 1;
+}
+
+.dm-gem-wrap .dm-gem {
+  width: min(64px, 15vw);
+  height: auto;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  transition: opacity 0.25s, transform 0.25s, filter 0.25s;
+}
+
+.dm-pedestal {
+  width: 100%;
+  max-width: 96px;
+  height: 22px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 35%, var(--surface-4), var(--surface-2) 70%);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.dm-slot.idle .dm-gem {
+  opacity: 0.18;
+  filter: grayscale(1);
+}
+
+.dm-slot.drop .dm-gem {
+  animation: dmdrop 0.32s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+@keyframes dmdrop {
+  from {
+    transform: translateY(-46px) scale(0.6);
+    opacity: 0;
+  }
+}
+
+.dm-slot.match .dm-gem {
+  transform: translateY(-6px) scale(1.08);
+  filter: drop-shadow(0 0 14px var(--glow)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+}
+
+.dm-slot.match .dm-pedestal {
+  background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--glow) 55%, transparent), var(--surface-2) 70%);
+}
+
+.dm-slot.dim .dm-gem {
+  opacity: 0.35;
+}
+
+.dm-result {
+  min-height: 30px;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--text-2);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.dm-result.show,
+.dm-result.win {
+  opacity: 1;
+}
+
+.dm-result.win {
+  color: var(--accent);
+}
+
+.dm-paytable {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+
+.dm-pay {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 8px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  border: 2px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.dm-pattern {
+  display: flex;
+  gap: 1px;
+}
+
+.dm-pattern .dm-gem {
+  width: 14px;
+  height: auto;
+}
+
+.dm-pays {
+  font-weight: 800;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dm-pay.hit {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-3));
+}
+
+@media (max-width: 640px) {
+  .dm-paytable {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .dm-slots {
+    gap: 6px;
+  }
+}

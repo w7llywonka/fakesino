@@ -615,3 +615,120 @@
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Multiplier ladder (step games) ---------- */
+
+.ladder-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+
+.ladder-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.ladder-step {
+  flex: 0 0 auto;
+  min-width: 78px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.ladder-step .m {
+  font-weight: 800;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ladder-step .c {
+  font-size: 11px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.ladder-step.done {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.ladder-step.done .c {
+  color: rgba(4, 34, 18, 0.7);
+}
+
+.ladder-step.next {
+  border-color: var(--accent);
+}
+
+.ladder-step.lost {
+  background: var(--red);
+  color: #fff;
+}
+
+.ladder-step.lost .c {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Big caption used by several games. */
+.stage-caption {
+  text-align: center;
+  min-height: 46px;
+}
+
+.stage-caption .main {
+  font-weight: 900;
+  font-size: 20px;
+}
+
+.stage-caption .sub {
+  color: var(--text-2);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.stage-caption.win .main {
+  color: var(--accent);
+}
+
+.stage-caption.lose .main {
+  color: var(--red);
+}
+
+/* Paytable rows (instant games). */
+.paytable {
+  display: grid;
+  gap: 4px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.paytable-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+
+.paytable-row .pays {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.paytable-row.hit {
+  background: var(--accent);
+  color: var(--accent-text);
+}

@@ -1,0 +1,232 @@
+/* ---------- Chicken ---------- */
+
+.ck-stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 14px;
+  padding-bottom: 18px;
+}
+
+.ck-road-wrap {
+  position: relative;
+  margin: 0 16px;
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  background: #1d222c;
+  flex: 1;
+  min-height: 300px;
+  max-height: 380px;
+}
+
+.ck-road-wrap.shake {
+  animation: ckshake 0.4s;
+}
+
+@keyframes ckshake {
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.ck-road {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 300px;
+  width: max-content;
+  min-width: 100%;
+}
+
+.ck-curb {
+  flex: 0 0 110px;
+  position: relative;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.12) 0 2px, transparent 2px 46px),
+    linear-gradient(90deg, #7c8794, #9aa5b1);
+}
+
+.ck-curb.start {
+  box-shadow: inset -8px 0 0 #c9cfd6;
+}
+
+.ck-curb.end {
+  flex-basis: 80px;
+  box-shadow: inset 8px 0 0 #c9cfd6;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+}
+
+.ck-lane {
+  flex: 0 0 104px;
+  position: relative;
+  background: #2b303b;
+  border-right: 3px dashed rgba(255, 255, 255, 0.35);
+  cursor: default;
+  overflow: hidden;
+}
+
+.ck-lane:nth-child(odd) {
+  background: #2f3540;
+}
+
+.ck-cover {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78px;
+  height: 78px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #59616e, #3a414c 70%);
+  box-shadow: inset 0 0 0 4px #4a525e, inset 0 0 0 8px #353b45, 0 2px 0 rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 13px;
+  color: #dfe5ec;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.25s, color 0.25s, box-shadow 0.25s;
+}
+
+.ck-lane.next {
+  cursor: pointer;
+}
+
+.ck-lane.next .ck-cover {
+  box-shadow: inset 0 0 0 4px var(--accent), inset 0 0 0 8px #353b45, 0 0 18px rgba(34, 211, 107, 0.4);
+  animation: ckpulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ckpulse {
+  50% {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+}
+
+.ck-lane.crossed .ck-cover {
+  background: radial-gradient(circle at 40% 35%, #f8d34a, #e0a800 70%);
+  color: #3d2b00;
+  box-shadow: inset 0 0 0 4px #fff3bf, 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Crossed lanes get a barrier. */
+.ck-lane.crossed::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 16%;
+  height: 12px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(45deg, #ff6b00 0 10px, #fff 10px 20px);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.ck-lane.hit .ck-cover {
+  background: radial-gradient(circle at 40% 35%, #ff6b6b, #c92a2a 70%);
+  color: #fff;
+}
+
+.ck-lane.danger .ck-cover {
+  opacity: 0.4;
+}
+
+.ck-car {
+  position: absolute;
+  left: 50%;
+  width: 48px;
+  height: 84px;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.45));
+  z-index: 2;
+}
+
+.ck-car.parked {
+  top: calc(50% - 42px);
+  opacity: 0.85;
+}
+
+.ck-car.crash {
+  top: calc(50% - 80px);
+  animation: ckcar 0.38s cubic-bezier(0.5, 0, 0.9, 0.6) both;
+}
+
+.ck-car.stopped {
+  top: calc(50% - 80px);
+}
+
+@keyframes ckcar {
+  from {
+    transform: translate(-50%, -420px);
+  }
+}
+
+.ck-chicken {
+  position: absolute;
+  top: 50%;
+  width: 64px;
+  height: 72px;
+  transform: translate(-50%, -58%);
+  transition: left 0.32s cubic-bezier(0.3, 0.7, 0.4, 1);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.ck-chicken.instant {
+  transition: none;
+}
+
+.ck-chicken .ck-bird {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ck-road-wrap.live .ck-chicken .ck-bird {
+  animation: ckidle 1s ease-in-out infinite;
+}
+
+@keyframes ckidle {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.ck-chicken.dead {
+  transform: translate(-50%, -30%) scaleY(0.35) scaleX(1.25);
+  transition: transform 0.15s;
+  filter: grayscale(0.4);
+}
+
+.ck-chicken.dead .ck-bird {
+  animation: none;
+}
+
+.ck-caption {
+  padding: 0 16px;
+}
+
+@media (max-width: 640px) {
+  .ck-lane {
+    flex-basis: 84px;
+  }
+  .ck-cover {
+    width: 64px;
+    height: 64px;
+    font-size: 12px;
+  }
+  .ck-curb {
+    flex-basis: 84px;
+  }
+}
