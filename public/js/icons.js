@@ -75,8 +75,17 @@ const P = {
   coinflip: '<ellipse cx="12" cy="12" rx="8" ry="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.5 2.5-1.5s2.5.7 2.5 1.7-1 1.4-2.5 1.8-2.5.8-2.5 1.8 1 1.7 2.5 1.7 2.5-.5 2.5-1.5"/>',
 };
 
+// Games can ship their own sidebar icon and lobby art in META (icon: inner SVG
+// for a 24×24 stroke icon; thumb: { bg: [from, to], glyph: SVG for a 300×400 card }).
+const gameIcons = {};
+const gameThumbs = {};
+export function registerGameArt(meta) {
+  if (meta.icon) gameIcons[meta.slug] = meta.icon;
+  if (meta.thumb) gameThumbs[meta.slug] = meta.thumb;
+}
+
 export function icon(name, size = 18, extra = '') {
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${P[name] || P.info}</svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${P[name] || gameIcons[name] || P.casino}</svg>`;
 }
 
 export function coin(code, size = 16) {
@@ -158,7 +167,7 @@ const ART = {
 };
 
 export function gameArt(slug, name) {
-  const a = ART[slug] || ART.dice;
+  const a = ART[slug] || gameThumbs[slug] || { bg: ['#3a4b5c', '#1d2b38'], glyph: '' };
   const id = `g-${slug}`;
   return `<svg class="art" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${name}">
     <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a.bg[0]}"/><stop offset="1" stop-color="${a.bg[1]}"/></linearGradient>

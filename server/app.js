@@ -8,6 +8,8 @@ import { Router, HttpError, badRequest, sendJson, readJson, parseCookies, cookie
 import { Store } from './store.js';
 import { LiveHub } from './live.js';
 import { createEngine, GAMES } from './engine.js';
+import { publicCatalog } from './catalog.js';
+import { PLUGINS } from './plugins/index.js';
 import { CrashGame } from './crash.js';
 import { createPayments } from './payments.js';
 import { rotateSeeds, publicSeeds, randomClientSeed } from './fair.js';
@@ -121,7 +123,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.get('/api/config', () => ({
     currencies: CURRENCIES,
     vipLevels: VIP_LEVELS,
-    games: Object.fromEntries(Object.entries(GAMES).map(([slug, g]) => [slug, { name: g.name, edge: g.edge }])),
+    games: publicCatalog(),
     payments: payments.methods(),
   }));
 
@@ -296,6 +298,16 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     return undefined; // streaming
   });
 
+  // --- Plugins (multiplayer games, site features) ------------------------------------
+  const pluginHandles = PLUGINS.map((p) => {
+    try {
+      return p.register({ router, store, live, engine, crash, payments, authed, publicUser, secureCookies }) || null;
+    } catch (err) {
+      console.error(`[plugin:${p.name}] failed to register`, err);
+      return null;
+    }
+  });
+
   // --- HTTP plumbing -------------------------------------------------------------------
   async function handleApi(req, res, url) {
     const match = router.match(req.method, url.pathname);
@@ -400,6 +412,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   crash.start();
 
   function close() {
+    for (const h of pluginHandles) h?.close?.();
     crash.stop();
     payments.stop();
     live.close();

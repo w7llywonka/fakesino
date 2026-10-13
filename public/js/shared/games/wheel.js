@@ -1,5 +1,20 @@
 import { fail, int, oneOf } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'wheel',
+  name: 'Wheel',
+  category: 'originals',
+  order: 70,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Spin a wheel of 10 to 50 segments. Choose the risk and watch where the pointer lands.',
+  howTo: ['Choose the risk and number of segments.', 'Press Bet to spin.', 'The segment under the pointer pays its multiplier.'],
+  verifyFields: [['segments', 'Segments', [10, 20, 30, 40, 50]], ['risk', 'Risk', ['low', 'medium', 'high']]],
+};
+
+export const RULES_VERSION = 1;
+
 export const SEGMENTS = [10, 20, 30, 40, 50];
 export const RISKS = ['low', 'medium', 'high'];
 

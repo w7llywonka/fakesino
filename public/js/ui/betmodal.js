@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toast } from './toast.js';
-import { renderResult } from './betpreview.js';
+import { renderResult, renderResultAsync } from './betpreview.js';
 import { bySlug } from '../games/registry.js';
 import { openFairnessModal } from './fairness.js';
 import * as fmt from '../format.js';
@@ -32,7 +32,7 @@ export async function openBetModal(id) {
       <div><div class="k">Multiplier</div><div class="v">${fmt.multiplier(bet.multiplier)}</div></div>
       <div><div class="k">Payout</div><div class="v ${win ? 'win-text' : ''}">${esc(fmt.money(bet.payout, bet.currency))} ${coin(bet.currency)}</div></div>
     </div>
-    ${renderResult(bet.game, bet.result, bet.params)}
+    <div data-role="preview">${renderResult(bet.game, bet.result, bet.params) || ''}</div>
     <a class="btn btn-primary btn-block" href="/casino/games/${bet.game}" style="margin-bottom:14px">Play ${esc(g.name)}</a>
     <details class="panel" ${bet.mine ? '' : ''}><summary style="cursor:pointer;font-weight:700;display:flex;gap:8px;align-items:center">${icon('shield', 16)} Provable Fairness</summary>
       <div class="seed-box" style="margin-top:12px;background:var(--bg-deep)">
@@ -52,23 +52,14 @@ export async function openBetModal(id) {
     </details>
   </div>`);
   modal.setBody(body);
+  if (!renderResult(bet.game, bet.result, bet.params)) renderResultAsync(bet.game, bet.result, bet.params).then((html) => (body.querySelector('[data-role=preview]').innerHTML = html));
   on(body, 'click', '[data-act=copy]', async () => {
     await copyText(`${location.origin}/casino/games/${bet.game}?modal=bet&id=${bet.id}`);
     toast({ type: 'success', title: 'Link copied' });
   });
   on(body, 'click', '[data-act=verify]', () => {
-    if (isCrash) {
-      openFairnessModal({ tab: 'crash' });
-      setTimeout(() => {
-        const input = document.querySelector('.modal [name=hash]');
-        if (input) {
-          input.value = seed.hash;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }, 300);
-      return;
-    }
-    openFairnessModal({ tab: 'verify', prefill: { game: bet.game, serverSeed: seed.serverSeed, clientSeed: seed.clientSeed, nonce: seed.nonce, params: bet.params, actions: bet.actions } });
+    if (isCrash) openFairnessModal({ tab: 'crash', prefill: { hash: seed.hash, salt: seed.salt, formulaVersion: seed.formulaVersion || 1 } });
+    else openFairnessModal({ tab: 'verify', prefill: { game: bet.game, serverSeed: seed.serverSeed, clientSeed: seed.clientSeed, nonce: seed.nonce, params: bet.params, actions: bet.actions, rulesVersion: bet.rulesVersion || 1 } });
   });
   return modal;
 }

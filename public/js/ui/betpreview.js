@@ -22,7 +22,12 @@ export function renderResult(game, result, params = {}) {
     case 'crash':
       return box(`<div style="text-align:center">${big(fmt.multiplier(result.crashPoint), 'var(--red)')}<div class="muted">${result.cashedAt ? `Cashed out at ${fmt.multiplier(result.cashedAt)}` : 'Did not cash out'}</div></div>`);
     case 'coinflip':
-      return box(`<div style="text-align:center">${big(result.side.toUpperCase(), winColor(result.win))}<div class="muted">Picked ${esc(params.side)}</div></div>`);
+      if (result.side) return box(`<div style="text-align:center">${big(result.side.toUpperCase(), winColor(result.win))}<div class="muted">Picked ${esc(params.side)}</div></div>`); // rules v1
+      return box(
+        `<div style="text-align:center"><div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">${(result.calls || [])
+          .map((c) => pill(c.result === 'heads' ? 'H' : 'T', c.result === c.side ? 'var(--accent)' : 'var(--red)', c.result === c.side ? 'var(--accent-text)' : '#fff'))
+          .join('')}</div><div class="muted">${result.wins} correct call${result.wins === 1 ? '' : 's'}${result.lost ? ' · missed' : ' · cashed out'}</div></div>`,
+      );
     case 'plinko':
       return box(
         `<div style="text-align:center"><div style="display:flex;gap:3px;justify-content:center;margin-bottom:8px">${result.path.map((p) => pill(p ? 'R' : 'L')).join('')}</div>
@@ -93,6 +98,22 @@ export function renderResult(game, result, params = {}) {
       return box(`<div style="text-align:center"><div style="display:grid;gap:4px;justify-content:center">${grid}</div><div class="muted" style="margin-top:8px">${result.freeSpins ? `${result.freeSpins} free spins · ` : ''}${result.spins.length} spin${result.spins.length > 1 ? 's' : ''} total</div></div>`);
     }
     default:
-      return box(`<pre style="margin:0;font-size:12px">${esc(JSON.stringify(result, null, 2))}</pre>`, 'justify-content:flex-start');
+      return '';
   }
+}
+
+const rawResult = (result) => box(`<pre style="margin:0;font-size:12px;white-space:pre-wrap">${esc(JSON.stringify(result, null, 2))}</pre>`, 'justify-content:flex-start');
+
+// Games without a built-in preview can export renderPreview(result, params)
+// from their UI module (public/js/games/<slug>.js).
+export async function renderResultAsync(game, result, params = {}) {
+  const html = renderResult(game, result, params);
+  if (html) return html;
+  try {
+    const mod = await import(`../games/${game}.js`);
+    if (mod.renderPreview) return box(mod.renderPreview(result, params));
+  } catch {
+    /* fall through */
+  }
+  return rawResult(result);
 }

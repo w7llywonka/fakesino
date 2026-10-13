@@ -41,7 +41,7 @@ export default function mountVideoPoker(ctx) {
   const stage = el(`<div class="vp-stage">
     <div class="vp-paytable">${PAYTABLE.map(
       (p) => `<div class="vp-row" data-key="${p.key}"><span class="vp-name">${p.name}</span><span class="vp-pays">${p.pays}×</span></div>`,
-    ).join('')}<div class="vp-note">9/6 Jacks or Better</div></div>
+    ).join('')}<div class="vp-note">Jacks or Better</div></div>
     <div class="vp-table">
       <div class="vp-result"></div>
       <div class="vp-cards">${ALL.map(

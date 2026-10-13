@@ -1,6 +1,27 @@
 import { fail, int, combinations, floor4 } from './util.js';
 import { shuffleSelect } from '../fair.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'mines',
+  name: 'Mines',
+  category: 'originals',
+  order: 30,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Uncover gems on a 5×5 grid while avoiding the mines. Every safe tile raises your multiplier; cash out whenever you like.',
+  howTo: [
+      'Choose how many mines (1–24) hide on the grid.',
+      'Press Bet, then reveal tiles one at a time.',
+      'Each gem raises your multiplier; hitting a mine loses the bet.',
+      'Cash out at any time after your first gem.',
+    ],
+  hotkeys: [['Q', 'Pick a random tile'], ['W', 'Remove a mine (idle)'], ['E', 'Add a mine (idle)']],
+  verifyFields: [['mines', 'Mines', 'number', 3]],
+};
+
+export const RULES_VERSION = 1;
+
 export const TILES = 25;
 export const EDGE = 0.01;
 

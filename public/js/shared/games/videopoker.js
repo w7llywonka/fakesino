@@ -1,13 +1,29 @@
 import { fail, RANKS, SUITS } from './util.js';
 import { shuffleSelect } from '../fair.js';
 
-// Jacks or Better, full-pay 9/6, single 52-card deck. Ten floats shuffle the
-// first ten cards of the deck: five are dealt, the rest replace discards in order.
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'videopoker',
+  name: 'Video Poker',
+  category: 'table',
+  order: 230,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Jacks or Better: Royal Flush 800×, Straight Flush 60×, Four of a Kind 22×, Full House 9×, Flush 6×. Hold and draw once.',
+  howTo: ['Press Deal.', 'Click the cards you want to hold.', 'Press Draw — the rest are replaced and the final hand is paid from the table.'],
+  hotkeys: [['1-5', 'Hold / unhold card']],
+};
+
+export const RULES_VERSION = 2;
+
+// Jacks or Better, single 52-card deck. 52 floats shuffle the deck (rank-major
+// order, same as cardFromFloat: ♦2 ♥2 ♠2 ♣2 ♦3 … ♣A); the first five cards are
+// dealt and the next five replace discards from left to right.
 
 export const PAYTABLE = [
   { key: 'royal_flush', name: 'Royal Flush', pays: 800 },
-  { key: 'straight_flush', name: 'Straight Flush', pays: 50 },
-  { key: 'four_kind', name: '4 of a Kind', pays: 25 },
+  { key: 'straight_flush', name: 'Straight Flush', pays: 60 },
+  { key: 'four_kind', name: '4 of a Kind', pays: 22 },
   { key: 'full_house', name: 'Full House', pays: 9 },
   { key: 'flush', name: 'Flush', pays: 6 },
   { key: 'straight', name: 'Straight', pays: 4 },
@@ -16,7 +32,7 @@ export const PAYTABLE = [
   { key: 'jacks_better', name: 'Jacks or Better', pays: 1 },
 ];
 
-const DECK = SUITS.flatMap((suit) => RANKS.map((rank) => ({ rank, suit })));
+const DECK = Array.from({ length: 52 }, (_, i) => ({ rank: RANKS[Math.floor(i / 4)], suit: SUITS[i % 4] }));
 
 export function evaluate(cards) {
   const values = cards.map((c) => RANKS.indexOf(c.rank) + 2).sort((a, b) => a - b);
@@ -51,7 +67,7 @@ export function normalize() {
 }
 
 export function start(rng) {
-  const order = shuffleSelect(rng.take(10), DECK.map((_, i) => i)).map((i) => DECK[i]);
+  const order = shuffleSelect(rng.take(52), DECK.map((_, i) => i)).map((i) => DECK[i]);
   return {
     hand: order.slice(0, 5),
     reserve: order.slice(5, 10),

@@ -1,40 +1,12 @@
 import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, toUsd } from '../public/js/shared/currencies.js';
-import * as dice from '../public/js/shared/games/dice.js';
-import * as limbo from '../public/js/shared/games/limbo.js';
-import * as plinko from '../public/js/shared/games/plinko.js';
-import * as mines from '../public/js/shared/games/mines.js';
-import * as keno from '../public/js/shared/games/keno.js';
-import * as wheel from '../public/js/shared/games/wheel.js';
-import * as coinflip from '../public/js/shared/games/coinflip.js';
-import * as roulette from '../public/js/shared/games/roulette.js';
-import * as baccarat from '../public/js/shared/games/baccarat.js';
-import * as hilo from '../public/js/shared/games/hilo.js';
-import * as blackjack from '../public/js/shared/games/blackjack.js';
-import * as videopoker from '../public/js/shared/games/videopoker.js';
-import * as tower from '../public/js/shared/games/tower.js';
-import * as slots from '../public/js/shared/games/slots.js';
 import { GameRuleError } from '../public/js/shared/games/util.js';
+import { GAMES, CATALOG } from './catalog.js';
 import { createRng, takeNonce, revealedSeed } from './fair.js';
 import { HttpError, badRequest } from './http.js';
 import { parseCurrency, parseAmount, credit, debit, recordWagerStats, assertNotOnBreak } from './accounts.js';
 
-export const GAMES = {
-  dice: { name: 'Dice', module: dice, edge: 0.01 },
-  limbo: { name: 'Limbo', module: limbo, edge: 0.01 },
-  plinko: { name: 'Plinko', module: plinko, edge: 0.01 },
-  mines: { name: 'Mines', module: mines, edge: 0.01 },
-  keno: { name: 'Keno', module: keno, edge: 0.01 },
-  wheel: { name: 'Wheel', module: wheel, edge: 0.01 },
-  coinflip: { name: 'Coinflip', module: coinflip, edge: 0.01 },
-  roulette: { name: 'Roulette', module: roulette, edge: 0.027 },
-  baccarat: { name: 'Baccarat', module: baccarat, edge: 0.0106 },
-  hilo: { name: 'Hilo', module: hilo, edge: 0.01 },
-  blackjack: { name: 'Blackjack', module: blackjack, edge: 0.005 },
-  videopoker: { name: 'Video Poker', module: videopoker, edge: 0.0046 },
-  tower: { name: 'Dragon Tower', module: tower, edge: 0.02 },
-  slots: { name: 'Neon Fruits', module: slots, edge: 0.037 },
-};
+export { GAMES, CATALOG } from './catalog.js';
 
 function rules(fn) {
   try {
@@ -76,9 +48,10 @@ export function createEngine({ store, live }) {
       params,
       result,
       seed,
+      rulesVersion: CATALOG[game]?.rulesVersion ?? 1,
       ...meta,
     };
-    recordWagerStats(user, { game, currency, amount, payout, edge: GAMES[game]?.edge ?? 0.01 });
+    recordWagerStats(user, { game, currency, amount, payout, edge: CATALOG[game]?.edge ?? 0.01 });
     store.addBet(bet);
     live.broadcastOwned('bet', publicBet(bet), user.id);
     return bet;

@@ -1,5 +1,25 @@
 import { fail, cardFromFloat, floor4 } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'hilo',
+  name: 'Hilo',
+  category: 'originals',
+  order: 80,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Guess whether the next card is higher or lower. Chain correct guesses to multiply your stake, skip cards you don’t like.',
+  howTo: [
+      'Press Bet to draw the first card.',
+      'Guess whether the next card is higher or lower (or the same).',
+      'Skip any card you don’t like.',
+      'Cash out after any correct guess.',
+    ],
+  hotkeys: [['Q', 'Higher'], ['W', 'Lower'], ['E', 'Skip card']],
+};
+
+export const RULES_VERSION = 1;
+
 // Infinite-deck Hilo. Ace is low (1) and King is high (13).
 // At an Ace you can pick Higher or Same; at a King, Lower or Same; otherwise
 // Higher-or-Same or Lower-or-Same. Each step multiplies by 0.99 / probability.

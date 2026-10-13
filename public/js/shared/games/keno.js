@@ -1,6 +1,22 @@
 import { fail, int, oneOf } from './util.js';
 import { shuffleSelect } from '../fair.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'keno',
+  name: 'Keno',
+  category: 'originals',
+  order: 60,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Pick up to 10 numbers from 40. Ten are drawn — the more hits, the bigger the payout across four risk levels.',
+  howTo: ['Pick 1 to 10 numbers (or use Auto Pick).', 'Choose a risk level.', 'Press Bet — 10 numbers are drawn and your hits set the payout.'],
+  hotkeys: [['Q', 'Auto pick'], ['W', 'Clear table']],
+  verifyFields: [['risk', 'Risk', ['classic', 'low', 'medium', 'high']], ['picks', 'Picked numbers (comma separated)', 'text', '1,2,3,4,5']],
+};
+
+export const RULES_VERSION = 1;
+
 export const NUMBERS = 40; // tiles 1..40
 export const DRAWN = 10;
 export const RISKS = ['classic', 'low', 'medium', 'high'];

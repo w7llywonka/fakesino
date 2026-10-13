@@ -66,12 +66,24 @@ export function shuffleSelect(floats, items) {
 
 export const CRASH_GROWTH = 0.00006;
 
-export function crashPointFromHex(hmacHex) {
-  // 52 bits of entropy → x in [0, 1). P(crash >= m) = 0.99 / m (1% edge).
+// Crash point from HMAC_SHA256(gameHash, salt) hex. P(crash >= m) ≈ 0.99 / m.
+// v1 (first chains): 52 bits, bustabit-style. v2: first 8 hex digits,
+// max(1, 2^32 / (int + 1) × 0.99) — the formula the big sites publish.
+export function crashPointFromHex(hmacHex, version = 1) {
+  if (version >= 2) {
+    const int = parseInt(hmacHex.slice(0, 8), 16);
+    return Math.floor(Math.max(1, (2 ** 32 / (int + 1)) * 0.99) * 100 * (1 + 1e-12)) / 100;
+  }
   const h = parseInt(hmacHex.slice(0, 13), 16);
   const x = h / 2 ** 52;
   const raw = Math.floor(99 / (1 - x)) / 100;
   return Math.max(1, raw);
+}
+
+// Slide (shared target-multiplier rounds): same shape with a 2% edge.
+export function slidePointFromHex(hmacHex) {
+  const int = parseInt(hmacHex.slice(0, 8), 16);
+  return Math.max(1, Math.floor((2 ** 32 / (int + 1)) * 0.98 * 100 * (1 + 1e-12)) / 100);
 }
 
 export function crashMultiplierAt(ms) {

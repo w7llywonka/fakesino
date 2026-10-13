@@ -37,6 +37,14 @@ export class LiveHub {
     for (const c of this.clients) this.write(c, event, c.userId === ownerId ? { ...data, mine: true } : data);
   }
 
+  // Plugin games/features publish on a named channel; the client re-emits
+  // these as `live:<channel>` and `live:<channel>:<type>` bus events.
+  channel(channel, type, data, userId = null) {
+    const payload = { channel, type, data };
+    if (userId != null) this.toUser(userId, 'game', payload);
+    else this.broadcast('game', payload);
+  }
+
   toUser(userId, event, data) {
     for (const c of this.clients) if (c.userId === userId) this.write(c, event, data);
   }

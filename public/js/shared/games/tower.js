@@ -1,5 +1,26 @@
-import { fail, int, oneOf, floor4 } from './util.js';
+import { fail, int, oneOf, round2h } from './util.js';
 import { shuffleSelect } from '../fair.js';
+
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'tower',
+  name: 'Dragon Tower',
+  category: 'originals',
+  order: 90,
+  edge: 0.02,
+  rtp: 98,
+  desc: 'Climb nine floors by picking the tiles that hide eggs. Higher difficulty means fewer eggs and bigger multipliers.',
+  howTo: [
+      'Choose a difficulty.',
+      'Press Bet and pick a tile on the bottom row.',
+      'Find an egg to climb to the next row; hit a skull and you lose.',
+      'Cash out at any time after the first row.',
+    ],
+  hotkeys: [['1-4', 'Pick that tile in the current row'], ['Q', 'Pick a random tile']],
+  verifyFields: [['difficulty', 'Difficulty', ['easy', 'medium', 'hard', 'expert', 'master']]],
+};
+
+export const RULES_VERSION = 2;
 
 // Dragon Tower: climb 9 rows, each with `cols` tiles of which `safe` hide eggs.
 
@@ -13,10 +34,11 @@ export const DIFFICULTIES = {
   master: { cols: 4, safe: 1 },
 };
 
+// Published ladder: 0.98 × (cols/safe)^level, rounded half up to 2 decimals.
 export function multiplierFor(difficulty, level) {
   if (level === 0) return 1;
   const { cols, safe } = DIFFICULTIES[difficulty];
-  return floor4((1 - EDGE) * (cols / safe) ** level);
+  return round2h((1 - EDGE) * (cols / safe) ** level);
 }
 
 export function normalize(params = {}) {
@@ -35,9 +57,10 @@ export const stateful = true;
 export function layout(rng, difficulty) {
   const { cols, safe } = DIFFICULTIES[difficulty];
   const rows = [];
+  // One float per egg: each picks a column from those still free in the row.
   for (let r = 0; r < ROWS; r++) {
-    const order = shuffleSelect(rng.take(cols), Array.from({ length: cols }, (_, i) => i));
-    rows.push(order.slice(0, safe).sort((a, b) => a - b));
+    const eggs = shuffleSelect(rng.take(safe), Array.from({ length: cols }, (_, i) => i));
+    rows.push(eggs.sort((a, b) => a - b));
   }
   return rows;
 }

@@ -1,5 +1,23 @@
 import { fail, cardFromFloat } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'baccarat',
+  name: 'Baccarat',
+  category: 'table',
+  order: 220,
+  edge: 0.0106,
+  rtp: 98.9,
+  desc: 'Punto banco with standard third-card rules. Back the Player, the Banker or a Tie.',
+  howTo: [
+      'Pick a chip value and place chips on Player, Banker or Tie.',
+      'Press Bet to deal.',
+      'Banker wins pay 0.95:1, Tie pays 8:1 and returns Player/Banker stakes.',
+    ],
+};
+
+export const RULES_VERSION = 1;
+
 // Punto banco with standard third-card rules. Banker wins pay 0.95:1, a tie
 // pays 8:1 and returns Player/Banker stakes.
 

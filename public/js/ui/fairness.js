@@ -5,9 +5,9 @@ import { state, setUser } from '../state.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toast, toastError, toastSuccess } from './toast.js';
-import { verifyBet, sha256Hex, floats, crashChain, VERIFIABLE } from '../verify.js';
-import { renderResult } from './betpreview.js';
-import { bySlug } from '../games/registry.js';
+import { verifyBet, sha256Hex, floats, crashChain, loadRules, latestRulesVersion } from '../verify.js';
+import { renderResult, renderResultAsync } from './betpreview.js';
+import { bySlug, GAMES } from '../games/registry.js';
 import { createArrayRng } from '../shared/fair.js';
 import { cardFromFloat } from '../shared/games/util.js';
 import * as fmt from '../format.js';
@@ -38,7 +38,7 @@ export function openFairnessModal({ tab = 'seeds', prefill = null } = {}) {
     body.innerHTML = '';
     if (t === 'seeds') seedsTab(body, show);
     else if (t === 'verify') verifyTab(body, prefill);
-    else crashTab(body);
+    else crashTab(body, prefill);
   };
   on(root, 'click', '[data-t]', (e, b) => show(b.dataset.t));
   show(tab === 'verify' || tab === 'crash' ? tab : state.user ? 'seeds' : 'verify');
@@ -96,32 +96,10 @@ async function seedsTab(body, show) {
   });
 }
 
-const PARAM_FIELDS = {
-  dice: [
-    ['target', 'Target', 'number', 50.5],
-    ['condition', 'Condition', ['over', 'under']],
-  ],
-  limbo: [['target', 'Target multiplier', 'number', 2]],
-  plinko: [
-    ['rows', 'Rows', [16, 15, 14, 13, 12, 11, 10, 9, 8]],
-    ['risk', 'Risk', ['low', 'medium', 'high']],
-  ],
-  keno: [
-    ['risk', 'Risk', ['classic', 'low', 'medium', 'high']],
-    ['picks', 'Picked numbers (comma separated)', 'text', '1,2,3,4,5'],
-  ],
-  wheel: [
-    ['segments', 'Segments', [10, 20, 30, 40, 50]],
-    ['risk', 'Risk', ['low', 'medium', 'high']],
-  ],
-  coinflip: [['side', 'Side', ['heads', 'tails']]],
-  mines: [['mines', 'Mines', 'number', 3]],
-  tower: [['difficulty', 'Difficulty', ['easy', 'medium', 'hard', 'expert', 'master']]],
-};
-
 function verifyTab(body, prefill) {
   const p = prefill || {};
-  const games = VERIFIABLE.map((g) => `<option value="${g}" ${p.game === g ? 'selected' : ''}>${esc(bySlug[g]?.name || g)}</option>`).join('');
+  const verifiable = GAMES.filter((g) => g.kind !== 'multiplayer');
+  const games = verifiable.map((g) => `<option value="${g.slug}" ${p.game === g.slug ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
   body.innerHTML = `<form class="vf">
     <div class="field"><div class="field-label">Game</div><select class="select" name="game">${games}</select></div>
     <div class="field"><div class="field-label">Server Seed</div><input class="input mono" name="serverSeed" value="${esc(p.serverSeed || '')}" placeholder="Revealed after you rotate your seed pair"></div>
@@ -129,22 +107,29 @@ function verifyTab(body, prefill) {
     <div class="two-col" style="gap:12px"><div class="field"><div class="field-label">Client Seed</div><input class="input mono" name="clientSeed" value="${esc(p.clientSeed || '')}"></div>
     <div class="field"><div class="field-label">Nonce</div><input class="input" name="nonce" inputmode="numeric" value="${esc(p.nonce ?? 0)}"></div></div>
     <div class="params"></div>
+    <div class="field version-field" style="display:none"><div class="field-label"><span>Rules version</span><span class="dim" style="font-size:12px">Use the version the bet was placed under</span></div><select class="select" name="rulesVersion"></select></div>
   </form><div class="vf-out"></div>`;
   const form = body.querySelector('form');
   const out = body.querySelector('.vf-out');
   const paramsEl = body.querySelector('.params');
-  const renderParams = () => {
-    const fields = PARAM_FIELDS[form.game.value] || [];
-    const pv = p.game === form.game.value ? p.params || {} : {};
+  const renderParams = async () => {
+    const game = form.game.value;
+    const fields = bySlug[game]?.verifyFields || [];
+    const pv = p.game === game ? p.params || {} : {};
     paramsEl.innerHTML = fields
       .map(([k, label, type, def]) => {
         const v = pv[k] ?? def;
-        if (Array.isArray(type)) return `<div class="field"><div class="field-label">${label}</div><select class="select" name="p_${k}">${type.map((o) => `<option ${String(o) === String(pv[k] ?? type[0]) ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
-        return `<div class="field"><div class="field-label">${label}</div><input class="input" name="p_${k}" value="${esc(Array.isArray(v) ? v.join(',') : v)}"></div>`;
+        if (Array.isArray(type)) return `<div class="field"><div class="field-label">${esc(label)}</div><select class="select" name="p_${k}">${type.map((o) => `<option ${String(o) === String(pv[k] ?? type[0]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
+        return `<div class="field"><div class="field-label">${esc(label)}</div><input class="input" name="p_${k}" value="${esc(Array.isArray(v) ? v.join(',') : v)}"></div>`;
       })
       .join('');
+    const latest = await latestRulesVersion(game);
+    const chosen = p.game === game && p.rulesVersion ? p.rulesVersion : latest;
+    form.rulesVersion.innerHTML = Array.from({ length: latest }, (_, i) => latest - i)
+      .map((v) => `<option value="${v}" ${v === chosen ? 'selected' : ''}>v${v}${v === latest ? ' (current)' : ''}</option>`)
+      .join('');
+    body.querySelector('.version-field').style.display = latest > 1 ? '' : 'none';
   };
-  renderParams();
   let timer;
   const run = async () => {
     const fd = Object.fromEntries(new FormData(form));
@@ -158,9 +143,10 @@ function verifyTab(body, prefill) {
     const params = {};
     for (const [k, v] of Object.entries(fd)) if (k.startsWith('p_')) params[k.slice(2)] = v;
     if (params.picks) params.picks = params.picks.split(/[\s,]+/).filter(Boolean).map(Number);
-    if (p.game === fd.game && p.params) Object.assign(params, { chips: p.params.chips });
+    const own = p.game === fd.game;
+    if (own && p.params) for (const [k, v] of Object.entries(p.params)) if (!(k in params)) params[k] = v;
     try {
-      out.innerHTML = await renderVerification(fd.game, fd.serverSeed, fd.clientSeed, Number(fd.nonce), params, p.game === fd.game ? p.actions : null);
+      out.innerHTML = await renderVerification(fd.game, fd.serverSeed, fd.clientSeed, Number(fd.nonce), params, own ? p.actions : null, Number(fd.rulesVersion) || undefined);
     } catch (err) {
       out.innerHTML = `<div class="demo-notice warn">${icon('alert', 16)}<div>${esc(err.message)}</div></div>`;
     }
@@ -169,44 +155,48 @@ function verifyTab(body, prefill) {
     clearTimeout(timer);
     timer = setTimeout(run, 150);
   });
-  form.game.addEventListener('change', () => {
-    renderParams();
-    run();
-  });
+  form.game.addEventListener('change', () => renderParams().then(run));
   form.addEventListener('submit', (e) => e.preventDefault());
-  run();
+  renderParams().then(run);
 }
 
-async function renderVerification(game, serverSeed, clientSeed, nonce, params, actions) {
+// Without the player's moves, multi-step games show their hidden opening
+// state (card order, mine/egg positions, flip sequence) instead of an outcome.
+async function renderVerification(game, serverSeed, clientSeed, nonce, params, actions, rulesVersion) {
   const cardsRow = (cards) => `<div style="display:flex;gap:6px;overflow-x:auto;padding:4px">${cards.map((c) => playingCard(c)).join('')}</div>`;
-  if (['hilo', 'blackjack', 'videopoker'].includes(game) && !actions) {
-    const fl = await floats(serverSeed, clientSeed, nonce, game === 'videopoker' ? 10 : 12);
-    let cards;
+  const mod = await loadRules(game, rulesVersion);
+  if (mod.stateful && !actions?.length) {
+    const fl = await floats(serverSeed, clientSeed, nonce, 1024);
+    const rng = () => createArrayRng(fl);
+    const label = (t) => `<div class="field-label" style="margin-bottom:6px">${t}</div>`;
     if (game === 'videopoker') {
-      const { start } = await import('../shared/games/videopoker.js');
-      const s = start(createArrayRng(fl));
-      cards = [...s.hand, ...s.reserve];
-    } else cards = fl.map((f) => cardFromFloat(f));
-    return `<div class="field-label" style="margin-bottom:6px">Card sequence</div><div class="result-preview">${cardsRow(cards)}</div>`;
+      const s = mod.start(rng());
+      return label('Deal (5) and replacement cards (5)') + `<div class="result-preview">${cardsRow([...s.hand, ...s.reserve])}</div>`;
+    }
+    if (game === 'hilo' || game === 'blackjack') return label('Card sequence') + `<div class="result-preview">${cardsRow(fl.slice(0, 12).map((f) => cardFromFloat(f)))}</div>`;
+    if (game === 'mines') {
+      const positions = mod.minePositions(rng(), Math.max(1, Math.min(24, Number(params.mines) || 3)));
+      return label('Mine positions') + renderResult('mines', { positions, revealed: [] });
+    }
+    if (game === 'tower') {
+      const d = params.difficulty || 'easy';
+      return label('Egg positions') + renderResult('tower', { difficulty: d, safeTiles: mod.layout(rng(), d), picks: [] });
+    }
+    if (game === 'coinflip' && mod.start) {
+      const s = mod.start(rng(), {});
+      return label('Flip sequence') + `<div class="result-preview" style="flex-wrap:wrap">${s.results.map((r, i) => `<span class="pill ${r === 'heads' ? 'yellow' : 'blue'}">${i + 1}. ${r}</span>`).join('')}</div>`;
+    }
+    if (mod.reveal) {
+      const { title, result } = mod.reveal(rng(), mod.normalize({ ...params, allowEmpty: true }));
+      return label(esc(title)) + (await renderResultAsync(game, result, params));
+    }
   }
-  if (game === 'mines' && !actions) {
-    const { minePositions } = await import('../shared/games/mines.js');
-    const fl = await floats(serverSeed, clientSeed, nonce, 24);
-    const positions = minePositions(createArrayRng(fl), Math.max(1, Math.min(24, Number(params.mines) || 3)));
-    return `<div class="field-label" style="margin-bottom:6px">Mine positions</div>${renderResult('mines', { positions, revealed: [] })}`;
-  }
-  if (game === 'tower' && !actions) {
-    const { layout, DIFFICULTIES } = await import('../shared/games/tower.js');
-    const d = params.difficulty || 'easy';
-    const fl = await floats(serverSeed, clientSeed, nonce, 9 * DIFFICULTIES[d].cols);
-    return `<div class="field-label" style="margin-bottom:6px">Egg positions</div>${renderResult('tower', { difficulty: d, safeTiles: layout(createArrayRng(fl), d), picks: [] })}`;
-  }
-  const { result, params: norm } = await verifyBet({ game, serverSeed, clientSeed, nonce, params, actions: actions || [] });
-  return `<div class="field-label" style="margin-bottom:6px">Result</div>${renderResult(game, result, norm)}
+  const { result, params: norm } = await verifyBet({ game, serverSeed, clientSeed, nonce, params, actions: actions || [], rulesVersion });
+  return `<div class="field-label" style="margin-bottom:6px">Result</div>${await renderResultAsync(game, result, norm)}
     ${result.multiplier != null ? `<div class="muted" style="text-align:center">Multiplier ${fmt.multiplier(result.multiplier ?? 0)}</div>` : ''}`;
 }
 
-async function crashTab(body) {
+async function crashTab(body, prefill = null) {
   body.innerHTML = '<div class="spinner"></div>';
   let info;
   try {
@@ -217,10 +207,11 @@ async function crashTab(body) {
   }
   const last = info.history[0];
   body.innerHTML = `
-    <div class="muted" style="font-size:13px;margin-bottom:12px">Crash rounds come from a chain of ${info.chainLength.toLocaleString()} SHA-256 hashes generated before the first round and played in reverse. Each round's crash point is HMAC-SHA256(game hash, salt). Hashing any round's hash gives the previous round's hash, ending at the published terminating hash.</div>
+    <div class="muted" style="font-size:13px;margin-bottom:12px">Crash rounds come from a chain of ${info.chainLength.toLocaleString()} SHA-256 hashes generated before the first round and played in reverse. Each round's crash point comes from HMAC-SHA256(game hash, salt) — formula v${info.formulaVersion}: ${info.formulaVersion >= 2 ? 'max(1, 2³² ÷ (first 8 hex digits + 1) × 0.99)' : 'max(1, floor(99 ÷ (1 − first 52 bits ÷ 2⁵²)) ÷ 100)'}. Hashing any round's hash gives the previous round's hash, ending at the published terminating hash.</div>
     ${copyField('Terminating hash (commitment)', info.terminatingHash)}
     ${copyField('Salt', info.salt)}
-    <form><div class="field"><div class="field-label">Game hash</div><input class="input mono" name="hash" value="${esc(last?.hash || '')}" placeholder="Paste a round hash"></div></form>
+    <form><div class="field"><div class="field-label">Game hash</div><input class="input mono" name="hash" value="${esc(prefill?.hash || last?.hash || '')}" placeholder="Paste a round hash"></div>
+      <div class="field"><div class="field-label">Formula</div><select class="select" name="formula"><option value="2" ${(prefill?.formulaVersion ?? info.formulaVersion) >= 2 ? 'selected' : ''}>v2 (current chains)</option><option value="1" ${(prefill?.formulaVersion ?? info.formulaVersion) < 2 ? 'selected' : ''}>v1 (first chains)</option></select></div></form>
     <div class="cx"></div>`;
   const out = body.querySelector('.cx');
   const run = async () => {
@@ -229,7 +220,7 @@ async function crashTab(body) {
       out.innerHTML = '<div class="empty">Enter a 64-character round hash.</div>';
       return;
     }
-    const chain = await crashChain(hash, info.salt, 10);
+    const chain = await crashChain(hash, prefill?.salt || info.salt, 10, Number(body.querySelector('[name=formula]').value));
     out.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>Hash</th><th class="r">Crash point</th></tr></thead><tbody>${chain
       .map((c, i) => `<tr><td class="mono" style="font-size:12px">${i === 0 ? '<b>this</b> ' : ''}${c.hash.slice(0, 20)}…</td><td class="r" style="color:${c.crashPoint >= 2 ? 'var(--accent)' : 'var(--text)'}">${fmt.multiplier(c.crashPoint)}</td></tr>`)
       .join('')}</tbody></table></div>`;

@@ -11,6 +11,7 @@ import * as tower from '../public/js/shared/games/tower.js';
 import * as slots from '../public/js/shared/games/slots.js';
 import * as roulette from '../public/js/shared/games/roulette.js';
 import * as hilo from '../public/js/shared/games/hilo.js';
+import * as flip from '../public/js/shared/games/coinflip.js';
 
 const near = (actual, expected, tol, label) => assert.ok(Math.abs(actual - expected) <= tol, `${label}: ${actual.toFixed(5)} vs ${expected}`);
 
@@ -65,12 +66,27 @@ test('mines multipliers give 99% for every mines/reveal combination', () => {
     }
 });
 
-test('dragon tower multipliers give 98%', () => {
+test('dragon tower multipliers give ~98% (published round-half-up ladder)', () => {
   for (const [d, { cols, safe }] of Object.entries(tower.DIFFICULTIES))
     for (let level = 1; level <= tower.ROWS; level++) {
       const ev = (safe / cols) ** level * tower.multiplierFor(d, level);
-      assert.ok(ev <= 0.98 + 1e-9 && ev > 0.975, `tower ${d}/${level}: ${ev}`);
+      assert.ok(ev <= 0.985 && ev > 0.975, `tower ${d}/${level}: ${ev}`);
     }
+  assert.deepEqual(Array.from({ length: 9 }, (_, k) => tower.multiplierFor('easy', k + 1)), [1.31, 1.74, 2.32, 3.1, 4.13, 5.51, 7.34, 9.79, 13.05]);
+  assert.equal(tower.multiplierFor('expert', 7), 2143.26);
+  assert.equal(tower.multiplierFor('master', 9), 256901.12);
+});
+
+test('flip ladder is 0.98 × 2^n, exactly the published values', () => {
+  for (let n = 1; n <= flip.MAX_FLIPS; n++) near(0.5 ** n * flip.multiplierFor(n), 0.98, 1e-9, `flip ${n}`);
+  assert.equal(flip.multiplierFor(20), 1027604.48);
+});
+
+test('precision helpers keep exact cents', () => {
+  assert.equal(mines.multiplierFor(8, 15), 23794.65);
+  assert.equal(mines.multiplierFor(14, 10), 294188.4);
+  assert.equal(mines.multiplierFor(19, 5), 8766.45);
+  assert.equal(dice.multiplierFor({ target: 50.5, condition: 'over' }), 2);
 });
 
 test('hilo steps pay 99% of fair odds', () => {

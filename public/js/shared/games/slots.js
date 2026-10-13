@@ -1,3 +1,17 @@
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'slots',
+  name: 'Neon Fruits',
+  category: 'slots',
+  order: 300,
+  edge: 0.037,
+  rtp: 96.3,
+  desc: 'A 5-reel, 20-line video slot with wilds, scatter pays and free spins where every win is tripled.',
+  howTo: ['Set your total bet (split across 20 lines).', 'Press Spin.', '3+ scatters anywhere award 10 free spins with all wins ×3.'],
+};
+
+export const RULES_VERSION = 1;
+
 // "Neon Fruits": 5 reels × 3 rows, 20 fixed paylines, wilds substitute for
 // everything except scatters, 3+ scatters pay and award 10 free spins with all
 // wins tripled (retriggerable up to 50 free spins). Theoretical RTP ≈ 96.3%,

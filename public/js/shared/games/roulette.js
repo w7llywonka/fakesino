@@ -1,5 +1,19 @@
 import { fail } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'roulette',
+  name: 'Roulette',
+  category: 'table',
+  order: 210,
+  edge: 0.027,
+  rtp: 97.3,
+  desc: 'European single-zero roulette with every inside and outside bet: straights, splits, streets, corners, lines, dozens, columns and even-money bets.',
+  howTo: ['Pick a chip value.', 'Click the table to place chips — numbers, lines between numbers, or the outside bets.', 'Press Bet to spin the wheel.'],
+};
+
+export const RULES_VERSION = 1;
+
 // European single-zero roulette. Every bet is a set of numbers that pays
 // 36 / n times the stake (including the stake), so every bet has a 2.70% edge.
 

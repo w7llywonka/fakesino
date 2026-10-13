@@ -45,6 +45,11 @@ export async function connectLive() {
   source.addEventListener('crash:cashout', (e) => bus.emit('live:crash:cashout', JSON.parse(e.data)));
   source.addEventListener('crash:cancel', (e) => bus.emit('live:crash:cancel', JSON.parse(e.data)));
   source.addEventListener('chat', (e) => bus.emit('live:chat', JSON.parse(e.data)));
+  source.addEventListener('game', (e) => {
+    const { channel, type, data } = JSON.parse(e.data);
+    bus.emit(`live:${channel}`, { type, data });
+    bus.emit(`live:${channel}:${type}`, data);
+  });
   source.addEventListener('tx', (e) => bus.emit('live:tx', JSON.parse(e.data)));
   source.addEventListener('balance', (e) => {
     const { currency, amount } = JSON.parse(e.data);

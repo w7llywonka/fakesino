@@ -299,7 +299,7 @@ test('every instant game accepts a bet', async () => {
     plinko: { rows: 12, risk: 'high' },
     keno: { risk: 'classic', picks: [1, 5, 9, 13, 40] },
     wheel: { segments: 30, risk: 'medium' },
-    coinflip: { side: 'tails' },
+    coinflip: { autoSides: ['tails', 'heads'] },
     slots: {},
   };
   for (const [game, params] of Object.entries(cases)) {

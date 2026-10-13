@@ -1,7 +1,7 @@
 import { el, esc, on } from '../dom.js';
 import { icon, coin } from '../icons.js';
 import { amountField } from '../ui/controls.js';
-import { MULTIPLIER } from '../shared/games/coinflip.js';
+import { LADDER, MAX_FLIPS, multiplierFor } from '../shared/games/coinflip.js';
 
 const SIDES = ['heads', 'tails'];
 const NAME = { heads: 'Heads', tails: 'Tails' };
@@ -73,42 +73,42 @@ function miniCoin(side, size = 22) {
     <g fill="#9a6209">${EMBLEM[side]}</g></svg>`;
 }
 
+const AUTO_CYCLE = [null, 'heads', 'tails', 'random'];
+
+export function renderPreview(result) {
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">${(result.calls || [])
+    .map((c) => `<span style="border-radius:50%;box-shadow:0 0 0 3px ${c.result === c.side ? 'var(--accent)' : 'var(--red)'}">${miniCoin(c.result, 30)}</span>`)
+    .join('')}</div>`;
+}
+
 export default function mountCoinflip(ctx) {
   const { api, fmt, sound } = ctx;
-  let side = 'heads';
+  let game = null; // active round view (from the server)
   let busy = false;
   let destroyed = false;
   let angle = 0; // resting rotation: 0 shows heads, 180 shows tails
-  let streak = 0;
-  let shuffling = false;
+  const autoSides = Array(MAX_FLIPS).fill(null);
+  autoSides[0] = 'heads';
   const anims = new Set();
-  const timers = new Set();
-  const later = (fn, ms) => {
-    const id = setTimeout(() => {
-      timers.delete(id);
-      fn();
-    }, ms);
-    timers.add(id);
-  };
 
   // ---- sidebar ----
-  const sidesEl = el(`<div class="cf-sides" role="radiogroup" aria-label="Side">${SIDES.map(
-    (s) => `<button type="button" class="cf-side" role="radio" data-side="${s}">${miniCoin(s, 28)}<span>${NAME[s]}</span></button>`,
-  ).join('')}</div>`);
+  const callEl = el(`<div class="cf-call">
+    <div class="cf-sides" role="group" aria-label="Call">${SIDES.map((s) => `<button type="button" class="cf-side" data-side="${s}">${miniCoin(s, 28)}<span>${NAME[s]}</span></button>`).join('')}</div>
+    <button type="button" class="btn btn-secondary btn-block cf-random" data-side="random">${icon('refresh', 16)}<span>Random Pick</span></button>
+  </div>`);
+  const autoEl = el(`<div class="cf-auto-grid" aria-label="Flips per round">${autoSides.map((_, i) => `<button type="button" class="cf-auto-tile" data-i="${i}"></button>`).join('')}</div>`);
 
   const panel = ctx.createBetPanel({
     fields: [
       amountField(),
-      { key: 'profit', type: 'profit', label: 'Profit on Win' },
-      { key: 'side', type: 'custom', label: 'Pick a Side', render: (box) => box.appendChild(sidesEl) },
+      { key: 'profit', type: 'profit', label: 'Total Profit (1.00×)' },
+      { key: 'call', type: 'custom', label: 'Call the next flip', mode: 'manual', render: (box) => box.appendChild(callEl), keepEnabled: true },
+      { key: 'flips', type: 'custom', label: 'Flips per round', mode: 'auto', render: (box) => box.appendChild(autoEl), keepEnabled: true },
     ],
-    onBet: () => play(false),
-    auto: { run: () => play(true) },
+    onBet: () => (game ? cashout() : startRound()),
+    auto: { run: () => autoRound(), canRun: () => autoCalls().length > 0 },
+    hotkeys: { q: () => call('heads'), w: () => call('tails'), e: () => call('random') },
   });
-  panel.setProfit(MULTIPLIER);
-
-  const randomBtn = el(`<button type="button" class="btn btn-secondary btn-block cf-random">${icon('refresh', 16)}<span>Random Pick</span></button>`);
-  panel.extra.appendChild(randomBtn);
 
   // ---- stage ----
   const layers = Array.from({ length: EDGE_LAYERS }, (_, i) => `<div class="cf-edge" style="--k:${(i / (EDGE_LAYERS - 1) - 0.5).toFixed(3)}"></div>`).join('');
@@ -123,16 +123,15 @@ export default function mountCoinflip(ctx) {
           <div class="cf-face cf-back">${faceSvg('tails')}</div>
         </div></div></div>
       </div>
-      <div class="cf-caption" aria-live="polite"><div class="cf-caption-main">Heads or Tails?</div><div class="cf-caption-sub">Pick a side and flip the coin</div></div>
+      <div class="cf-caption" aria-live="polite"><div class="cf-caption-main">Heads or Tails?</div><div class="cf-caption-sub">Press Bet, then call up to 20 flips in a row</div></div>
+      <div class="cf-landed" aria-label="Flips this round"></div>
     </div>
-    <div class="stage-bottom"><div class="stat-tiles cf-tiles">
-      <div class="bp-field"><div class="bp-label">Multiplier</div><div class="input-suffix"><input class="input" readonly tabindex="-1" value="${MULTIPLIER.toFixed(2)}"><span class="suffix">×</span></div></div>
-      <div class="bp-field"><div class="bp-label">Win Chance</div><div class="input-suffix"><input class="input" readonly tabindex="-1" value="50.00"><span class="suffix">%</span></div></div>
-      <div class="bp-field"><div class="bp-label">Win Streak</div><div class="input-suffix"><input class="input" readonly tabindex="-1" data-k="streak" value="0"><span class="suffix">${icon('fire', 14)}</span></div></div>
-    </div></div>
+    <div class="stage-bottom"><div class="cf-ladder">${LADDER.map(
+      (l) => `<div class="cf-step" data-w="${l.wins}"><div class="m">${fmt.multiplier(l.multiplier)}</div><div class="c">${l.chance >= 0.01 ? `${+l.chance.toFixed(2)}%` : `${l.chance.toExponential(1)}%`}</div></div>`,
+    ).join('')}</div></div>
   </div>`);
   ctx.stage.appendChild(stage);
-  const history = ctx.historyStrip(stage, { max: 12 });
+  const history = ctx.historyStrip(stage, { max: 10 });
   history.el.classList.add('cf-history');
   stage.prepend(history.el);
 
@@ -140,54 +139,12 @@ export default function mountCoinflip(ctx) {
   const toss = stage.querySelector('.cf-toss');
   const coinEl = stage.querySelector('.cf-coin');
   const shadow = stage.querySelector('.cf-shadow');
+  const caption = stage.querySelector('.cf-caption');
   const capMain = stage.querySelector('.cf-caption-main');
   const capSub = stage.querySelector('.cf-caption-sub');
-  const caption = stage.querySelector('.cf-caption');
-  const streakInput = stage.querySelector('[data-k=streak]');
+  const landedEl = stage.querySelector('.cf-landed');
+  const ladder = stage.querySelector('.cf-ladder');
   if (!ctx.animations()) scene.classList.add('still');
-
-  function pick(s, { silent = false } = {}) {
-    side = s;
-    sidesEl.querySelectorAll('.cf-side').forEach((b) => {
-      const active = b.dataset.side === s;
-      b.classList.toggle('active', active);
-      b.setAttribute('aria-checked', String(active));
-    });
-    if (!silent) sound.click();
-  }
-
-  function syncRandom() {
-    randomBtn.disabled = busy || panel.autoRunning || shuffling;
-  }
-
-  on(sidesEl, 'click', '.cf-side', (e, b) => {
-    if (b.disabled || shuffling) return;
-    pick(b.dataset.side);
-  });
-
-  // Random pick: flicker between the sides for a moment, then settle.
-  randomBtn.addEventListener('click', () => {
-    if (busy || panel.autoRunning || shuffling) return;
-    const target = Math.random() < 0.5 ? 'heads' : 'tails';
-    if (!ctx.animations()) return pick(target);
-    shuffling = true;
-    syncRandom();
-    let flips = target === side ? 6 : 5;
-    const step = () => {
-      pick(side === 'heads' ? 'tails' : 'heads', { silent: true });
-      sound.tick();
-      if (--flips > 0) later(step, 65);
-      else {
-        shuffling = false;
-        syncRandom();
-      }
-    };
-    step();
-  });
-
-  panel.onChange((key) => {
-    if (key === 'autoStopped' || key === 'mode') syncRandom();
-  });
 
   function setCaption(main, sub, cls = '') {
     capMain.textContent = main;
@@ -200,44 +157,70 @@ export default function mountCoinflip(ctx) {
     coinEl.style.transform = `rotateX(${a}deg)`;
   }
 
-  async function flip(result, isAuto) {
+  function renderLanded(calls = [], { reveal = null } = {}) {
+    landedEl.innerHTML = calls
+      .map((c) => `<span class="cf-landed-coin ${c.result === c.side ? 'hit' : 'miss'}" data-tip="Called ${NAME[c.side]} · landed ${NAME[c.result]}">${miniCoin(c.result, 26)}</span>`)
+      .join('');
+    if (reveal) landedEl.insertAdjacentHTML('beforeend', reveal);
+  }
+
+  function renderLadder(wins = 0, live = false) {
+    ladder.querySelectorAll('.cf-step').forEach((step) => {
+      const w = Number(step.dataset.w);
+      step.classList.toggle('done', w <= wins && wins > 0);
+      step.classList.toggle('next', live && w === wins + 1);
+    });
+    const cur = ladder.querySelector(live ? `.cf-step[data-w="${wins + 1}"]` : `.cf-step[data-w="${Math.max(1, wins)}"]`);
+    if (cur) ladder.scrollTo({ left: cur.offsetLeft - ladder.clientWidth / 2 + cur.clientWidth / 2, behavior: ctx.animations() ? 'smooth' : 'auto' });
+  }
+
+  function renderAutoGrid() {
+    autoEl.querySelectorAll('.cf-auto-tile').forEach((b, i) => {
+      const v = autoSides[i];
+      b.className = `cf-auto-tile ${v ? 'set' : ''}`;
+      b.innerHTML = v === 'random' ? icon('refresh', 16) : v ? miniCoin(v, 22) : `<span class="n">${i + 1}</span>`;
+      b.dataset.tip = v ? `Flip ${i + 1}: ${v === 'random' ? 'Random' : NAME[v]}` : `Flip ${i + 1}: off`;
+    });
+    const n = autoCalls().length;
+    panel.setLabel('flips', `Flips per round · ${n} → ${fmt.multiplier(multiplierFor(n))}`);
+    sync();
+  }
+
+  const autoCalls = () => autoSides.filter(Boolean);
+
+  // Reflect the round in the sidebar: buttons, profit and the main button.
+  function sync() {
+    const live = !!game && !game.done;
+    callEl.querySelectorAll('button').forEach((b) => (b.disabled = !live || busy));
+    panel.lock(live);
+    // Live: profit so far. Idle: profit if the next round wins (first call, or all auto calls).
+    const m = live ? game.multiplier : multiplierFor(panel.mode === 'auto' ? autoCalls().length : 1);
+    panel.setLabel('profit', `${live ? 'Total Profit' : 'Profit on Win'} (${fmt.multiplier(m)})`);
+    panel.setProfit(m);
+    if (live) panel.setButton(game.wins ? `Cashout ${fmt.multiplier(game.multiplier)}` : 'Cashout', { disabled: busy || !game.wins });
+    else if (!panel.autoRunning) panel.resetButton();
+    renderLadder(live ? game.wins : 0, live);
+  }
+
+  async function flipCoin(result, fast) {
     const base = result === 'tails' ? 180 : 0;
-    if (!ctx.animations()) {
-      setAngle(base);
-      return;
-    }
-    const spins = isAuto ? 3 : 5;
-    const duration = isAuto ? 820 : 1250;
-    const from = angle % 360;
+    if (!ctx.animations()) return setAngle(base);
+    const spins = fast ? 2 : 4;
+    const duration = fast ? 520 : 1000;
     const to = spins * 360 + base;
     scene.classList.remove('win', 'lose');
     scene.classList.add('flipping');
     const run = [
-      coinEl.animate([{ transform: `rotateX(${from}deg)` }, { transform: `rotateX(${to}deg)` }], {
-        duration: duration * 0.88,
-        easing: 'cubic-bezier(.18,.62,.32,1)',
-        fill: 'forwards',
-      }),
+      coinEl.animate([{ transform: `rotateX(${angle % 360}deg)` }, { transform: `rotateX(${to}deg)` }], { duration: duration * 0.88, easing: 'cubic-bezier(.18,.62,.32,1)', fill: 'forwards' }),
       toss.animate(
         [
-          { transform: 'translateY(0) scale(1) rotate(0deg)', easing: 'cubic-bezier(.22,.7,.4,1)' },
-          { transform: 'translateY(-48%) scale(1.14) rotate(-7deg)', offset: 0.44, easing: 'cubic-bezier(.6,0,.8,.45)' },
-          { transform: 'translateY(0) scale(1) rotate(0deg)', offset: 0.84, easing: 'ease-out' },
-          { transform: 'translateY(-5%) scale(1.01) rotate(1deg)', offset: 0.92, easing: 'ease-in' },
-          { transform: 'translateY(0) scale(1) rotate(0deg)' },
+          { transform: 'translateY(0) scale(1)', easing: 'cubic-bezier(.22,.7,.4,1)' },
+          { transform: 'translateY(-42%) scale(1.12)', offset: 0.45, easing: 'cubic-bezier(.6,0,.8,.45)' },
+          { transform: 'translateY(0) scale(1)' },
         ],
         { duration },
       ),
-      shadow.animate(
-        [
-          { transform: 'translateX(-50%) scale(1)', opacity: 1, easing: 'cubic-bezier(.22,.7,.4,1)' },
-          { transform: 'translateX(-50%) scale(.5)', opacity: 0.35, offset: 0.44, easing: 'cubic-bezier(.6,0,.8,.45)' },
-          { transform: 'translateX(-50%) scale(1)', opacity: 1, offset: 0.84 },
-          { transform: 'translateX(-50%) scale(.94)', opacity: 0.9, offset: 0.92 },
-          { transform: 'translateX(-50%) scale(1)', opacity: 1 },
-        ],
-        { duration },
-      ),
+      shadow.animate([{ transform: 'translateX(-50%) scale(1)', opacity: 1 }, { transform: 'translateX(-50%) scale(.55)', opacity: 0.4, offset: 0.45 }, { transform: 'translateX(-50%) scale(1)', opacity: 1 }], { duration }),
     ];
     run.forEach((a) => anims.add(a));
     try {
@@ -252,71 +235,148 @@ export default function mountCoinflip(ctx) {
     scene.classList.remove('flipping');
   }
 
-  function decorateChip(result, win) {
-    const chip = history.el.lastElementChild;
-    if (!chip) return;
-    chip.classList.add('cf-chip');
-    chip.innerHTML = miniCoin(result, 26);
-    chip.setAttribute('aria-label', `${NAME[result]}, ${win ? 'win' : 'loss'}`);
-    chip.dataset.tip = `${NAME[result]} · ${win ? 'Win' : 'Loss'}`;
+  // A finished round: show the result, report the bet, record history.
+  function finish(res, { fast = false } = {}) {
+    const bet = res.bet;
+    const v = res.game.state;
+    const code = bet.currency;
+    const won = bet.payout > 0;
+    game = null;
+    if (won) {
+      sound.cashout();
+      setCaption(`Cashed out at ${fmt.multiplier(bet.multiplier)}`, `You won <b>${esc(fmt.money(bet.payout, code))}</b> ${coin(code, 14)}`, 'win');
+      if (!destroyed) ctx.resultPop(caption, { multiplier: bet.multiplier, payout: bet.payout, currency: code, duration: fast ? 900 : 1800 });
+    } else {
+      sound.lose();
+      const miss = v.calls[v.calls.length - 1];
+      setCaption(`${NAME[miss.result]} — round over`, `You called ${NAME[miss.side]} after ${v.wins} correct call${v.wins === 1 ? '' : 's'}`, 'lose');
+    }
+    scene.classList.add(won ? 'win' : 'lose');
+    history.push({ label: fmt.multiplier(bet.multiplier), win: won, betId: bet.id });
+    ctx.setBalance(res.balance);
+    ctx.reportBet(bet);
+    sync();
   }
 
-  async function play(isAuto) {
-    if (busy) return null;
-    if (!ctx.requireAuth()) return null;
+  async function startRound() {
+    if (busy || !ctx.requireAuth()) return;
     busy = true;
-    syncRandom();
-    if (!isAuto) panel.setBusy(true);
+    sync();
     try {
       const v = panel.values();
-      const res = await api.post('/api/games/coinflip/bet', { amount: v.amount, currency: ctx.currency(), params: { side } });
-      ctx.debitView(res);
+      const res = await api.post('/api/games/coinflip/bet', { amount: v.amount, currency: ctx.currency(), params: {} });
       sound.bet();
-      const { side: landed, win } = res.bet.result;
-      const code = res.bet.currency || ctx.currency();
-      if (ctx.animations()) setCaption('Flipping…', '&nbsp;', 'flipping');
-      await flip(landed, isAuto);
-      if (!destroyed) {
-        win ? sound.win() : sound.lose();
-        streak = win ? streak + 1 : 0;
-        streakInput.value = String(streak);
-        const profit = res.bet.payout - res.bet.amount;
-        setCaption(
-          NAME[landed],
-          win
-            ? `You won <b>${esc(fmt.money(res.bet.payout, code))}</b> ${coin(code, 14)}`
-            : `You lost <b>${esc(fmt.money(Math.abs(profit), code))}</b> ${coin(code, 14)}`,
-          win ? 'win' : 'lose',
-        );
-        if (ctx.animations()) {
-          scene.classList.remove('win', 'lose');
-          void scene.offsetWidth;
-        }
-        scene.classList.add(win ? 'win' : 'lose');
-        history.push({ label: NAME[landed], win, betId: res.bet.id });
-        decorateChip(landed, win);
-      }
-      ctx.settle(res);
-      // The win card sits over the caption (still inside ctx.stage) so the landed face stays visible.
-      if (win && !destroyed) ctx.resultPop(caption, { multiplier: MULTIPLIER, payout: res.bet.payout, currency: code, duration: isAuto ? 900 : 1600 });
-      return { win, profit: res.bet.payout - res.bet.amount };
+      game = res.game.state;
+      ctx.setBalance(res.balance);
+      renderLanded([]);
+      scene.classList.remove('win', 'lose');
+      setCaption('Call it!', 'Heads or tails? One miss ends the round.', '');
+    } catch (err) {
+      if (err.code === 'game_active' && err.data.game) {
+        game = err.data.game.state;
+        renderLanded(game.calls);
+      } else throw err;
     } finally {
       busy = false;
-      if (!isAuto) panel.setBusy(false);
-      syncRandom();
+      sync();
     }
   }
 
-  pick('heads', { silent: true });
+  async function call(choice) {
+    if (!game || game.done || busy) return;
+    const side = choice === 'random' ? SIDES[Math.random() < 0.5 ? 0 : 1] : choice;
+    busy = true;
+    sync();
+    sound.click();
+    try {
+      const res = await api.post('/api/games/coinflip/action', { action: 'flip', data: { side } });
+      const v = res.game.state;
+      const last = v.calls[v.calls.length - 1];
+      if (ctx.animations()) setCaption('Flipping…', `You called <b>${NAME[side]}</b>`, 'flipping');
+      await flipCoin(last.result, false);
+      if (destroyed) return;
+      renderLanded(v.calls);
+      if (res.bet) return finish(res);
+      game = v;
+      sound.win();
+      scene.classList.add('win');
+      setCaption(`${NAME[last.result]}!`, `${fmt.multiplier(v.multiplier)} — next correct call pays ${fmt.multiplier(v.nextMultiplier)}`, 'win');
+    } finally {
+      busy = false;
+      sync();
+    }
+  }
+
+  async function cashout() {
+    if (!game || !game.wins || busy) return;
+    busy = true;
+    sync();
+    try {
+      const res = await api.post('/api/games/coinflip/action', { action: 'cashout' });
+      finish(res);
+    } finally {
+      busy = false;
+      sync();
+    }
+  }
+
+  // Auto: the whole round resolves in one request; replay the flips quickly.
+  async function autoRound() {
+    const sides = autoCalls().map((s) => (s === 'random' ? SIDES[Math.random() < 0.5 ? 0 : 1] : s));
+    const v = panel.values();
+    const res = await api.post('/api/games/coinflip/bet', { amount: v.amount, currency: ctx.currency(), params: { autoSides: sides } });
+    ctx.debitView(res);
+    sound.bet();
+    const calls = res.game.state.calls;
+    renderLanded([]);
+    for (let i = 0; i < calls.length && !destroyed; i++) {
+      if (ctx.animations()) await flipCoin(calls[i].result, true);
+      else setAngle(calls[i].result === 'tails' ? 180 : 0);
+      renderLanded(calls.slice(0, i + 1));
+    }
+    if (!destroyed) finish(res, { fast: true });
+    return { win: res.bet.payout > res.bet.amount, profit: res.bet.payout - res.bet.amount };
+  }
+
+  on(callEl, 'click', 'button[data-side]', (e, b) => !b.disabled && call(b.dataset.side));
+  on(autoEl, 'click', '.cf-auto-tile', (e, b) => {
+    if (panel.autoRunning) return;
+    const i = Number(b.dataset.i);
+    autoSides[i] = AUTO_CYCLE[(AUTO_CYCLE.indexOf(autoSides[i]) + 1) % AUTO_CYCLE.length];
+    renderAutoGrid();
+  });
+  panel.onChange((key) => {
+    if (key === 'mode') renderAutoGrid();
+    if (key === 'amount') sync();
+  });
+
+  async function resume() {
+    if (!ctx.isAuthed()) return;
+    try {
+      const { game: active } = await api.get('/api/games/coinflip/active');
+      if (destroyed || !active) return;
+      game = active.state;
+      panel.set('amount', active.amount);
+      renderLanded(game.calls);
+      const last = game.calls[game.calls.length - 1];
+      if (last) setAngle(last.result === 'tails' ? 180 : 0);
+      setCaption('Round in progress', `${game.wins} correct call${game.wins === 1 ? '' : 's'} · ${fmt.multiplier(game.multiplier)}`, '');
+      sync();
+    } catch {
+      /* no active round */
+    }
+  }
+
   setAngle(0);
+  renderAutoGrid();
+  resume();
+  ctx.on('user', resume);
 
   return {
     destroy() {
       destroyed = true;
       anims.forEach((a) => a.cancel());
       anims.clear();
-      timers.forEach((id) => clearTimeout(id));
-      timers.clear();
     },
   };
 }

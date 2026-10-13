@@ -27,16 +27,23 @@ export function oneOf(v, name, options) {
   return v;
 }
 
+// Floors/rounds with a relative tolerance so values that are mathematically
+// exact (0.98 × 7/3 × …) don't lose a cent to binary floating point.
 export function floor2(n) {
-  return Math.floor(n * 100 + 1e-9) / 100;
+  return Math.floor(n * 100 * (1 + 1e-12)) / 100;
 }
 
 export function floor4(n) {
-  return Math.floor(n * 10000 + 1e-9) / 10000;
+  return Math.floor(n * 10000 * (1 + 1e-12)) / 10000;
 }
 
 export function round2(n) {
   return Math.round(n * 100) / 100;
+}
+
+// Round half up at 2 decimals (published ladders use this).
+export function round2h(n) {
+  return Math.round(n * 100 * (1 + 1e-12)) / 100;
 }
 
 export function combinations(n, k) {

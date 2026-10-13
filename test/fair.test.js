@@ -2,8 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { createRng, sha256, rotateSeeds, initialSeeds, takeNonce } from '../server/fair.js';
-import { createArrayRng, bytesToFloat, crashPointFromHex, crashMultiplierAt, crashTimeFor, shuffleSelect } from '../public/js/shared/fair.js';
+import { createArrayRng, bytesToFloat, crashPointFromHex, slidePointFromHex, crashMultiplierAt, crashTimeFor, shuffleSelect } from '../public/js/shared/fair.js';
 import { crashPointForHash } from '../server/crash.js';
+import * as vp from '../public/js/shared/games/videopoker.js';
+import * as vp1 from '../public/js/shared/games/legacy/videopoker.v1.js';
+import * as tower from '../public/js/shared/games/tower.js';
+import * as tower1 from '../public/js/shared/games/legacy/tower.v1.js';
+import * as flip from '../public/js/shared/games/coinflip.js';
+import * as flip1 from '../public/js/shared/games/legacy/coinflip.v1.js';
 
 const seed = { serverSeed: 'a'.repeat(64), clientSeed: 'client', nonce: 7 };
 
@@ -77,4 +83,49 @@ test('crash growth curve and its inverse agree', () => {
     assert.ok(Math.abs(crashMultiplierAt(t + 1) - m) <= 0.01 + 1e-9);
   }
   assert.equal(crashMultiplierAt(0), 1);
+});
+
+// Published test vector: seeds 'server seed' / 'client seed', nonce 1.
+const vector = { serverSeed: 'server seed', clientSeed: 'client seed', nonce: 1 };
+const short = (cards) => cards.map((c) => `${c.rank}${c.suit[0]}`).join(' ');
+
+test('video poker v2 deals the published test vector; v1 bets still replay', () => {
+  const s = vp.start(createRng(vector));
+  assert.equal(short(s.hand), 'Js 10d 5h Kc 9d');
+  assert.equal(short(s.reserve), 'Kh 10h 9c Ah 3h');
+  assert.equal(vp.paysFor('straight_flush'), 60);
+  assert.equal(vp.paysFor('four_kind'), 22);
+  // The frozen v1 module still produces the original (different) deal.
+  const old = vp1.start(createRng(vector));
+  assert.notEqual(short(old.hand), short(s.hand));
+  assert.equal(vp1.paysFor('straight_flush'), 50);
+});
+
+test('dragon tower v2 lays eggs per the published test vector', () => {
+  assert.deepEqual(tower.layout(createRng(vector), 'easy'), [[0, 1, 2], [1, 2, 3], [1, 2, 3], [0, 1, 3], [0, 2, 3], [1, 2, 3], [0, 1, 3], [0, 2, 3], [0, 2, 3]]);
+  assert.equal(tower1.multiplierFor('easy', 1), 1.3066, 'v1 kept its old ladder');
+});
+
+test('flip v2: a float of 0.5 lands tails; auto calls stop at the first miss', () => {
+  const s = flip.start(createArrayRng([0.5, 0.9, 0.9, ...Array(17).fill(0.1)]), { autoSides: ['tails', 'heads', 'heads', 'heads'] });
+  assert.deepEqual(s.calls.map((c) => c.result), ['tails', 'heads', 'heads', 'tails']);
+  assert.equal(s.lost, true);
+  const won = flip.start(createArrayRng(Array(20).fill(0.9)), { autoSides: ['heads', 'heads', 'heads'] });
+  assert.equal(won.payout, 7.84);
+  assert.equal(flip1.outcome(createArrayRng([0.2]), { side: 'heads' }).win, true, 'v1 single flip still replays');
+});
+
+test('crash v2 and slide formulas match the published shape', () => {
+  // int = 0 → 2^32 × 0.99, the maximum; int = 2^32 - 1 → 1.00x.
+  assert.equal(crashPointFromHex('00000000', 2), Math.floor(2 ** 32 * 0.99 * 100) / 100);
+  assert.equal(crashPointFromHex('ffffffff', 2), 1);
+  assert.equal(slidePointFromHex('ffffffff'), 1);
+  let h = 'seed';
+  const n = 20000;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    h = sha256(h);
+    pts.push(crashPointFromHex(crypto.createHmac('sha256', h).update('salt').digest('hex'), 2));
+  }
+  for (const m of [2, 10]) assert.ok(Math.abs(pts.filter((c) => c >= m).length / n - 0.99 / m) < 0.02);
 });

@@ -1,5 +1,21 @@
 import { fail, num, floor2 } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'limbo',
+  name: 'Limbo',
+  category: 'originals',
+  order: 50,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Set a target multiplier and see if the result reaches it. Simple, fast and up to 1,000,000×.',
+  howTo: ['Choose a target multiplier (1.01× – 1,000,000×).', 'Press Bet.', 'You win if the result is at or above your target.'],
+  hotkeys: [['W', 'Target −'], ['E', 'Target +']],
+  verifyFields: [['target', 'Target multiplier', 'number', 2]],
+};
+
+export const RULES_VERSION = 1;
+
 export const EDGE = 0.01;
 export const MIN_TARGET = 1.01;
 export const MAX_TARGET = 1000000;

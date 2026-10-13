@@ -11,8 +11,13 @@ export const TICK_MS = 50;
 const CHAIN_LENGTH = 20000;
 const MAX_AUTO = 1000000;
 
-export function crashPointForHash(hash, salt) {
-  return crashPointFromHex(crypto.createHmac('sha256', hash).update(salt).digest('hex'));
+// The salt for new chains is fixed and public, so it is chosen independently
+// of the (secret) chain seed: sha256 of a published phrase.
+export const CRASH_SALT = crypto.createHash('sha256').update('fakesino crash salt · 2026-10-13').digest('hex');
+export const CRASH_FORMULA = 2;
+
+export function crashPointForHash(hash, salt, version = 1) {
+  return crashPointFromHex(crypto.createHmac('sha256', hash).update(salt).digest('hex'), version);
 }
 
 // Multiplayer crash. Round hashes come from a pre-generated SHA-256 chain played
@@ -40,7 +45,8 @@ export class CrashGame {
         seed,
         length: CHAIN_LENGTH,
         index: 0,
-        salt: randomHex(16),
+        salt: CRASH_SALT,
+        formulaVersion: CRASH_FORMULA,
         history: c?.history || [],
         terminatingHash: null,
         chainNo: (c?.chainNo || 0) + 1,
@@ -62,7 +68,7 @@ export class CrashGame {
     const cc = this.store.data.crash;
     const hash = this.chain[cc.length - 1 - cc.index];
     cc.index++;
-    return { hash, salt: cc.salt, roundNo: cc.index, chainNo: cc.chainNo };
+    return { hash, salt: cc.salt, roundNo: cc.index, chainNo: cc.chainNo, formulaVersion: cc.formulaVersion || 1 };
   }
 
   start() {
@@ -85,12 +91,13 @@ export class CrashGame {
   }
 
   beginBetting() {
-    const { hash, salt, roundNo, chainNo } = this.nextHash();
+    const { hash, salt, roundNo, chainNo, formulaVersion } = this.nextHash();
     this.round = {
       id: `${chainNo}-${roundNo}`,
       hash,
       salt,
-      crashPoint: crashPointForHash(hash, salt),
+      formulaVersion,
+      crashPoint: crashPointForHash(hash, salt, formulaVersion),
       phase: 'betting',
       bettingEndsAt: Date.now() + this.bettingMs,
       startedAt: null,
@@ -143,7 +150,7 @@ export class CrashGame {
         payout: p.payout || 0,
         params: { autoCashout: p.autoCashout || null },
         result: { crashPoint: r.crashPoint, cashedAt: p.cashedAt || null, multiplier: p.cashedAt || 0 },
-        seed: { roundId: r.id, hash: r.hash, salt: r.salt },
+        seed: { roundId: r.id, hash: r.hash, salt: r.salt, formulaVersion: r.formulaVersion },
       });
     }
     this.history.unshift({ id: r.id, crashPoint: r.crashPoint, hash: r.hash, at: r.crashedAt });
@@ -273,6 +280,7 @@ export class CrashGame {
     return {
       terminatingHash: c.terminatingHash,
       salt: c.salt,
+      formulaVersion: c.formulaVersion || 1,
       chainLength: c.length,
       played: c.index,
       history: this.history.slice(0, 50).map(({ id, crashPoint, hash }) => ({ id, crashPoint, hash })),

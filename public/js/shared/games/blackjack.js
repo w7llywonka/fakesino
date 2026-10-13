@@ -1,5 +1,25 @@
 import { fail, cardFromFloat } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'blackjack',
+  name: 'Blackjack',
+  category: 'table',
+  order: 200,
+  edge: 0.005,
+  rtp: 99.5,
+  desc: 'Beat the dealer to 21. Blackjack pays 3:2, dealer stands on all 17s, double, split and insurance available.',
+  howTo: [
+      'Press Bet to deal.',
+      'Hit to draw a card, Stand to keep your total.',
+      'Double on any two cards; split a pair once.',
+      'Insurance is offered when the dealer shows an Ace.',
+    ],
+  hotkeys: [['Q', 'Hit'], ['W', 'Stand'], ['E', 'Split'], ['R', 'Double']],
+};
+
+export const RULES_VERSION = 1;
+
 // Infinite-deck blackjack.
 // - Blackjack pays 3:2, insurance pays 2:1
 // - Dealer stands on all 17s and peeks for blackjack

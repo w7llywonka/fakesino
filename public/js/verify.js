@@ -30,29 +30,24 @@ export async function floats(serverSeed, clientSeed, nonce, count) {
   return out;
 }
 
-const loaders = {
-  dice: () => import('./shared/games/dice.js'),
-  limbo: () => import('./shared/games/limbo.js'),
-  plinko: () => import('./shared/games/plinko.js'),
-  mines: () => import('./shared/games/mines.js'),
-  keno: () => import('./shared/games/keno.js'),
-  wheel: () => import('./shared/games/wheel.js'),
-  coinflip: () => import('./shared/games/coinflip.js'),
-  roulette: () => import('./shared/games/roulette.js'),
-  baccarat: () => import('./shared/games/baccarat.js'),
-  hilo: () => import('./shared/games/hilo.js'),
-  blackjack: () => import('./shared/games/blackjack.js'),
-  videopoker: () => import('./shared/games/videopoker.js'),
-  tower: () => import('./shared/games/tower.js'),
-  slots: () => import('./shared/games/slots.js'),
-};
+// Load a game's rules. Bets record the rules version they were played under;
+// older versions are kept frozen in shared/games/legacy/<game>.v<N>.js.
+export async function loadRules(game, rulesVersion) {
+  const current = await import(`./shared/games/${game}.js`);
+  const latest = current.RULES_VERSION ?? 1;
+  const v = Number(rulesVersion) || latest;
+  if (v >= latest) return current;
+  return import(`./shared/games/legacy/${game}.v${v}.js`);
+}
 
-export const VERIFIABLE = Object.keys(loaders);
+export async function latestRulesVersion(game) {
+  return (await import(`./shared/games/${game}.js`)).RULES_VERSION ?? 1;
+}
 
 // Recompute a bet. For multi-step games pass the recorded `actions` to replay
 // the player's moves; without them you get the opening state.
-export async function verifyBet({ game, serverSeed, clientSeed, nonce, params = {}, actions = [] }) {
-  const mod = await loaders[game]();
+export async function verifyBet({ game, serverSeed, clientSeed, nonce, params = {}, actions = [], rulesVersion }) {
+  const mod = await loadRules(game, rulesVersion);
   const normalized = mod.normalize({ ...params, allowEmpty: true });
   let count = 64;
   for (;;) {
@@ -76,16 +71,16 @@ export async function verifyBet({ game, serverSeed, clientSeed, nonce, params = 
   }
 }
 
-export async function crashPoint(hash, salt) {
-  return crashPointFromHex(await hmacHex(hash, salt));
+export async function crashPoint(hash, salt, formulaVersion = 1) {
+  return crashPointFromHex(await hmacHex(hash, salt), formulaVersion);
 }
 
 // Walk the hash chain backwards to list previous rounds from one game hash.
-export async function crashChain(hash, salt, count = 10) {
+export async function crashChain(hash, salt, count = 10, formulaVersion = 1) {
   const out = [];
   let h = hash;
   for (let i = 0; i < count; i++) {
-    out.push({ hash: h, crashPoint: await crashPoint(h, salt) });
+    out.push({ hash: h, crashPoint: await crashPoint(h, salt, formulaVersion) });
     h = await sha256Hex(h);
   }
   return out;

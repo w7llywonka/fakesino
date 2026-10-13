@@ -1,5 +1,25 @@
 import { int, oneOf } from './util.js';
 
+// Catalogue entry, read by the server (game discovery) and the lobby (/api/config).
+export const META = {
+  slug: 'plinko',
+  name: 'Plinko',
+  category: 'originals',
+  order: 20,
+  edge: 0.01,
+  rtp: 99,
+  desc: 'Drop a ball through 8–16 rows of pegs. Each peg sends it left or right and the bucket it lands in sets your multiplier — up to 1,000× on high risk.',
+  howTo: [
+      'Choose a risk level and number of rows.',
+      'Press Bet to drop a ball — you can drop several at once.',
+      'The bucket the ball lands in pays its multiplier.',
+    ],
+  hotkeys: [['W', 'Fewer rows'], ['E', 'More rows']],
+  verifyFields: [['rows', 'Rows', [16, 15, 14, 13, 12, 11, 10, 9, 8]], ['risk', 'Risk', ['low', 'medium', 'high']]],
+};
+
+export const RULES_VERSION = 1;
+
 export const ROWS = [8, 9, 10, 11, 12, 13, 14, 15, 16];
 export const RISKS = ['low', 'medium', 'high'];
 

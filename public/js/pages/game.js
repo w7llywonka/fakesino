@@ -54,7 +54,7 @@ export default async function gamePage(page, { slug }) {
       <div class="game-info-body"><div class="thumb">${gameArt(slug, meta.name)}</div>
         <div><p style="margin-top:0">${esc(meta.desc)}</p>
         <p>Every result is generated from your server seed, client seed and nonce, and can be checked independently in <a class="link" href="?modal=fairness&tab=verify">the verifier</a>. House edge ${(100 - meta.rtp).toFixed(1)}%.</p>
-        <p class="dim">Hotkeys: <span class="kbd">Space</span> bet · <span class="kbd">S</span> double bet · <span class="kbd">A</span> halve bet · <span class="kbd">D</span> zero bet${meta.hotkeys ? ` · ${meta.hotkeys}` : ''}</p></div></div>
+        <p class="dim">Hotkeys: <span class="kbd">Space</span> bet · <span class="kbd">S</span> double bet · <span class="kbd">A</span> halve bet · <span class="kbd">D</span> zero bet${(meta.hotkeys || []).map(([k, label]) => ` · <span class="kbd">${esc(k)}</span> ${esc(label.toLowerCase())}`).join('')}</p></div></div>
     </div>
     <div class="lb-slot"></div>
   </div>`);
