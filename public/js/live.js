@@ -1,19 +1,39 @@
 import { bus, state, setBalance } from './state.js';
+import { api } from './api.js';
 
 let source = null;
 let retry = 1000;
+let generation = 0;
+let lastTicketRetry = 0;
 
-// One EventSource per session; reconnects when the user signs in/out so the
-// server can attach per-user pushes (balances, deposits, crash cashouts).
-export function connectLive() {
+// One EventSource per wallet. EventSource can't send the wallet key header, so
+// it authenticates with a short-lived ticket; that lets the server push this
+// wallet's balance changes, deposit confirmations and crash cashouts.
+export async function connectLive() {
+  const gen = ++generation;
   if (source) source.close();
-  source = new EventSource('/api/live');
+  source = null;
+  let ticket = null;
+  if (state.user) {
+    try {
+      ({ ticket } = await api.post('/api/live/ticket'));
+    } catch {
+      /* fall back to an anonymous feed */
+    }
+  }
+  if (gen !== generation) return; // a newer connection superseded this one
+  source = new EventSource(ticket ? `/api/live?ticket=${ticket}` : '/api/live');
   source.addEventListener('hello', (e) => {
     retry = 1000;
     const data = JSON.parse(e.data);
     state.serverOffset = data.serverTime - Date.now();
     bus.emit('live:hello', data);
     if (data.crash) bus.emit('live:crash', data.crash);
+    // The server forgot our ticket (e.g. it restarted): get a fresh one.
+    if (state.user && !data.authed && Date.now() - lastTicketRetry > 10000) {
+      lastTicketRetry = Date.now();
+      connectLive();
+    }
   });
   source.addEventListener('bet', (e) => bus.emit('live:bet', JSON.parse(e.data)));
   source.addEventListener('crash', (e) => {

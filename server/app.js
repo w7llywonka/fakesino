@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,26 +80,41 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   };
 
   router.post('/api/auth/guest', (ctx) => {
-    const deviceId = String(ctx.body.deviceId || '').toLowerCase();
+    const deviceId = String(ctx.body.deviceId || ctx.walletKey || '').toLowerCase();
     if (!DEVICE_RE.test(deviceId)) throw badRequest('Invalid wallet key', { field: 'deviceId' });
     const known = userForDevice(store, deviceId);
     if (ctx.body.mustExist && !known) throw new HttpError(404, 'No wallet found for that key', { field: 'deviceId' });
-    // Keep the current session when it already belongs to this device (or the
-    // device is new to the server, e.g. local storage was cleared).
-    if (ctx.user && (!known || known.id === ctx.user.id)) {
-      if (!known) linkDevice(store, deviceId, ctx.user);
-      return { user: publicUser(ctx.user), created: false, restored: false };
-    }
     if (known) {
-      startSession(ctx, known);
+      if (!ctx.user || ctx.user.id !== known.id) startSession(ctx, known);
       return { user: publicUser(known), created: false, restored: false };
     }
+    // An unknown key with an identified wallet (e.g. local storage was cleared
+    // but the cookie survived) is re-linked to that wallet, unless the browser
+    // explicitly asked for a brand-new one.
+    if (ctx.user && !ctx.body.fresh) {
+      linkDevice(store, deviceId, ctx.user);
+      return { user: publicUser(ctx.user), created: false, restored: false };
+    }
     guestLimit(`guest:${ctx.ip}`);
-    const { user, restored } = createGuest(store, ctx.body.restore);
+    const { user, restored } = createGuest(store, ctx.body.fresh ? null : ctx.body.restore);
     linkDevice(store, deviceId, user);
     startSession(ctx, user);
     return { user: publicUser(user), created: true, restored };
   });
+
+  // EventSource can't send headers, so the live feed authenticates with a
+  // short-lived ticket obtained over a normal (header-authenticated) request.
+  const liveTickets = new Map();
+  router.post(
+    '/api/live/ticket',
+    authed((ctx) => {
+      const now = Date.now();
+      for (const [t, v] of liveTickets) if (v.exp < now) liveTickets.delete(t);
+      const ticket = crypto.randomBytes(24).toString('hex');
+      liveTickets.set(ticket, { userId: ctx.user.id, exp: now + 12 * 3600 * 1000 });
+      return { ticket };
+    }),
+  );
 
   router.get('/api/me', (ctx) => ({ user: ctx.user ? publicUser(ctx.user) : null }));
 
@@ -274,7 +290,9 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   );
 
   router.get('/api/live', (ctx) => {
-    live.connect(ctx.req, ctx.res, ctx.user?.id ?? null, { serverTime: Date.now(), crash: crash.stateFor(ctx.user) });
+    const t = liveTickets.get(ctx.query.get('ticket') || '');
+    const user = t && t.exp > Date.now() ? store.data.users[t.userId] : ctx.user;
+    live.connect(ctx.req, ctx.res, user?.id ?? null, { serverTime: Date.now(), authed: !!user, crash: crash.stateFor(user) });
     return undefined; // streaming
   });
 
@@ -284,6 +302,15 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     if (!match) return sendJson(res, 404, { error: 'Not found' });
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies.sid;
+    // Identify the wallet: the X-Wallet-Key header first, the session cookie as
+    // a fallback (and to re-link a browser whose key changed).
+    const rawKey = String(req.headers['x-wallet-key'] || '').toLowerCase();
+    const walletKey = DEVICE_RE.test(rawKey) ? rawKey : null;
+    let user = walletKey ? userForDevice(store, walletKey) : null;
+    if (!user) {
+      user = sessionUser(store, token);
+      if (user && walletKey && req.method === 'POST' && url.pathname !== '/api/auth/guest') linkDevice(store, walletKey, user);
+    }
     const setCookies = [];
     const ctx = {
       req,
@@ -291,7 +318,8 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
       params: match.params,
       query: url.searchParams,
       token,
-      user: sessionUser(store, token),
+      walletKey,
+      user,
       ip: req.socket.remoteAddress,
       body: {},
       setCookie: (c) => setCookies.push(c),

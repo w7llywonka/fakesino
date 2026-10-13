@@ -129,6 +129,72 @@ test('a cleared key is re-linked to the current session', async () => {
   assert.equal(fresh.data.user.id, first.data.user.id);
 });
 
+// Header-only client: identifies the wallet with X-Wallet-Key, never sends cookies.
+function keyClient(k) {
+  const call = async (method, url, body) => {
+    const res = await fetch(base + url, {
+      method,
+      headers: { 'x-wallet-key': k, ...(body ? { 'content-type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return { status: res.status, data: await res.json().catch(() => null) };
+  };
+  return { get: (u) => call('GET', u), post: (u, b = {}) => call('POST', u, b) };
+}
+
+test('the X-Wallet-Key header identifies the wallet without cookies', async () => {
+  const k = key();
+  const c = keyClient(k);
+  const created = await c.post('/api/auth/guest', {});
+  assert.equal(created.data.created, true);
+  assert.equal((await c.get('/api/me')).data.user.id, created.data.user.id);
+  const dep = await c.post('/api/payments/card', { amount: 50, currency: 'USD', card: card('4242424242424242') });
+  assert.equal(dep.data.user.balances.USD, 50);
+  const bet = await c.post('/api/games/limbo/bet', { amount: 1, currency: 'USD', params: { target: 2 } });
+  assert.equal(bet.status, 200);
+});
+
+test('a wallet the server forgot answers 401 until the browser restores it', async () => {
+  const k = key();
+  const c = keyClient(k);
+  const r = await c.get('/api/stats');
+  assert.equal(r.status, 401);
+  assert.equal(r.data.code, 'auth_required');
+  assert.equal((await c.get('/api/me')).data.user, null);
+  const restored = await c.post('/api/auth/guest', { restore: { balances: { USD: 42 } } });
+  assert.equal(restored.data.restored, true);
+  assert.equal((await c.get('/api/stats')).status, 200);
+  assert.equal((await c.get('/api/me')).data.user.balances.USD, 42);
+});
+
+test('starting a fresh wallet never reuses the current one', async () => {
+  const c = client();
+  const first = await c.post('/api/auth/guest', { deviceId: key() });
+  const fresh = await c.post('/api/auth/guest', { deviceId: key(), fresh: true, restore: { balances: { USD: 5 } } });
+  assert.notEqual(fresh.data.user.id, first.data.user.id);
+  assert.equal(fresh.data.user.balances.USD, 0, 'a fresh wallet ignores snapshots');
+});
+
+test('the live feed authenticates with a ticket', async () => {
+  const c = keyClient(key());
+  await c.post('/api/auth/guest', {});
+  const { data } = await c.post('/api/live/ticket');
+  assert.match(data.ticket, /^[a-f0-9]{48}$/);
+  const hello = async (url) => {
+    const ctrl = new AbortController();
+    const res = await fetch(base + url, { signal: ctrl.signal });
+    const reader = res.body.getReader();
+    let text = '';
+    while (!text.includes('event: hello')) text += new TextDecoder().decode((await reader.read()).value);
+    while (!/event: hello\ndata: .*\n/.test(text)) text += new TextDecoder().decode((await reader.read()).value);
+    ctrl.abort();
+    return JSON.parse(text.match(/event: hello\ndata: (.*)\n/)[1]);
+  };
+  assert.equal((await hello(`/api/live?ticket=${data.ticket}`)).authed, true);
+  assert.equal((await hello('/api/live?ticket=nope')).authed, false);
+  assert.equal((await keyClient(key()).post('/api/live/ticket')).status, 401);
+});
+
 test('usernames can be changed and stay unique', async () => {
   const a = await newPlayer(0);
   const b = await newPlayer(0);

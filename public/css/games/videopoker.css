@@ -55,6 +55,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+.vp-note {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border: 1px dashed var(--surface-4);
+  border-radius: var(--radius-sm);
+}
+
 .vp-row.hint {
   box-shadow: inset 0 0 0 2px var(--gold);
 }
@@ -309,6 +321,11 @@
     padding: 4px 8px;
     font-size: 11px;
     gap: 6px;
+  }
+  .vp-note {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-align: center;
   }
   .vp-cards {
     gap: 7px;

@@ -1,7 +1,7 @@
 import { el, esc, on, sleep } from '../dom.js';
 import { icon, coin } from '../icons.js';
 import { CURRENCIES, roundDown } from '../shared/currencies.js';
-import { state, bus, currency, balanceOf, savePrefs } from '../state.js';
+import { state, bus, currency, balanceOf, savePrefs, ensureSession } from '../state.js';
 import * as fmt from '../format.js';
 import { toast, toastError } from './toast.js';
 
@@ -269,8 +269,9 @@ export function createBetPanel(container, opts) {
       if (spec.mode) node.style.display = spec.mode === m && !spec.hidden ? '' : 'none';
     }
     betBtn.textContent = m === 'auto' ? 'Start Autobet' : opts.betLabel || 'Bet';
-    for (const fn of listeners) fn('mode', m, values);
     applyDisabled();
+    // Notify after re-enabling so games can re-lock the fields they control.
+    for (const fn of listeners) fn('mode', m, values);
   }
 
   on(root, 'click', '.bp-mode .tab', (e, t) => !t.disabled && setMode(t.dataset.mode));
@@ -300,7 +301,7 @@ export function createBetPanel(container, opts) {
 
   async function runAuto() {
     if (!state.user) {
-      window.dispatchEvent(new CustomEvent('auth-required'));
+      ensureSession().catch(() => {});
       return;
     }
     autoRunning = true;

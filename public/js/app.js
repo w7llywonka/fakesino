@@ -1,11 +1,10 @@
-import { api } from './api.js';
+import { api, setRecovery } from './api.js';
 import { state, bus, ensureSession, refreshUser } from './state.js';
 import { route, startRouter, setQuery } from './router.js';
 import { connectLive } from './live.js';
 import { renderShell } from './ui/layout.js';
 import { closeModal, currentModal } from './ui/modal.js';
 import { initTooltips } from './ui/tooltip.js';
-import { toast } from './ui/toast.js';
 import * as misc from './pages/misc.js';
 
 const lazy = (path, name = 'default') => async (page, params) => (await import(path))[name](page, params);
@@ -94,6 +93,8 @@ async function syncModal(q) {
 
 async function boot() {
   // No sign-in: every browser gets its own play-money wallet automatically.
+  // If the server ever forgets it, requests rebuild it from the local copy.
+  setRecovery(() => ensureSession());
   const [config] = await Promise.all([api.get('/api/config'), ensureSession()]);
   state.config = config;
   const { page } = renderShell(document.getElementById('app'));
@@ -112,15 +113,6 @@ async function boot() {
     // Re-render pages whose content depends on the account (game pages keep their state).
     if (currentMatch && !currentMatch.pattern.startsWith('/casino/games')) renderPage(currentMatch);
   });
-  // If the session cookie is lost mid-visit, quietly reconnect the same wallet.
-  let reconnecting = null;
-  window.addEventListener('auth-required', () => {
-    reconnecting ||= ensureSession()
-      .then(() => toast({ title: 'Wallet reconnected', message: 'Try that again.' }))
-      .catch(() => {})
-      .finally(() => (reconnecting = null));
-  });
-
   // Keep stats (VIP progress, totals) fresh when navigating.
   bus.on('route', () => state.user && refreshUser().catch(() => {}));
 

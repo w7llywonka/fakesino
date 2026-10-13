@@ -1,7 +1,7 @@
 import { el, esc } from '../dom.js';
 import { coin } from '../icons.js';
 import { api } from '../api.js';
-import { state, bus, currency, balanceOf, setBalance, isAuthed } from '../state.js';
+import { state, bus, currency, balanceOf, setBalance, isAuthed, ensureSession } from '../state.js';
 import * as fmt from '../format.js';
 import { sound } from '../sound.js';
 import { toast, toastError } from './toast.js';
@@ -41,8 +41,7 @@ export function createGameContext({ slug, controls, stage, footer }) {
     isAuthed,
     requireAuth() {
       if (isAuthed()) return true;
-      // The wallet session is (re)connecting; app.js listens for this.
-      window.dispatchEvent(new CustomEvent('auth-required'));
+      ensureSession().catch(() => {});
       return false;
     },
     createBetPanel(opts) {

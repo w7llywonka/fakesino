@@ -1,0 +1,598 @@
+/* Baccarat — two hands, three betting spots, bead road. Selectors are
+   namespaced with .bc- because game stylesheets stay loaded between pages. */
+
+.bc-stage {
+  --cw: 80px;
+  --ch: 115px;
+  --player: #3b82f6;
+  --banker: #ff4d5e;
+  --tie: #22d36b;
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 24px 18px;
+  min-height: 560px;
+  user-select: none;
+  overflow: hidden;
+  background: radial-gradient(ellipse 75% 55% at 50% 35%, rgba(47, 124, 246, 0.07), transparent 70%), var(--bg);
+}
+
+/* ---------- bead road ---------- */
+
+.bc-top {
+  display: flex;
+  min-height: 40px;
+  padding-right: 90px;
+}
+
+.bc-road {
+  display: flex;
+  gap: 5px;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.bc-bead {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--surface-3);
+  animation: bcbead 0.25s ease-out;
+}
+
+.bc-bead.player {
+  background: var(--player);
+}
+
+.bc-bead.banker {
+  background: var(--banker);
+}
+
+.bc-bead.tie {
+  background: var(--tie);
+  color: var(--accent-text);
+}
+
+@keyframes bcbead {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* ---------- shoe ---------- */
+
+.bc-shoe {
+  position: absolute;
+  top: 14px;
+  right: 24px;
+  width: calc(var(--cw) * 0.6);
+  height: calc(var(--ch) * 0.6);
+  transform: rotate(10deg);
+  z-index: 1;
+}
+
+.bc-shoe span {
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+  transform: translate(calc(var(--i) * -1.5px), calc(var(--i) * -2px));
+  border: 3px solid #eef3f9;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.09) 0 2px, transparent 2px 8px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.09) 0 2px, transparent 2px 8px),
+    linear-gradient(150deg, #3b7cfb, #1c4cc0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.bc-shoe-box {
+  position: absolute;
+  left: -9px;
+  right: -12px;
+  bottom: -9px;
+  height: 58%;
+  border-radius: 8px 8px 12px 12px;
+  background: linear-gradient(180deg, #2a3e50, #17242f);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), 0 10px 22px rgba(0, 0, 0, 0.45);
+  clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 100%);
+}
+
+/* ---------- hands ---------- */
+
+.bc-hands {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 44px;
+  margin-top: auto;
+}
+
+.bc-hand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(29, 43, 56, 0.55);
+  border: 2px solid transparent;
+  transition: border-color 0.25s, box-shadow 0.25s, opacity 0.25s;
+}
+
+.bc-hand-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bc-hand-name {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.bc-hand.player .bc-hand-name {
+  color: #7fb0ff;
+}
+
+.bc-hand.banker .bc-hand-name {
+  color: #ff8794;
+}
+
+.bc-total {
+  min-width: 32px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  font-weight: 800;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.35;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+
+.bc-total.show {
+  opacity: 1;
+}
+
+.bc-cards {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.bc-hand.player .bc-slot.third {
+  order: -1;
+}
+
+.bc-slot {
+  position: relative;
+  width: var(--cw);
+  height: var(--ch);
+  flex-shrink: 0;
+}
+
+.bc-slot.third {
+  width: var(--ch);
+}
+
+.bc-slot::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--cw);
+  height: var(--ch);
+  transform: translate(-50%, -50%);
+  border-radius: 8px;
+  border: 2px dashed rgba(167, 182, 200, 0.13);
+}
+
+.bc-slot.third::before {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.bc-slot.filled::before {
+  display: none;
+}
+
+.bc-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--cw);
+  height: var(--ch);
+  margin: calc(var(--ch) / -2) 0 0 calc(var(--cw) / -2);
+  perspective: 900px;
+}
+
+.bc-slot.third .bc-card {
+  transform: rotate(90deg);
+}
+
+.bc-card-in {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.38s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+.bc-card.down .bc-card-in {
+  transform: rotateY(180deg);
+}
+
+.bc-card .pcard {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  padding: 6px 7px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  transition: box-shadow 0.25s, opacity 0.25s;
+}
+
+.bc-card .pcard .r {
+  font-size: 22px;
+}
+
+.bc-card .pcard .big svg {
+  width: 40px;
+  height: 40px;
+}
+
+.bc-card .pcard.back {
+  transform: rotateY(180deg);
+  border: 3px solid #eef3f9;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.2) 0 12%, transparent 13%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.09) 0 3px, transparent 3px 10px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.09) 0 3px, transparent 3px 10px),
+    linear-gradient(150deg, #3b7cfb, #1c4cc0);
+}
+
+.bc-stage.clearing .bc-card {
+  opacity: 0;
+  transition: opacity 0.16s;
+}
+
+/* outcome */
+
+.bc-hand.win {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(34, 211, 107, 0.12), 0 10px 30px rgba(34, 211, 107, 0.15);
+}
+
+.bc-hand.win .bc-total {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.bc-hand.tie {
+  border-color: rgba(34, 211, 107, 0.55);
+}
+
+.bc-hand.lose .bc-face {
+  opacity: 0.55;
+}
+
+.bc-banner {
+  align-self: center;
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 15px;
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transition: opacity 0.2s, transform 0.2s;
+  background: var(--surface-3);
+}
+
+.bc-banner.show {
+  opacity: 1;
+  transform: none;
+}
+
+.bc-banner.player {
+  background: var(--player);
+  color: #fff;
+}
+
+.bc-banner.banker {
+  background: var(--banker);
+  color: #fff;
+}
+
+.bc-banner.tie {
+  background: var(--tie);
+  color: var(--accent-text);
+}
+
+.bc-banner em {
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.bc-score {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* ---------- betting spots ---------- */
+
+.bc-spots {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto auto;
+}
+
+.bc-spot {
+  --spot: var(--player);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 10px 12px;
+  min-height: 138px;
+  border-radius: var(--radius-lg);
+  border: 2px solid color-mix(in srgb, var(--spot) 45%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--spot) 16%, transparent), color-mix(in srgb, var(--spot) 6%, transparent));
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.2s, transform 0.08s;
+  outline: none;
+}
+
+.bc-spot.tie {
+  --spot: var(--tie);
+}
+
+.bc-spot.banker {
+  --spot: var(--banker);
+}
+
+.bc-spot:hover {
+  border-color: var(--spot);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--spot) 24%, transparent), color-mix(in srgb, var(--spot) 9%, transparent));
+}
+
+.bc-spot:active {
+  transform: scale(0.99);
+}
+
+.bc-spot:focus-visible {
+  box-shadow: 0 0 0 3px var(--blue);
+}
+
+.bc-stage.locked .bc-spot {
+  cursor: default;
+}
+
+.bc-stage.locked .bc-spot:hover {
+  border-color: color-mix(in srgb, var(--spot) 45%, transparent);
+}
+
+.bc-spot-name {
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--spot) 60%, #fff);
+}
+
+.bc-spot-pays {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+}
+
+.bc-stack {
+  position: relative;
+  width: 44px;
+  height: 52px;
+  margin-top: 8px;
+}
+
+.bc-disc,
+.bc-stack .placed-chip {
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--i) * 4px);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.bc-disc {
+  background: var(--chip);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.8), inset 0 0 0 6px var(--chip), 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+
+.bc-stack .placed-chip {
+  font-size: 12px;
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.85), inset 0 0 0 6px var(--chip), 0 3px 8px rgba(0, 0, 0, 0.5);
+}
+
+.bc-amt {
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bc-spot.win {
+  border-color: var(--spot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--spot) 35%, transparent), 0 0 30px color-mix(in srgb, var(--spot) 35%, transparent);
+}
+
+.bc-spot.lose.has {
+  opacity: 0.6;
+}
+
+.bc-tip {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1100px) {
+  .bc-stage {
+    --cw: 70px;
+    --ch: 101px;
+  }
+  .bc-hands {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 900px) {
+  .bc-stage {
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 600px) {
+  .bc-stage {
+    --cw: 42px;
+    --ch: 61px;
+    gap: 12px;
+    padding: 10px 8px 12px;
+    min-height: 470px;
+  }
+  .bc-top {
+    padding-right: 60px;
+  }
+  .bc-bead {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  .bc-hands {
+    gap: 8px;
+  }
+  .bc-top {
+    min-height: 40px;
+  }
+  .bc-hand {
+    padding: 8px 6px 10px;
+    gap: 8px;
+  }
+  .bc-hand-name {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+  .bc-total {
+    height: 22px;
+    min-width: 26px;
+    font-size: 12px;
+  }
+  .bc-cards {
+    gap: 4px;
+  }
+  .bc-card .pcard {
+    padding: 3px 4px;
+    border-radius: 5px;
+  }
+  .bc-card .pcard .r {
+    font-size: 13px;
+  }
+  .bc-card .pcard .s {
+    width: 12px;
+    height: 12px;
+  }
+  .bc-card .pcard .big svg {
+    width: 20px;
+    height: 20px;
+  }
+  .bc-card .pcard.back {
+    border-width: 2px;
+  }
+  .bc-slot::before {
+    border-radius: 5px;
+  }
+  .bc-spots {
+    gap: 6px;
+  }
+  .bc-spot {
+    min-height: 116px;
+    padding: 10px 4px 8px;
+  }
+  .bc-spot-name {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+  .bc-spot-pays {
+    font-size: 10px;
+  }
+  .bc-stack {
+    width: 36px;
+    height: 44px;
+    margin-top: 4px;
+  }
+  .bc-disc,
+  .bc-stack .placed-chip {
+    width: 36px;
+    height: 36px;
+  }
+  .bc-stack .placed-chip {
+    font-size: 10px;
+  }
+  .bc-amt {
+    font-size: 10px;
+  }
+  .bc-banner {
+    font-size: 13px;
+    min-height: 30px;
+  }
+  .bc-tip {
+    display: none;
+  }
+  .bc-shoe {
+    top: 8px;
+    right: 14px;
+  }
+}
+
+/* chip rack in the sidebar: fit all seven chips on one row */
+
+.bc-rack {
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.bc-rack .chip-btn {
+  width: 37px;
+  height: 37px;
+  font-size: 10px;
+}

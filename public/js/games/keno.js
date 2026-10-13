@@ -21,8 +21,11 @@ function hitChance(n, k) {
   return (combinations(n, k) * combinations(NUMBERS - n, DRAWN - k)) / combinations(NUMBERS, DRAWN);
 }
 
+const tiny = new Intl.NumberFormat('en-US', { maximumSignificantDigits: 2 });
+const chanceText = (pct) => (pct >= 0.01 ? `${pct.toFixed(2)}%` : `${tiny.format(pct)}%`);
+
 export default function mountKeno(ctx) {
-  const { api, fmt, sound } = ctx;
+  const { api, sound } = ctx;
   let risk = 'classic';
   const picks = new Set();
   let busy = false;
@@ -153,7 +156,7 @@ export default function mountKeno(ctx) {
       .map((m, k) => `<div class="kp-m" data-k="${k}"><span class="kp-long">${esc(multText(m))}</span><span class="kp-short">${esc(shortText(m))}</span></div>`)
       .join('')}</div>
       <div class="keno-pay-row kp-hits ${n >= 8 ? 'dense' : ''}" style="--cols:${n + 1}">${row
-        .map((m, k) => `<div class="kp-h" data-k="${k}" data-tip="${esc(`${multText(m)} · ${fmt.percent(hitChance(n, k) * 100, hitChance(n, k) < 0.0001 ? 4 : 2)} chance`)}"><b>${k}</b><span class="kp-word">${k === 1 ? 'hit' : 'hits'}</span>${GEM}</div>`)
+        .map((m, k) => `<div class="kp-h" data-k="${k}" data-tip="${esc(`${multText(m)} · ${chanceText(hitChance(n, k) * 100)} chance`)}"><b>${k}</b><span class="kp-word">${k === 1 ? 'hit' : 'hits'}</span>${GEM}</div>`)
         .join('')}</div>`;
   }
 

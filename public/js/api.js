@@ -1,3 +1,5 @@
+import { deviceId } from './walletkey.js';
+
 export class ApiError extends Error {
   constructor(status, data) {
     super(data?.error || `Request failed (${status})`);
@@ -8,8 +10,16 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, url, body) {
-  const opts = { method, credentials: 'same-origin', headers: {} };
+// If the server doesn't know this browser's wallet (restart, wiped data), the
+// app rebuilds it from the local snapshot and the request is retried once.
+let recover = null;
+let recovering = null;
+export function setRecovery(fn) {
+  recover = fn;
+}
+
+async function request(method, url, body, { retry = true } = {}) {
+  const opts = { method, credentials: 'same-origin', headers: { 'X-Wallet-Key': deviceId() } };
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -27,14 +37,23 @@ async function request(method, url, body) {
     /* empty body */
   }
   if (!res.ok) {
-    const err = new ApiError(res.status, data);
-    if (res.status === 401 && data?.code === 'auth_required') window.dispatchEvent(new CustomEvent('auth-required'));
-    throw err;
+    if (res.status === 401 && data?.code === 'auth_required' && retry && recover) {
+      recovering ||= Promise.resolve()
+        .then(recover)
+        .finally(() => (recovering = null));
+      try {
+        await recovering;
+      } catch {
+        throw new ApiError(res.status, data);
+      }
+      return request(method, url, body, { retry: false });
+    }
+    throw new ApiError(res.status, data);
   }
   return data;
 }
 
 export const api = {
   get: (url) => request('GET', url),
-  post: (url, body = {}) => request('POST', url, body),
+  post: (url, body = {}, opts) => request('POST', url, body, opts),
 };

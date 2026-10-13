@@ -107,11 +107,11 @@ export default function mountCrash(ctx) {
     <div class="history-strip cr-history" aria-label="Previous rounds"></div>
     <div class="cr-graph">
       <canvas class="cr-canvas" aria-hidden="true"></canvas>
-      <div class="cr-center">
+      <div class="cr-center"><div class="cr-card">
         <div class="cr-mult">Connecting…</div>
         <div class="cr-note"></div>
         <div class="cr-progress" hidden><div class="cr-progress-fill"></div></div>
-      </div>
+      </div></div>
     </div>
     <div class="cr-foot"><span class="cr-round"><i class="cr-dot"></i><span></span></span><span class="cr-foot-stats"></span></div>
   </div>`);

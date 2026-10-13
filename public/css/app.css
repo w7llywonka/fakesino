@@ -2488,3 +2488,12 @@ textarea.input {
 .play-money-banner b {
   color: var(--text);
 }
+
+@media (max-width: 480px) {
+  .header .logo span {
+    display: none;
+  }
+  .header-center {
+    min-width: 0;
+  }
+}

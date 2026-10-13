@@ -1,5 +1,8 @@
 import { api } from './api.js';
 import { CURRENCIES } from './shared/currencies.js';
+import { deviceId, setDeviceId, randomKey } from './walletkey.js';
+
+export { deviceId };
 
 // Global app state + a tiny event bus.
 const listeners = new Map();
@@ -52,40 +55,11 @@ export const balanceOf = (code = currency()) => state.user?.balances?.[code] ?? 
 export const isAuthed = () => !!state.user;
 
 // ---- Local wallet ----------------------------------------------------------------
-// No accounts: the browser keeps a random wallet key and a snapshot of the
-// wallet. The server only knows a hash of the key. If the server ever loses the
-// wallet (fresh database, new host), the snapshot rebuilds it.
-const DEVICE_KEY = 'fakesino:device';
+// No accounts: the browser keeps a random wallet key (walletkey.js) and a
+// snapshot of the wallet. The server only knows a hash of the key. If the
+// server ever loses the wallet (fresh database, new host), the snapshot
+// rebuilds it.
 const WALLET_KEY = 'fakesino:wallet';
-let memoryDevice = null;
-
-function randomKey() {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export function deviceId() {
-  try {
-    let id = localStorage.getItem(DEVICE_KEY);
-    if (!/^[a-f0-9]{32,128}$/.test(id || '')) {
-      id = randomKey();
-      localStorage.setItem(DEVICE_KEY, id);
-    }
-    return id;
-  } catch {
-    memoryDevice ||= randomKey();
-    return memoryDevice;
-  }
-}
-
-function setDeviceId(id) {
-  try {
-    localStorage.setItem(DEVICE_KEY, id);
-  } catch {
-    memoryDevice = id;
-  }
-}
 
 function loadSnapshot() {
   try {
@@ -110,7 +84,7 @@ function saveSnapshot() {
 
 // Get (or create) this browser's wallet session.
 export async function ensureSession() {
-  const res = await api.post('/api/auth/guest', { deviceId: deviceId(), restore: loadSnapshot() });
+  const res = await api.post('/api/auth/guest', { deviceId: deviceId(), restore: loadSnapshot() }, { retry: false });
   setUser(res.user);
   return res;
 }
@@ -118,7 +92,7 @@ export async function ensureSession() {
 // Switch this browser to another wallet using its backup key.
 export async function useWalletKey(key) {
   const id = String(key || '').trim().toLowerCase();
-  const res = await api.post('/api/auth/guest', { deviceId: id, mustExist: true });
+  const res = await api.post('/api/auth/guest', { deviceId: id, mustExist: true }, { retry: false });
   setDeviceId(id);
   setUser(res.user);
   return res;
@@ -127,7 +101,7 @@ export async function useWalletKey(key) {
 // Start over with a brand-new, empty wallet.
 export async function newWallet() {
   const id = randomKey();
-  const res = await api.post('/api/auth/guest', { deviceId: id });
+  const res = await api.post('/api/auth/guest', { deviceId: id, fresh: true }, { retry: false });
   setDeviceId(id);
   setUser(res.user);
   return res;

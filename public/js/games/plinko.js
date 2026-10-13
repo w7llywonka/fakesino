@@ -148,7 +148,7 @@ export default function mountPlinko(ctx) {
     g2d.clearRect(0, 0, L.w, L.h);
 
     // Pegs
-    const pr = Math.max(1.8, PEG_R * g);
+    const pr = Math.max(1.8, Math.min(5, PEG_R * g));
     g2d.fillStyle = '#ffffff';
     g2d.beginPath();
     const flashing = [];
