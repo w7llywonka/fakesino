@@ -22,6 +22,7 @@ route('/explorer/:network/tx/:hash', lazy('./pages/explorer.js'));
 route('/settings', lazy('./pages/settings.js'));
 route('/settings/:tab', lazy('./pages/settings.js'));
 route('/provably-fair', lazy('./pages/fair.js'));
+route('/provably-fair/:tab', lazy('./pages/fair.js'));
 route('/promotions', misc.promotionsPage);
 route('/leaderboard', misc.leaderboardPage);
 route('/responsible-gaming', misc.responsiblePage);

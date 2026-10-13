@@ -662,6 +662,22 @@ test('new coins: XRP deposits use a shared address plus destination tag; USDC, B
   assert.equal((await a.post('/api/payments/withdraw', { currency: 'BCH', amount: 0.01, address: 'bitcoincash:q' + 'p'.repeat(41) })).status, 200);
 });
 
+test('unhash reveals a rotated server seed, never the active one', async () => {
+  const c = await newPlayer(0);
+  const { active } = (await c.get('/api/fair/seeds')).data;
+  const live = await c.get(`/api/fair/unhash?hash=${active.serverSeedHash}`);
+  assert.equal(live.status, 400);
+  assert.match(live.data.error, /still in use/);
+  assert.equal((await c.get(`/api/fair/unhash?hash=${active.nextServerSeedHash}`)).status, 400);
+  assert.equal((await c.get('/api/fair/unhash?hash=nothex')).status, 400);
+  await c.post('/api/fair/rotate', {});
+  const r = await c.get(`/api/fair/unhash?hash=${active.serverSeedHash}`);
+  assert.equal(r.status, 200);
+  assert.equal(crypto.createHash('sha256').update(r.data.seed.serverSeed).digest('hex'), active.serverSeedHash);
+  const other = await newPlayer(0);
+  assert.equal((await other.get(`/api/fair/unhash?hash=${active.serverSeedHash}`)).status, 404);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');

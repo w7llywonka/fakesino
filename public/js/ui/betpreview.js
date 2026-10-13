@@ -37,7 +37,7 @@ export function renderResult(game, result, params = {}) {
       );
     case 'plinko':
       return box(
-        `<div style="text-align:center"><div style="display:flex;gap:3px;justify-content:center;margin-bottom:8px">${result.path.map((p) => pill(p ? 'R' : 'L')).join('')}</div>
+        `<div style="text-align:center;min-width:0"><div style="display:flex;gap:3px;justify-content:center;flex-wrap:wrap;margin-bottom:8px">${result.path.map((p) => pill(p ? 'R' : 'L')).join('')}</div>
         <div class="muted">${esc(params.rows)} rows · ${esc(params.risk)} risk · bucket ${result.bucket} → <b style="color:var(--text)">${fmt.multiplier(result.multiplier, 1)}</b></div></div>`,
       );
     case 'wheel':

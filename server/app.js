@@ -231,6 +231,20 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     }),
   );
 
+  // "Unhash": reveal a server seed from its hash once it has been rotated out.
+  router.get(
+    '/api/fair/unhash',
+    authed((ctx) => {
+      const hash = String(ctx.query.get('hash') || '').trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(hash)) throw badRequest('Enter a 64-character SHA-256 hash', { field: 'hash' });
+      if (hash === ctx.user.seeds.serverSeedHash || hash === ctx.user.seeds.nextServerSeedHash)
+        throw badRequest('This server seed is still in use. Rotate your seed pair to reveal it.', { field: 'hash' });
+      const s = (ctx.user.seedHistory || []).find((x) => x.serverSeedHash === hash);
+      if (!s) throw new HttpError(404, 'No revealed server seed matches this hash for your wallet');
+      return { seed: s };
+    }),
+  );
+
   router.get('/api/fair/crash', () => crash.fairness());
 
   // --- Games ------------------------------------------------------------------------

@@ -97,7 +97,8 @@ async function seedsTab(body, show) {
   });
 }
 
-function verifyTab(body, prefill) {
+// Also mounted on the Provably Fair page's Calculation tab.
+export function verifyTab(body, prefill) {
   const p = prefill || {};
   const verifiable = GAMES.filter((g) => g.kind !== 'multiplayer');
   const games = verifiable.map((g) => `<option value="${g.slug}" ${p.game === g.slug ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
