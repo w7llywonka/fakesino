@@ -181,7 +181,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
 
   router.get(
     '/api/wallet/transactions',
-    authed((ctx) => ({ transactions: payments.transactions(ctx.user, { type: ctx.query.get('type'), limit: Math.min(200, Number(ctx.query.get('limit')) || 50) }) })),
+    authed((ctx) => ({ transactions: payments.transactions(ctx.user, { type: ctx.query.get('type'), status: ctx.query.get('status') || undefined, limit: Math.min(200, Number(ctx.query.get('limit')) || 50) }) })),
   );
 
   router.post('/api/wallet/vault', authed((ctx) => payments.vault(ctx.user, ctx.body)));
@@ -192,6 +192,10 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.post('/api/payments/crypto/address', authed((ctx) => payments.depositAddress(ctx.user, ctx.body)));
   router.post('/api/payments/crypto/simulate', authed((ctx) => payments.simulateCryptoDeposit(ctx.user, ctx.body)));
   router.get('/api/payments/buy/quotes', (ctx) => payments.buyQuotes(Object.fromEntries(ctx.query)));
+  router.get('/api/payments/swap/quote', (ctx) => payments.swapQuote(Object.fromEntries(ctx.query)));
+  router.post('/api/payments/swap', authed((ctx) => payments.swap(ctx.user, ctx.body)));
+  router.get('/api/wallet/transactions/:id', authed((ctx) => payments.transaction(ctx.user, ctx.params.id)));
+  router.get('/api/explorer/tx/:hash', (ctx) => payments.explorerTx(ctx.params.hash));
   router.post('/api/payments/withdraw', authed((ctx) => payments.withdraw(ctx.user, ctx.body)));
   router.post('/api/payments/cards/:id/remove', authed((ctx) => payments.removeCard(ctx.user, ctx.params.id)));
   router.post('/api/bonus/rakeback', authed((ctx) => payments.claimRakeback(ctx.user)));

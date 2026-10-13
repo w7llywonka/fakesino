@@ -62,6 +62,8 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       notify(user.id, { kind: 'deposit', title: tx.method === 'card' ? 'Deposit successful' : 'Deposit confirmed', message: `${amt} play money has been credited to your wallet.`, link: '/transactions/deposits' });
     if (tx.type === 'withdrawal' && tx.status === 'completed')
       notify(user.id, { kind: 'withdrawal', title: 'Withdrawal sent', message: `${amt} was sent${tx.details?.txHash ? ` · tx ${tx.details.txHash.slice(0, 10)}…` : ''} (simulated).`, link: '/transactions/withdrawals' });
+    if (tx.type === 'swap' && tx.status === 'completed')
+      notify(user.id, { kind: 'swap', title: 'Swap complete', message: `${amountText(tx.details.fromAmount, tx.details.from)} → ${amt}`, link: '/transactions/swaps' });
   }
 
   function validateCardInput(card) {
@@ -443,16 +445,96 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     return { user: publicUser(user) };
   }
 
-  function transactions(user, { type, limit = 50 } = {}) {
+  // Tabs: deposits exclude on-ramp purchases, which have their own tab;
+  // "tips" covers tips and rain.
+  const TYPE_FILTER = {
+    deposit: (t) => t.type === 'deposit' && t.method !== 'buy',
+    purchase: (t) => t.type === 'deposit' && t.method === 'buy',
+    tips: (t) => t.type === 'tip' || t.type === 'rain' || t.method === 'rain',
+  };
+  function transactions(user, { type, status, limit = 50 } = {}) {
     const out = [];
     const txs = store.data.transactions;
+    const match = TYPE_FILTER[type] || ((t) => !type || type === 'all' || t.type === type);
     for (let i = txs.length - 1; i >= 0 && out.length < limit; i--) {
       const t = txs[i];
-      if (t.userId !== user.id) continue;
-      if (type && type !== 'all' && t.type !== type) continue;
+      if (t.userId !== user.id || !match(t)) continue;
+      if (status && t.status !== status) continue;
       out.push(publicTx(t));
     }
     return out;
+  }
+
+  function transaction(user, id) {
+    const t = store.data.transactions.find((x) => x.id === Number(id) && x.userId === user.id);
+    if (!t) throw new HttpError(404, 'Transaction not found');
+    return { transaction: publicTx(t) };
+  }
+
+  // ---- swap between cryptos (0.5% fee, ~$1 minimum) ----
+  const SWAP_FEE = 0.005;
+  function swapQuote(from, to, amount) {
+    if (CURRENCIES[from]?.type !== 'crypto' || CURRENCIES[to]?.type !== 'crypto') throw badRequest('Swaps are between cryptocurrencies');
+    if (from === to) throw badRequest('Choose two different coins');
+    const rate = CURRENCIES[from].usd / CURRENCIES[to].usd;
+    const fee = roundDown(from, amount * SWAP_FEE);
+    const toAmount = roundDown(to, (amount - fee) * rate);
+    return { from, to, amount, rate, fee, toAmount, minimum: roundDown(from, fromUsd(from, 1)) };
+  }
+
+  function swap(user, body) {
+    const from = parseCurrency(user, body.from);
+    const to = parseCurrency(user, body.to);
+    const amount = parseAmount(from, body.amount);
+    const q = swapQuote(from, to, amount);
+    if (toUsd(from, amount) < 1) throw badRequest(`Minimum swap is ${amountText(q.minimum, from)}`, { field: 'amount' });
+    assertNotOnBreak(user);
+    debit(user, from, amount);
+    const net = networkFor(to);
+    const tx = addTx(user, {
+      type: 'swap',
+      method: 'swap',
+      status: 'pending',
+      currency: to,
+      amount: q.toAmount,
+      details: { from, to, fromAmount: amount, toAmount: q.toAmount, rate: q.rate, fee: q.fee, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required: net.confirmations },
+    });
+    store.save();
+    live.toUser(user.id, 'balance', { currency: from, amount: user.balances[from] });
+    // Withdraw leg, then the deposit leg confirms on the target network (~30 s).
+    const step = Math.min(Number(process.env.FAKESINO_CONFIRM_MS ?? 1500), 30000 / Math.max(1, net.confirmations + 1));
+    later(step, () => confirmLater(user, tx, net.confirmations));
+    return { transaction: publicTx(tx), user: publicUser(user) };
+  }
+
+  // ---- simulated block explorer ----
+  const BLOCK_SECONDS = { bitcoin: 600, litecoin: 150, dogecoin: 60, erc20: 12, bep20: 3, polygon: 2, trc20: 3, sol: 0.4, solana: 0.4 };
+  const BASE_HEIGHT = { bitcoin: 860000, litecoin: 2700000, dogecoin: 5300000, erc20: 20500000, bep20: 41000000, polygon: 60000000, trc20: 64000000, sol: 280000000, solana: 280000000 };
+  const fakeExternal = (seed, network) => `fake-${network}-ext1${crypto.createHash('sha256').update(seed).digest('hex').slice(0, 30)}`;
+  function explorerTx(hash) {
+    const t = store.data.transactions.find((x) => x.details?.txHash === hash);
+    if (!t) throw new HttpError(404, 'Transaction not found on this (simulated) network');
+    const d = t.details;
+    const net = d.network || networkFor(t.currency)?.id || 'erc20';
+    const height = Math.floor(BASE_HEIGHT[net] + (t.createdAt - Date.UTC(2026, 0, 1)) / 1000 / (BLOCK_SECONDS[net] || 10));
+    const confirmations = t.status === 'completed' ? Math.max(d.required || 1, d.confirmations || 1) : d.confirmations || 0;
+    const outgoing = t.type === 'withdrawal';
+    return {
+      tx: {
+        hash,
+        coin: t.currency,
+        network: net,
+        networkLabel: d.networkLabel || networkFor(t.currency)?.label || net,
+        amount: t.type === 'swap' ? d.toAmount : t.amount,
+        fee: t.type === 'withdrawal' ? (d.fee ?? null) : t.method === 'buy' ? (d.networkFee ?? null) : null,
+        status: t.status === 'completed' ? 'confirmed' : t.status === 'failed' ? 'failed' : 'pending',
+        blockHeight: t.status === 'pending' && !confirmations ? null : height,
+        confirmations,
+        timestamp: t.updatedAt,
+        from: outgoing ? fakeExternal(`hot:${t.currency}`, net) : fakeExternal(hash, net),
+        to: outgoing ? d.address : d.address || fakeExternal(`swap:${hash}`, net),
+      },
+    };
   }
 
   // Resume pending transfers after a restart.
@@ -461,7 +543,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       if (tx.status !== 'pending') continue;
       const user = store.data.users[tx.userId];
       if (!user) continue;
-      if (tx.type === 'deposit' && tx.method === 'crypto') {
+      if ((tx.type === 'deposit' && (tx.method === 'crypto' || tx.method === 'buy')) || tx.type === 'swap') {
         tx.status = 'completed';
         tx.details.confirmations = tx.details.required;
         credit(user, tx.currency, tx.amount);
@@ -480,6 +562,10 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   return {
     addTx,
     buyQuotes,
+    transaction,
+    swap,
+    swapQuote: (q) => swapQuote(q.from, q.to, Number(q.amount) || 0),
+    explorerTx,
     cardDeposit,
     authenticate,
     depositAddress,

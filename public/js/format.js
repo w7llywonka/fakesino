@@ -75,3 +75,10 @@ export function inputAmount(value, code) {
   const c = CURRENCIES[code] || CURRENCIES.USD;
   return (Number(value) || 0).toFixed(c.decimals);
 }
+
+// Exchange rates: up to 8 significant digits, no trailing zeros.
+export function rate(value) {
+  const v = Number(value) || 0;
+  const decimals = v >= 1 ? Math.max(0, 8 - Math.floor(Math.log10(v)) - 1) : 8;
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: Math.min(8, decimals), maximumSignificantDigits: 8 }).format(v);
+}

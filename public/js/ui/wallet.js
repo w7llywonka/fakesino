@@ -16,6 +16,7 @@ const TABS = [
   ['deposit', 'Deposit'],
   ['buy', 'Buy Crypto'],
   ['withdraw', 'Withdraw'],
+  ['swap', 'Swap'],
   ['vault', 'Vault'],
   ['tip', 'Tip'],
 ];
@@ -45,7 +46,10 @@ export function openWalletModal(tab = 'deposit') {
 
   function show(t) {
     tab = t;
-    root.querySelectorAll('.wallet-tabs .tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
+    root.querySelectorAll('.wallet-tabs .tab').forEach((b) => {
+      b.classList.toggle('active', b.dataset.tab === t);
+      if (b.dataset.tab === t) b.parentElement.scrollLeft = Math.max(0, b.offsetLeft - (b.parentElement.clientWidth - b.offsetWidth) / 2);
+    });
     setQuery({ modal: 'wallet', tab: t }, { replace: true });
     offs.splice(0).forEach((f) => f());
     body.innerHTML = '';
@@ -53,6 +57,7 @@ export function openWalletModal(tab = 'deposit') {
     if (t === 'deposit') depositTab(ctx);
     else if (t === 'buy') buyTab(ctx);
     else if (t === 'withdraw') withdrawTab(ctx);
+    else if (t === 'swap') swapTab(ctx);
     else if (t === 'vault') vaultTab(ctx);
     else if (t === 'tip') tipTab(ctx);
   }
@@ -738,6 +743,134 @@ function withdrawTab({ body, offs }) {
       }
     });
   }
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Swap one crypto for another (0.5% fee, settles on the target network)
+
+let swapPair = null;
+function swapTab({ body, offs }) {
+  if (!swapPair) {
+    const from = CURRENCIES[currency()].type === 'crypto' ? currency() : 'BTC';
+    swapPair = { from, to: from === 'USDT' ? 'BTC' : 'USDT' };
+  }
+  let { from, to } = swapPair;
+  let amountValue = '';
+  let quoteSeq = 0;
+  let pickers = [];
+  const view = el('<div class="swap"></div>');
+  const list = el('<div class="tx-list"></div>');
+  body.append(view, list);
+
+  function render() {
+    swapPair = { from, to };
+    view.innerHTML = '';
+    const fromBox = el('<div></div>');
+    const toBox = el('<div></div>');
+    const form = el(`<form novalidate>
+      <div class="field" data-field="amount"><div class="field-label"><span>You pay</span><span class="aux dim"></span></div>
+        <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" placeholder="${fmt.inputAmount(0, from)}" value="${esc(amountValue)}"><span class="suffix">${coin(from)}</span></div>
+        <button type="button" class="addon" data-frac="0.5">½</button><button type="button" class="addon" data-frac="1">Max</button></div><div class="field-error"></div></div>
+      <div class="swap-flip"><button type="button" class="btn btn-secondary btn-sm" data-act="flip" aria-label="Flip coins">${icon('swap', 16)}</button></div>
+      <div class="to-slot"></div>
+      <div class="summary swap-quote"><div class="line"><span>You receive</span><b class="q-out">—</b></div>
+        <div class="line"><span>Rate</span><span class="q-rate">1 ${from} ≈ —</span></div>
+        <div class="line"><span>Fee (0.5%)</span><span class="q-fee">—</span></div>
+        <div class="line"><span>Minimum</span><span class="q-min">—</span></div></div>
+      <div class="field-error form-error" style="margin-bottom:10px"></div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Swap</button>
+      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Play-money swap. The ${to} arrives after the ${esc(networkFor(to).label)} confirmations.</div></form>`);
+    view.append(fromBox, form);
+    form.querySelector('.to-slot').appendChild(toBox);
+    const fromPicker = currencyPicker(fromBox, {
+      label: 'From',
+      value: from,
+      filter: (c) => CURRENCIES[c].type === 'crypto',
+      onChange: (c) => {
+        if (c === to) to = from;
+        from = c;
+        amountValue = '';
+        render();
+      },
+    });
+    const toPicker = currencyPicker(toBox, {
+      label: 'To',
+      value: to,
+      filter: (c) => CURRENCIES[c].type === 'crypto' && c !== from,
+      onChange: (c) => {
+        to = c;
+        render();
+      },
+    });
+    pickers = [fromPicker, toPicker];
+    const input = form.amount;
+    const aux = form.querySelector('.aux');
+    const q = (sel) => form.querySelector(sel);
+    const update = async () => {
+      amountValue = input.value;
+      const amount = Number(input.value) || 0;
+      aux.textContent = `≈ ${fmt.fiat(fmt.usdOf(amount, from))}`;
+      const seq = ++quoteSeq;
+      try {
+        const res = await api.get(`/api/payments/swap/quote?from=${from}&to=${to}&amount=${amount}`);
+        if (seq !== quoteSeq) return;
+        q('.q-out').innerHTML = amount > 0 ? `${fmt.amount(res.toAmount, to)} ${coin(to)}` : '—';
+        q('.q-rate').textContent = `1 ${from} ≈ ${fmt.rate(res.rate)} ${to}`;
+        q('.q-fee').textContent = `${fmt.amount(res.fee, from)} ${from}`;
+        q('.q-min').textContent = `${fmt.amount(res.minimum, from)} ${from}`;
+      } catch {
+        /* quote is informational */
+      }
+    };
+    input.addEventListener('input', update);
+    update();
+    on(form, 'click', '[data-frac]', (e, b) => {
+      input.value = fmt.inputAmount(roundDown(from, balanceOf(from) * Number(b.dataset.frac)), from);
+      update();
+    });
+    form.querySelector('[data-act=flip]').addEventListener('click', () => {
+      [from, to] = [to, from];
+      amountValue = '';
+      render();
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('[type=submit]');
+      btn.classList.add('loading');
+      try {
+        const { transaction, user } = await api.post('/api/payments/swap', { from, to, amount: Number(input.value) });
+        setUser(user);
+        list.prepend(swapRow(transaction));
+        toast({ type: 'info', title: 'Swap submitted', message: `${fmt.amount(transaction.details.fromAmount, from)} ${from} → ${fmt.amount(transaction.amount, to)} ${to}` });
+        amountValue = '';
+        render();
+      } catch (err) {
+        showFieldErrors(form, err);
+      } finally {
+        btn.classList.remove('loading');
+      }
+    });
+  }
+
+  function swapRow(tx) {
+    const d = tx.details || {};
+    const pct = d.required ? Math.min(100, (d.confirmations / d.required) * 100) : 100;
+    return el(`<div class="tx-progress" data-tx="${tx.id}">${coin(d.from, 22)}${icon('right', 14)}${coin(tx.currency, 22)}
+      <div style="flex:1;min-width:0"><div class="row between"><b>${fmt.amount(d.fromAmount, d.from)} ${d.from} → ${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b>
+        ${tx.status === 'completed' ? '<span class="pill green">Completed</span>' : `<span class="pill yellow">${d.confirmations}/${d.required}</span>`}</div>
+        <div class="progress" style="margin-top:8px"><div style="width:${pct}%"></div></div></div></div>`);
+  }
+
+  offs.push(
+    bus.on('live:tx', (tx) => {
+      if (tx.type !== 'swap') return;
+      const row = list.querySelector(`[data-tx="${tx.id}"]`);
+      if (row) row.replaceWith(swapRow(tx));
+      if (tx.status === 'completed') toastSuccess('Swap complete', `${fmt.amount(tx.amount, tx.currency)} ${tx.currency} credited`);
+    }),
+    bus.on('balance', () => pickers.forEach((p) => p.refresh())),
+  );
   render();
 }
 

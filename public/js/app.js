@@ -18,6 +18,7 @@ route('/vip', lazy('./pages/vip.js'));
 route('/challenges', lazy('./pages/challenges.js'));
 route('/transactions', lazy('./pages/transactions.js'));
 route('/transactions/:tab', lazy('./pages/transactions.js'));
+route('/explorer/:network/tx/:hash', lazy('./pages/explorer.js'));
 route('/settings', lazy('./pages/settings.js'));
 route('/settings/:tab', lazy('./pages/settings.js'));
 route('/provably-fair', lazy('./pages/fair.js'));
@@ -60,7 +61,7 @@ async function renderPage(match) {
 // ---- Modals driven by ?modal= ----
 let openKey = null;
 async function syncModal(q) {
-  const key = q.modal ? `${q.modal}${q.modal === 'bet' ? `:${q.id}` : ''}` : null;
+  const key = q.modal ? `${q.modal}${q.modal === 'bet' || q.modal === 'tx' ? `:${q.id}` : ''}` : null;
   if (key === openKey && (key === null || currentModal())) return;
   openKey = key;
   if (!key) {
@@ -84,6 +85,9 @@ async function syncModal(q) {
       break;
     case 'bet':
       done(await (await import('./ui/betmodal.js')).openBetModal(q.id));
+      break;
+    case 'tx':
+      done(await (await import('./ui/txmodal.js')).openTxModal(q.id));
       break;
     case 'stats':
       done(await (await import('./ui/stats.js')).openStatsModal());

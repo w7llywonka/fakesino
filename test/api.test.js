@@ -266,6 +266,32 @@ test('buy crypto: provider quotes, card checkout, coins arrive on-chain', async 
   assert.equal(me.balances.LTC, r.data.transaction.amount, 'credited after confirmations');
 });
 
+test('swap converts between cryptos with a 0.5% fee; explorer and tx details', async () => {
+  const c = await newPlayer(0);
+  await c.post('/api/payments/crypto/simulate', { currency: 'LTC', amount: 10 });
+  await new Promise((r) => setTimeout(r, 150));
+  const q = (await c.get('/api/payments/swap/quote?from=LTC&to=USDT&amount=2')).data;
+  assert.equal(q.fee, 0.01);
+  assert.equal(q.toAmount, 139.3);
+  assert.equal((await c.post('/api/payments/swap', { from: 'LTC', to: 'LTC', amount: 1 })).status, 400);
+  assert.equal((await c.post('/api/payments/swap', { from: 'LTC', to: 'USDT', amount: 0.001 })).status, 400, 'minimum');
+  const s = await c.post('/api/payments/swap', { from: 'LTC', to: 'USDT', amount: 2 });
+  assert.equal(s.status, 200, JSON.stringify(s.data));
+  assert.equal(s.data.user.balances.LTC, 8);
+  assert.equal(s.data.transaction.status, 'pending');
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await c.get('/api/me')).data.user.balances.USDT, 139.3);
+  const swaps = (await c.get('/api/wallet/transactions?type=swap')).data.transactions;
+  assert.equal(swaps[0].status, 'completed');
+  const one = (await c.get(`/api/wallet/transactions/${swaps[0].id}`)).data.transaction;
+  assert.equal(one.details.from, 'LTC');
+  const ex = (await c.get(`/api/explorer/tx/${one.details.txHash}`)).data.tx;
+  assert.equal(ex.status, 'confirmed');
+  assert.ok(ex.blockHeight > 0);
+  const deposits = (await c.get('/api/wallet/transactions?type=deposit')).data.transactions;
+  assert.ok(deposits.every((t) => t.method !== 'buy'));
+});
+
 test('crypto deposits confirm block by block; withdrawals debit immediately', async () => {
   const c = await newPlayer(0);
   const addr = await c.post('/api/payments/crypto/address', { currency: 'LTC' });
