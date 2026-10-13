@@ -5,7 +5,7 @@ import { state, bus } from '../state.js';
 import { navigate } from '../router.js';
 import * as fmt from '../format.js';
 
-const KIND_ICON = { deposit: 'wallet', withdrawal: 'arrowUp', vault: 'vault', vip: 'crown', challenge: 'trophy', bonus: 'gift', tip: 'coins', rain: 'coins', swap: 'swap', mention: 'chat', limit: 'shield', race: 'trophy', security: 'lock' };
+const KIND_ICON = { deposit: 'wallet', withdrawal: 'arrowUp', vault: 'vault', vip: 'crown', challenge: 'trophy', bonus: 'gift', tip: 'coins', rain: 'coins', swap: 'swap', affiliate: 'users', mention: 'chat', limit: 'shield', race: 'trophy', security: 'lock' };
 const FILTERS = [
   ['all', 'All'],
   ['wallet', 'Wallet'],

@@ -127,7 +127,7 @@ function footer() {
     .join('');
   return `<footer class="footer"><div class="footer-inner">
     <div><h4>Casino</h4>${games}</div>
-    <div><h4>Platform</h4><a href="/provably-fair">Provably Fair</a><a href="/vip">VIP Club</a><a href="/promotions">Promotions</a><a href="/leaderboard">Leaderboard</a></div>
+    <div><h4>Platform</h4><a href="/provably-fair">Provably Fair</a><a href="/vip">VIP Club</a><a href="/promotions">Promotions</a><a href="/leaderboard">Leaderboard</a><a href="/affiliate">Affiliate</a></div>
     <div><h4>Account</h4><a href="?modal=wallet&tab=deposit">Deposit</a><a href="?modal=wallet&tab=withdraw">Withdraw</a><a href="/transactions/deposits">Transactions</a><a href="/settings/general">Settings</a></div>
     <div><h4>About</h4><a href="/responsible-gaming">Responsible Gaming</a><a href="/terms">Terms of Service</a><p style="margin:8px 0 0">Fakesino is a simulation. All balances are play money with no cash value. No real payments are ever processed.</p></div>
   </div>
@@ -259,6 +259,7 @@ function userDropdown() {
     ['vault', 'Vault', '?modal=wallet&tab=vault'],
     ['crown', 'VIP', '/vip'],
     ['stats', 'Statistics', '?modal=stats'],
+    ['users', 'Affiliate', '/affiliate'],
     ['list', 'Transactions', '/transactions/deposits'],
     ['history', 'My Bets', '/transactions/bets'],
     ['settings', 'Settings', '/settings/general'],

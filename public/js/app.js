@@ -23,6 +23,8 @@ route('/settings', lazy('./pages/settings.js'));
 route('/settings/:tab', lazy('./pages/settings.js'));
 route('/provably-fair', lazy('./pages/fair.js'));
 route('/provably-fair/:tab', lazy('./pages/fair.js'));
+route('/affiliate', lazy('./pages/affiliate.js'));
+route('/affiliate/:tab', lazy('./pages/affiliate.js'));
 route('/promotions', misc.promotionsPage);
 route('/leaderboard', misc.leaderboardPage);
 route('/responsible-gaming', misc.responsiblePage);
@@ -106,11 +108,47 @@ async function syncModal(q) {
   }
 }
 
+// Referral links (/?c=CODE): remember the campaign, then tidy the URL.
+const REF_KEY = 'fakesino:ref';
+function captureReferral() {
+  const url = new URL(location.href);
+  const code = url.searchParams.get('c');
+  if (!code) return;
+  try {
+    localStorage.setItem(REF_KEY, code);
+  } catch {
+    /* storage blocked: the referral is simply not recorded */
+  }
+  url.searchParams.delete('c');
+  history.replaceState({}, '', url.pathname + url.search + url.hash);
+}
+async function attachReferral() {
+  let code = null;
+  try {
+    code = localStorage.getItem(REF_KEY);
+  } catch {
+    return;
+  }
+  if (!code || !state.user) return;
+  try {
+    await api.post('/api/affiliate/attach', { code });
+  } catch {
+    /* already referred, unknown code or an older wallet */
+  }
+  try {
+    localStorage.removeItem(REF_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function boot() {
+  captureReferral();
   // No sign-in: every browser gets its own play-money wallet automatically.
   // If the server ever forgets it, requests rebuild it from the local copy.
   setRecovery(() => ensureSession());
   const [config] = await Promise.all([api.get('/api/config'), ensureSession()]);
+  attachReferral();
   state.config = config;
   initRegistry(config.games);
   const { page } = renderShell(document.getElementById('app'));

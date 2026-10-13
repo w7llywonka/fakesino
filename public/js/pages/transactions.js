@@ -174,6 +174,7 @@ function methodLabel(t) {
   const BONUS = { daily: 'Daily bonus', weekly: 'Weekly bonus', monthly: 'Monthly bonus', levelup: 'Level-up bonus', reload: 'Reload', welcome: 'Welcome offer', drop: 'Bonus drop' };
   if (BONUS[t.method]) return `${icon('gift', 16)} ${BONUS[t.method]}`;
   if (t.method === 'rakeback') return `${icon('coins', 16)} Rakeback`;
+  if (t.method === 'affiliate') return `${icon('users', 16)} Affiliate commission`;
   if (t.method === 'challenge') return `${icon('trophy', 16)} Challenge prize`;
   if (t.method === 'vault_in') return `${icon('vault', 16)} Wallet → Vault`;
   if (t.method === 'vault_out') return `${icon('vault', 16)} Vault → Wallet`;

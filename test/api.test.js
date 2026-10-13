@@ -734,6 +734,41 @@ test('two-factor: setup, enable, required for withdrawals, vault and tips, codes
   assert.equal((await c.post('/api/tips', { to: otherName, amount: 1, currency: 'USD' })).status, 200);
 });
 
+test('affiliate: campaigns, referral attach, commission on referred play, claim', async () => {
+  const owner = await newPlayer(0);
+  assert.equal((await owner.post('/api/affiliate/campaigns', { name: 'Stream', code: 'Bad Code!' })).status, 400);
+  const v = await owner.post('/api/affiliate/campaigns', { name: 'Stream', code: 'mystream' });
+  assert.equal(v.status, 200, JSON.stringify(v.data));
+  assert.equal(v.data.campaigns[0].code, 'mystream');
+  const rival = await newPlayer(0);
+  assert.equal((await rival.post('/api/affiliate/campaigns', { name: 'Copy', code: 'mystream' })).data.field, 'code');
+  assert.equal((await owner.post('/api/affiliate/attach', { code: 'mystream' })).status, 400); // self
+  const fan = await newPlayer(0);
+  assert.equal((await fan.post('/api/affiliate/attach', { code: 'nope' })).status, 404);
+  const a = await fan.post('/api/affiliate/attach', { code: 'mystream' });
+  assert.equal(a.status, 200, JSON.stringify(a.data));
+  assert.equal((await fan.post('/api/affiliate/attach', { code: 'mystream' })).status, 400); // only once
+  await fan.post('/api/payments/card', { amount: 500, currency: 'USD', card: card('4242424242424242') });
+  for (let i = 0; i < 4; i++) await fan.post('/api/games/dice/bet', { amount: 100, currency: 'USD', params: { target: 50, condition: 'over' } });
+  const view = (await owner.get('/api/affiliate')).data;
+  // 4 × $100 on Dice (1% edge): 400 × 0.01 ÷ 2 × 10% = $0.20
+  assert.equal(view.totals.referrals, 1);
+  assert.equal(view.totals.wageredUsd, 400);
+  assert.ok(Math.abs(view.totals.availableUsd - 0.2) < 1e-9, String(view.totals.availableUsd));
+  assert.equal(view.campaigns[0].referrals, 1);
+  const claim = await owner.post('/api/affiliate/claim', { currency: 'USD' });
+  assert.equal(claim.status, 200, JSON.stringify(claim.data));
+  assert.equal(claim.data.user.balances.USD, 0.2);
+  assert.equal((await owner.post('/api/affiliate/claim', { currency: 'USD' })).status, 400);
+  // No circular referrals, and wallets that have already played can't join.
+  assert.equal((await fan.post('/api/affiliate/campaigns', { name: 'Fan', code: 'fanpage' })).status, 200);
+  assert.match((await owner.post('/api/affiliate/attach', { code: 'fanpage' })).data.error, /you referred/);
+  await rival.post('/api/affiliate/campaigns', { name: 'Rival', code: 'rivalpage' });
+  const late = await newPlayer(10);
+  await late.post('/api/games/dice/bet', { amount: 1, currency: 'USD', params: { target: 50, condition: 'over' } });
+  assert.match((await late.post('/api/affiliate/attach', { code: 'rivalpage' })).data.error, /Only new wallets/);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');
