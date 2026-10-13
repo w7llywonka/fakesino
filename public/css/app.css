@@ -4345,3 +4345,15 @@ textarea.input {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
 }
+.lang-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+}
+.lang-pick .select {
+  width: auto;
+  height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
+}

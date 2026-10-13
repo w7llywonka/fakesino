@@ -7,6 +7,7 @@ import { closeModal, currentModal } from './ui/modal.js';
 import { initTooltips } from './ui/tooltip.js';
 import * as misc from './pages/misc.js';
 import { initRegistry } from './games/registry.js';
+import { initI18n } from './i18n.js';
 
 const lazy = (path, name = 'default') => async (page, params) => (await import(path))[name](page, params);
 
@@ -157,6 +158,7 @@ async function boot() {
   attachReferral();
   state.config = config;
   initRegistry(config.games);
+  initI18n();
   const { page } = renderShell(document.getElementById('app'));
   pageEl = page;
   initTooltips();

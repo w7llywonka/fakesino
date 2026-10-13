@@ -9,6 +9,7 @@ import * as fmt from '../format.js';
 import { setQuery } from '../router.js';
 import { createChat } from './chat.js';
 import { slip, createSlipPanel } from './betslip.js';
+import { LANGUAGES, currentLanguage, setLanguage } from '../i18n.js';
 import { SPORTS, LEAGUES } from '../shared/sports.js';
 
 export function renderShell(app) {
@@ -45,6 +46,7 @@ export function renderShell(app) {
   </div>`);
   app.appendChild(shell);
 
+  on(shell, 'change', '[data-lang]', (e, sel) => setLanguage(sel.value));
   on(shell, 'click', '[data-act=collapse]', () => {
     if (window.innerWidth <= 900) return shell.classList.remove('mobile-menu');
     const collapsed = !shell.classList.contains('sidebar-collapsed');
@@ -191,7 +193,8 @@ function footer() {
     <div><h4>Account</h4><a href="?modal=wallet&tab=deposit">Deposit</a><a href="?modal=wallet&tab=withdraw">Withdraw</a><a href="/transactions/deposits">Transactions</a><a href="/settings/general">Settings</a></div>
     <div><h4>About</h4><a href="?modal=help">Help Center</a><a href="/responsible-gaming">Responsible Gaming</a><a href="/terms">Terms of Service</a><p style="margin:8px 0 0">Fakesino is a simulation. All balances are play money with no cash value. No real payments are ever processed.</p></div>
   </div>
-  <div class="footer-bottom"><div class="logo" style="font-size:18px"><span>FAKE<b>SINO</b></span></div><div>© ${new Date().getFullYear()} Fakesino · Play money only</div><div class="badge-18">18+</div></div>
+  <div class="footer-bottom"><div class="logo" style="font-size:18px"><span>FAKE<b>SINO</b></span></div>
+    <label class="lang-pick no-i18n">${icon('globe', 16)}<select class="select" data-lang aria-label="Language">${LANGUAGES.map(([k, n]) => `<option value="${k}" ${k === currentLanguage() ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div>© ${new Date().getFullYear()} Fakesino · Play money only</div><div class="badge-18">18+</div></div>
   </footer>`;
 }
 
