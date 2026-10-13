@@ -172,6 +172,7 @@ export function publicUser(user) {
     activeGames: Object.keys(user.active || {}),
     limits: user.limits || { depositDailyUsd: null, breakUntil: 0 },
     cards: (user.cards || []).map(({ id, brand, last4, expMonth, expYear, name }) => ({ id, brand, last4, expMonth, expYear, name })),
+    twoFactor: !!user.totp,
   };
 }
 

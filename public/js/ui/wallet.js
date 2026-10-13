@@ -8,7 +8,7 @@ import * as fmt from '../format.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toastSuccess, toastError, toast } from './toast.js';
-import { showFieldErrors } from './forms.js';
+import { showFieldErrors, twoFactorField } from './forms.js';
 import { qrSvg } from '../shared/qr.js';
 import { networksFor, networkFor, validAddress } from '../shared/networks.js';
 
@@ -690,6 +690,7 @@ function withdrawTab({ body, offs }) {
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div>
         <div class="field-error"></div></div>
       <div class="summary"></div>
+      ${twoFactorField(state.user)}
       <div class="field-error form-error" style="margin-bottom:10px"></div>
       <button class="btn btn-primary btn-block btn-lg" type="submit" ${!isCrypto && !cards.length ? 'disabled' : ''}>Withdraw</button>
       <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">${isCrypto ? `Minimum withdrawal: ${fmt.amount(net.withdrawMin, code)} ${code} · Network fee: ${fmt.amount(net.withdrawFee, code)} ${code}` : `Minimum withdrawal $${cfg.withdrawMinUsd} equivalent`}. Play money leaves your balance and lands nowhere real.</div>
@@ -729,7 +730,7 @@ function withdrawTab({ body, offs }) {
       btn.classList.add('loading');
       const fd = Object.fromEntries(new FormData(view));
       try {
-        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, tag: fd.tag, cardId: fd.cardId });
+        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, tag: fd.tag, cardId: fd.cardId, code: fd.code });
         setUser(user);
         picker.refresh();
         content.innerHTML = '';
@@ -914,6 +915,7 @@ function vaultTab({ body }) {
       <div class="summary"><div class="line"><span>Vault balance</span><b>${fmt.amount(vault, code)} ${code}</b></div><div class="line"><span>Wallet balance</span><b>${fmt.amount(balanceOf(code), code)} ${code}</b></div></div>
       <div class="field" data-field="amount"><div class="field-label">Amount</div>
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div><div class="field-error"></div></div>
+      ${direction === 'withdraw' ? twoFactorField(state.user) : ''}
       <div class="field-error form-error" style="margin-bottom:10px"></div>
       <button class="btn btn-primary btn-block btn-lg" type="submit">${direction === 'deposit' ? 'Deposit to Vault' : 'Withdraw from Vault'}</button></form>`);
     content.appendChild(view);
@@ -927,7 +929,7 @@ function vaultTab({ body }) {
     view.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        const { user } = await api.post('/api/wallet/vault', { currency: code, amount: Number(view.amount.value), direction });
+        const { user } = await api.post('/api/wallet/vault', { currency: code, amount: Number(view.amount.value), direction, code: view.code?.value });
         setUser(user);
         picker.refresh();
         toastSuccess(direction === 'deposit' ? 'Moved to vault' : 'Moved to wallet');
@@ -966,6 +968,7 @@ function tipTab({ body }) {
       <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux dim"></span></div>
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(pre.amount || 0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div><div class="field-error"></div></div>
       <label class="check-row" style="margin-bottom:14px"><input type="checkbox" name="public"> Show in chat</label>
+      ${twoFactorField(state.user)}
       <div class="field-error form-error" style="margin-bottom:10px"></div>
       <button class="btn btn-primary btn-block btn-lg" type="submit">Send Tip</button>
       <div class="muted" style="font-size:12px;margin-top:10px">Tips are play money and can't be reversed. Daily limit: $1,000 sent and received.</div></form>`);
@@ -983,7 +986,7 @@ function tipTab({ body }) {
       const btn = view.querySelector('[type=submit]');
       btn.disabled = true;
       try {
-        await api.post('/api/tips', { to: view.to.value.trim(), amount: Number(view.amount.value), currency: code, public: view.public.checked, room: state.prefs.chatRoom || 'en' });
+        await api.post('/api/tips', { to: view.to.value.trim(), amount: Number(view.amount.value), currency: code, public: view.public.checked, room: state.prefs.chatRoom || 'en', code: view.code?.value });
         toastSuccess('Tip sent', `${fmt.money(Number(view.amount.value), code)} to ${view.to.value.trim()}`);
         picker.refresh();
         pre.username = '';

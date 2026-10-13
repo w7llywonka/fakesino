@@ -15,3 +15,10 @@ export function showFieldErrors(form, err) {
   }
   return false;
 }
+
+// Two-factor code input for money-moving forms, shown when 2FA is on.
+export function twoFactorField(user) {
+  if (!user?.twoFactor) return '';
+  return `<div class="field" data-field="code"><div class="field-label"><span>Two Factor Code</span><span class="dim" style="font-size:12px">From your authenticator app</span></div>
+    <input class="input mono" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><div class="field-error"></div></div>`;
+}

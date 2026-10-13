@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CURRENCIES, CURRENCY_CODES, isCurrency, isDisplayFiat, roundDown } from '../public/js/shared/currencies.js';
 import { Router, HttpError, badRequest, sendJson, readJson, parseCookies, cookie, rateLimiter } from './http.js';
+import { newSecret, otpauthUri, matchStep, requireTwoFactor } from './totp.js';
 import { Store } from './store.js';
 import { LiveHub } from './live.js';
 import { createEngine, GAMES } from './engine.js';
@@ -132,6 +133,45 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   }));
 
   // --- Account ----------------------------------------------------------------------
+  // --- Two-factor (TOTP) ------------------------------------------------------------
+  const tfaLimit = rateLimiter({ windowMs: 60_000, max: 10 });
+  router.post(
+    '/api/account/2fa/setup',
+    authed((ctx) => {
+      if (ctx.user.totp) throw badRequest('Two-factor is already on');
+      ctx.user.totpPending = newSecret();
+      store.save();
+      return { secret: ctx.user.totpPending, uri: otpauthUri(ctx.user.totpPending, ctx.user.username) };
+    }),
+  );
+  router.post(
+    '/api/account/2fa/enable',
+    authed((ctx) => {
+      tfaLimit(`2fa:${ctx.user.id}`);
+      const secret = ctx.user.totpPending;
+      if (!secret) throw badRequest('Start the setup first');
+      const step = matchStep(secret, ctx.body.code);
+      if (step == null) throw badRequest('Invalid two-factor code', { field: 'code' });
+      ctx.user.totp = { secret, enabledAt: Date.now(), used: [step] };
+      delete ctx.user.totpPending;
+      store.save();
+      notifier.notify(ctx.user.id, { kind: 'security', title: 'Two-factor enabled', message: 'Withdrawals, vault withdrawals and tips now need a code from your authenticator.', link: '/settings/security' });
+      return { user: publicUser(ctx.user) };
+    }),
+  );
+  router.post(
+    '/api/account/2fa/disable',
+    authed((ctx) => {
+      tfaLimit(`2fa:${ctx.user.id}`);
+      if (!ctx.user.totp) throw badRequest('Two-factor is not on');
+      requireTwoFactor(ctx.user, ctx.body.code);
+      delete ctx.user.totp;
+      store.save();
+      notifier.notify(ctx.user.id, { kind: 'security', title: 'Two-factor disabled', message: 'Withdrawals no longer ask for a code.', link: '/settings/security' });
+      return { user: publicUser(ctx.user) };
+    }),
+  );
+
   router.post(
     '/api/account/settings',
     authed((ctx) => {

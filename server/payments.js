@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
 import { amountText } from './notify.js';
 import { NETWORKS, networkFor, validAddress, validTag } from '../public/js/shared/networks.js';
+import { requireTwoFactor } from './totp.js';
 import { PROVIDERS, quote, quotes, BUY_MIN_USD } from '../public/js/shared/onramps.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
@@ -402,6 +403,8 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       if (!saved) throw badRequest('Choose a saved card to withdraw to', { field: 'card' });
       details = { brand: saved.brand, last4: saved.last4 };
     }
+    if (!(amount <= (user.balances[currency] || 0) + 1e-12)) throw badRequest('Insufficient balance', { field: 'amount', code: 'insufficient_balance' });
+    requireTwoFactor(user, body.code);
     debit(user, currency, amount);
     const tx = addTx(user, { type: 'withdrawal', method: isCrypto ? 'crypto' : 'card', status: 'pending', currency, amount, details });
     store.save();
@@ -449,6 +452,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     user.vault ||= {};
     if (body.direction === 'withdraw') {
       if (amount > (user.vault[currency] || 0) + 1e-12) throw badRequest('Not enough in the vault');
+      requireTwoFactor(user, body.code);
       user.vault[currency] = roundDown(currency, (user.vault[currency] || 0) - amount);
       credit(user, currency, amount);
     } else {

@@ -5,11 +5,13 @@ import { state, setUser, bus, savePrefs, deviceId, useWalletKey, newWallet } fro
 import { toastSuccess, toastError, toast } from '../ui/toast.js';
 import { showFieldErrors } from '../ui/forms.js';
 import { brandChip } from '../ui/wallet.js';
+import { qrSvg } from '../shared/qr.js';
 import * as fmt from '../format.js';
 
 const TABS = [
   ['general', 'General'],
   ['preferences', 'Preferences'],
+  ['security', 'Security'],
   ['offers', 'Offers'],
   ['payments', 'Saved cards'],
   ['limits', 'Responsible Gaming'],
@@ -214,6 +216,51 @@ export default function settingsPage(page, { tab = 'general' }) {
       .catch((err) => (body.innerHTML = `<div class="empty">${esc(err.message)}</div>`));
     };
     loadOffers();
+  } else if (tab === 'security') {
+    const render = (setup = null) => {
+      const on2fa = state.user.twoFactor;
+      body.innerHTML = `<h3 style="margin-top:0">Two Factor</h3>
+        <p class="muted" style="margin-top:0">Use an authenticator app (any app that supports TOTP codes) to protect your play-money wallet. Once enabled, withdrawals, vault withdrawals, tips and rain need a 6-digit code.</p>
+        ${
+          on2fa
+            ? `<div class="demo-notice">${icon('lock', 16)}<div><b>Two-factor is on.</b> Enter a current code to turn it off.</div></div>
+          <form class="tfa-form" novalidate style="max-width:420px">${codeField()}<button class="btn btn-secondary" type="submit">Disable two-factor</button></form>`
+            : setup
+              ? `<div class="tfa-setup"><div class="qr-wrap">${qrSvg(setup.uri)}<div style="min-width:0">
+                <div class="field"><div class="field-label">Copy this code to your authenticator app</div>
+                <div class="address-box"><span class="addr mono" style="flex:1">${esc(setup.secret.match(/.{1,4}/g).join(' '))}</span><button class="btn btn-secondary btn-sm" type="button" data-act="copy">${icon('copy', 14)} Copy</button></div></div>
+                <div class="muted" style="font-size:12.5px">Don’t let anyone see this. Scan the QR code or type the key, then enter the 6-digit code the app shows.</div></div></div>
+                <form class="tfa-form" novalidate style="max-width:420px;margin-top:14px">${codeField()}<button class="btn btn-primary" type="submit">Enable two-factor</button></form></div>`
+              : `<button class="btn btn-primary" data-act="setup">${icon('lock', 16)} Set up two-factor</button>`
+        }`;
+      body.querySelector('[data-act=setup]')?.addEventListener('click', async () => {
+        try {
+          render(await api.post('/api/account/2fa/setup'));
+        } catch (err) {
+          toastError(err);
+        }
+      });
+      body.querySelector('[data-act=copy]')?.addEventListener('click', async () => {
+        await copyText(setup.secret);
+        toast({ type: 'success', title: 'Key copied' });
+      });
+      const form = body.querySelector('.tfa-form');
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          const { user } = await api.post(on2fa ? '/api/account/2fa/disable' : '/api/account/2fa/enable', { code: form.code.value.trim() });
+          setUser(user);
+          toastSuccess(on2fa ? 'Two-factor disabled' : 'Two-factor enabled');
+          render();
+        } catch (err) {
+          showFieldErrors(form, err);
+        }
+      });
+      form?.code.focus();
+    };
+    const codeField = () =>
+      '<div class="field" data-field="code"><div class="field-label">Two Factor Code</div><input class="input mono" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"><div class="field-error"></div></div>';
+    render();
   } else if (tab === 'payments') {
     const render = () => {
       const cards = state.user.cards || [];

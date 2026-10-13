@@ -704,6 +704,36 @@ test('my bets page back with a cursor; daily archive', async () => {
   assert.equal((await c.get('/api/bets/archive/yesterday')).status, 400);
 });
 
+test('two-factor: setup, enable, required for withdrawals, vault and tips, codes single-use', async () => {
+  const { codeAt, stepAt } = await import('../server/totp.js');
+  // Keep the whole test inside one 30 s step so s − 1 stays in the drift window.
+  if (Date.now() % 30000 > 25000) await new Promise((r) => setTimeout(r, 30000 - (Date.now() % 30000) + 50));
+  const c = await newPlayer(200);
+  const other = await newPlayer(0);
+  const otherName = (await other.get('/api/me')).data.user.username;
+  const setup = (await c.post('/api/account/2fa/setup')).data;
+  assert.match(setup.secret, /^[A-Z2-7]{32}$/);
+  assert.match(setup.uri, /^otpauth:\/\/totp\/Fakesino%3A/);
+  assert.equal((await c.post('/api/account/2fa/enable', { code: '000000' === codeAt(setup.secret, stepAt()) ? '111111' : '000000' })).status, 400);
+  const s = stepAt();
+  const en = await c.post('/api/account/2fa/enable', { code: codeAt(setup.secret, s) });
+  assert.equal(en.status, 200, JSON.stringify(en.data));
+  assert.equal(en.data.user.twoFactor, true);
+  await c.post('/api/wallet/vault', { currency: 'USD', amount: 20, direction: 'deposit' });
+  const noCode = await c.post('/api/wallet/vault', { currency: 'USD', amount: 5, direction: 'withdraw' });
+  assert.equal(noCode.status, 400);
+  assert.equal(noCode.data.field, 'code');
+  assert.equal((await c.post('/api/tips', { to: otherName, amount: 1, currency: 'USD' })).data.field, 'code');
+  const w = await c.post('/api/wallet/vault', { currency: 'USD', amount: 5, direction: 'withdraw', code: codeAt(setup.secret, s + 1) });
+  assert.equal(w.status, 200, JSON.stringify(w.data));
+  // The same code can't be used twice.
+  assert.equal((await c.post('/api/wallet/vault', { currency: 'USD', amount: 5, direction: 'withdraw', code: codeAt(setup.secret, s + 1) })).status, 400);
+  const off = await c.post('/api/account/2fa/disable', { code: codeAt(setup.secret, s - 1) });
+  assert.equal(off.status, 200, JSON.stringify(off.data));
+  assert.equal(off.data.user.twoFactor, false);
+  assert.equal((await c.post('/api/tips', { to: otherName, amount: 1, currency: 'USD' })).status, 200);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');

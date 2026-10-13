@@ -6,7 +6,7 @@ import { setQuery } from '../router.js';
 import { CURRENCIES, CURRENCY_CODES } from '../shared/currencies.js';
 import { openModal } from './modal.js';
 import { toast, toastSuccess, toastError } from './toast.js';
-import { showFieldErrors } from './forms.js';
+import { showFieldErrors, twoFactorField } from './forms.js';
 import * as fmt from '../format.js';
 
 export const ignored = () => state.prefs.ignored || [];
@@ -67,6 +67,7 @@ export function openRain(prefill = {}) {
     <div class="field" data-field="currency"><div class="field-label">Currency</div><select class="select" name="currency">${CURRENCY_CODES.map((c) => `<option ${c === code ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
     <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux dim"></span></div><input class="input" name="amount" inputmode="decimal" value="${esc(prefill.amount ?? '')}"><div class="field-error"></div></div>
     <div class="field" data-field="users"><div class="field-label">Number of users (1–50)</div><input class="input" name="users" inputmode="numeric" value="${esc(prefill.users ?? 10)}"><div class="field-error"></div></div>
+    ${twoFactorField(state.user)}
     <div class="field-error form-error" style="margin-bottom:10px"></div>
     <button class="btn btn-primary btn-block btn-lg" type="submit">Make it rain</button></form>`);
   const modal = openModal({ title: 'Rain', iconName: 'coins', body });
@@ -80,7 +81,7 @@ export function openRain(prefill = {}) {
   body.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      const r = await api.post('/api/rain', { amount: Number(body.amount.value), currency: code, users: Number(body.users.value), room: state.prefs.chatRoom || 'en' });
+      const r = await api.post('/api/rain', { amount: Number(body.amount.value), currency: code, users: Number(body.users.value), room: state.prefs.chatRoom || 'en', code: body.code?.value });
       toastSuccess('It rained!', `${r.users} user${r.users > 1 ? 's' : ''} got ${fmt.money(r.share, code)} each`);
       modal.close();
     } catch (err) {
