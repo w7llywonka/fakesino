@@ -10,6 +10,7 @@ import { LiveHub } from './live.js';
 import { createEngine, GAMES } from './engine.js';
 import { publicCatalog } from './catalog.js';
 import { PLUGINS } from './plugins/index.js';
+import { createNotifier } from './notify.js';
 import { CrashGame } from './crash.js';
 import { createPayments } from './payments.js';
 import { rotateSeeds, publicSeeds, randomClientSeed } from './fair.js';
@@ -58,7 +59,8 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   const live = new LiveHub();
   const engine = createEngine({ store, live });
   const crash = new CrashGame({ store, live, engine, timing: crashTiming });
-  const payments = createPayments({ store, live, publicUser });
+  const notifier = createNotifier({ store, live });
+  const payments = createPayments({ store, live, publicUser, notify: notifier.notify });
   payments.recover();
 
   const guestLimit = rateLimiter({ windowMs: 60_000, max: 30 });
@@ -303,11 +305,15 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     return undefined; // streaming
   });
 
+  // --- Notifications (header bell) ----------------------------------------------------
+  router.get('/api/notifications', authed((ctx) => notifier.list(ctx.user.id)));
+  router.post('/api/notifications/read', authed((ctx) => notifier.markRead(ctx.user.id, ctx.body.all ? 'all' : ctx.body.ids)));
+
   // --- Plugins (multiplayer games, site features) ------------------------------------
   const plugins = {};
   const pluginHandles = PLUGINS.map((p) => {
     try {
-      const handle = p.register({ router, store, live, engine, crash, payments, authed, publicUser, secureCookies, betLimit, roundDown, timing: roundTiming[p.name] }) || null;
+      const handle = p.register({ router, store, live, engine, crash, payments, notify: notifier.notify, authed, publicUser, secureCookies, betLimit, roundDown, timing: roundTiming[p.name] }) || null;
       plugins[p.name] = handle;
       return handle;
     } catch (err) {

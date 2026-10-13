@@ -30,7 +30,7 @@ function weekStart(now = Date.now()) {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day);
 }
 
-export default function register({ router, store, live, engine, payments, authed }) {
+export default function register({ router, store, live, engine, payments, notify }) {
   const data = (store.data.challenges ||= { list: [], seq: 0 });
 
   function rotate(now = Date.now()) {
@@ -72,6 +72,7 @@ export default function register({ router, store, live, engine, payments, authed
       store.save();
       live.toUser(user.id, 'balance', { currency: 'USD', amount: user.balances.USD });
       live.channel('challenges', 'won', view(c), user.id);
+      notify(user.id, { kind: 'challenge', category: 'rewards', title: `${CATALOG[c.game]?.name || c.game} challenge completed`, message: `You were first to hit ${c.minMultiplier}× and won $${c.prizeUsd} play money.`, link: '/challenges' });
       live.channel('challenges', 'finished', view(c));
     }
   });

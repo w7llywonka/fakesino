@@ -57,6 +57,7 @@ export async function connectLive() {
     bus.emit(`live:${channel}:${type}`, data);
   });
   source.addEventListener('tx', (e) => bus.emit('live:tx', JSON.parse(e.data)));
+  source.addEventListener('notification', (e) => bus.emit('live:notification', JSON.parse(e.data)));
   source.addEventListener('balance', (e) => {
     const { currency, amount } = JSON.parse(e.data);
     setBalance(currency, amount, { reason: 'push' });

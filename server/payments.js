@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
+import { amountText } from './notify.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
 import { parseCurrency, parseAmount, credit, debit, vipInfo, DAILY_BONUS_COOLDOWN, assertNotOnBreak, assertDepositLimit } from './accounts.js';
@@ -23,7 +24,7 @@ function txId() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-export function createPayments({ store, live, publicUser }) {
+export function createPayments({ store, live, publicUser, notify = () => {} }) {
   const timers = new Set();
   const later = (ms, fn) => {
     const t = setTimeout(() => {
@@ -54,6 +55,11 @@ export function createPayments({ store, live, publicUser }) {
   function pushTx(user, tx) {
     live.toUser(user.id, 'tx', publicTx(tx));
     live.toUser(user.id, 'balance', { currency: tx.currency, amount: user.balances[tx.currency] });
+    const amt = amountText(tx.amount, tx.currency);
+    if (tx.type === 'deposit' && tx.status === 'completed')
+      notify(user.id, { kind: 'deposit', title: tx.method === 'card' ? 'Deposit successful' : 'Deposit confirmed', message: `${amt} play money has been credited to your wallet.`, link: '/transactions/deposits' });
+    if (tx.type === 'withdrawal' && tx.status === 'completed')
+      notify(user.id, { kind: 'withdrawal', title: 'Withdrawal sent', message: `${amt} was sent${tx.details?.txHash ? ` · tx ${tx.details.txHash.slice(0, 10)}…` : ''} (simulated).`, link: '/transactions/withdrawals' });
   }
 
   function validateCardInput(card) {
@@ -256,6 +262,7 @@ export function createPayments({ store, live, publicUser }) {
       details: { address: user.addresses?.[currency] || null, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required },
     });
     store.save();
+    notify(user.id, { kind: 'deposit', title: 'Deposit detected', message: `${amountText(amount, currency)} is on its way · 0/${required} confirmations.`, link: '/transactions/deposits' });
     const step = Number(process.env.FAKESINO_CONFIRM_MS ?? 1500);
     const confirm = () => {
       tx.details.confirmations++;
@@ -360,6 +367,7 @@ export function createPayments({ store, live, publicUser }) {
     }
     addTx(user, { type: 'vault', method: body.direction === 'withdraw' ? 'vault_out' : 'vault_in', status: 'completed', currency, amount, details: {} });
     store.save();
+    notify(user.id, { kind: 'vault', title: body.direction === 'withdraw' ? 'Vault withdrawal' : 'Vault deposit', message: `${amountText(amount, currency)} ${body.direction === 'withdraw' ? 'moved back to your wallet' : 'locked in your vault'}.`, link: '/transactions/vault' });
     return { user: publicUser(user) };
   }
 

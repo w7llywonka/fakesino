@@ -1,5 +1,7 @@
 import { el, esc, on, $ } from '../dom.js';
 import { icon, coin } from '../icons.js';
+import { bellButton } from './notifications.js';
+import { openSearch } from './search.js';
 import { state, bus, currency, balanceOf, setCurrency, savePrefs } from '../state.js';
 import { CURRENCIES, CURRENCY_CODES } from '../shared/currencies.js';
 import { GAMES, CATEGORIES } from '../games/registry.js';
@@ -33,6 +35,7 @@ export function renderShell(app) {
     <div class="chat-slot"></div>
     <nav class="mobile-nav">
       <button data-act="mobile-menu">${icon('menu', 20)}<span>Browse</span></button>
+      <button data-act="mobile-search">${icon('search', 20)}<span>Search</span></button>
       <a href="/casino">${icon('casino', 20)}<span>Casino</span></a>
       <a href="/transactions/bets">${icon('list', 20)}<span>Bets</span></a>
       <button data-act="chat">${icon('chat', 20)}<span>Chat</span></button>
@@ -50,6 +53,10 @@ export function renderShell(app) {
   on(shell, 'click', '.scrim', () => shell.classList.remove('mobile-menu'));
   on(shell, 'click', '.sidebar a', () => shell.classList.remove('mobile-menu'));
   on(shell, 'click', '[data-act=chat]', () => toggleChat());
+  on(shell, 'click', '[data-act=mobile-search]', () => {
+    shell.classList.remove('mobile-menu');
+    openSearch();
+  });
   on(shell, 'click', '.nav-group > .nav-item[data-toggle]', (e, b) => b.parentElement.classList.toggle('open'));
   on(shell, 'click', '[data-modal]', (e, b) => {
     e.preventDefault();
@@ -148,6 +155,7 @@ function renderHeader(shell) {
     </div>`;
   right.innerHTML = `
     <button class="icon-btn hide-mobile" data-act="search" aria-label="Search">${icon('search', 20)}</button>
+    <span class="nt-slot"></span>
     <div style="position:relative">
       <button class="icon-btn" data-act="user" aria-label="Account">${icon('user', 20)}</button>
     </div>
@@ -180,15 +188,13 @@ function renderHeader(shell) {
     e.stopPropagation();
     toggleDropdown(pill, currencyDropdown, 'currency');
   });
+  right.querySelector('.nt-slot').replaceWith(bellButton());
   const userWrap = right.querySelector('[data-act=user]').parentElement;
   userWrap.querySelector('button').addEventListener('click', (e) => {
     e.stopPropagation();
     toggleDropdown(userWrap, userDropdown, 'user', 'right');
   });
-  right.querySelector('[data-act=search]').addEventListener('click', () => {
-    navigate('/casino');
-    setTimeout(() => $('.search-bar input')?.focus(), 50);
-  });
+  right.querySelector('[data-act=search]').addEventListener('click', () => openSearch());
   // Close dropdowns on outside clicks; clicks on a dropdown's own anchor
   // (its parent) are left to the anchor's toggle.
   docClick = (e) => {
