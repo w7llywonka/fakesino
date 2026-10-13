@@ -106,11 +106,13 @@ function sidebarNav() {
       <a class="nav-item" href="/challenges">${icon('trophy', 18)}<span>Challenges</span></a>
       <a class="nav-item" href="/vip">${icon('crown', 18)}<span>VIP Club</span></a>
       <a class="nav-item" href="/leaderboard">${icon('trophy', 18)}<span>Leaderboard</span></a>
+      <a class="nav-item" href="/affiliate">${icon('users', 18)}<span>Affiliate</span></a>
     </div>
     <div class="nav-group">
       <a class="nav-item" href="/provably-fair">${icon('shield', 18)}<span>Provably Fair</span></a>
       <a class="nav-item" href="/responsible-gaming">${icon('support', 18)}<span>Responsible Gaming</span></a>
       <button class="nav-item" data-act="chat">${icon('chat', 18)}<span>Live Chat</span></button>
+      <a class="nav-item" href="?modal=help">${icon('support', 18)}<span>Live Support</span></a>
     </div>`;
 }
 
@@ -129,7 +131,7 @@ function footer() {
     <div><h4>Casino</h4>${games}</div>
     <div><h4>Platform</h4><a href="/provably-fair">Provably Fair</a><a href="/vip">VIP Club</a><a href="/promotions">Promotions</a><a href="/leaderboard">Leaderboard</a><a href="/affiliate">Affiliate</a></div>
     <div><h4>Account</h4><a href="?modal=wallet&tab=deposit">Deposit</a><a href="?modal=wallet&tab=withdraw">Withdraw</a><a href="/transactions/deposits">Transactions</a><a href="/settings/general">Settings</a></div>
-    <div><h4>About</h4><a href="/responsible-gaming">Responsible Gaming</a><a href="/terms">Terms of Service</a><p style="margin:8px 0 0">Fakesino is a simulation. All balances are play money with no cash value. No real payments are ever processed.</p></div>
+    <div><h4>About</h4><a href="?modal=help">Help Center</a><a href="/responsible-gaming">Responsible Gaming</a><a href="/terms">Terms of Service</a><p style="margin:8px 0 0">Fakesino is a simulation. All balances are play money with no cash value. No real payments are ever processed.</p></div>
   </div>
   <div class="footer-bottom"><div class="logo" style="font-size:18px"><span>FAKE<b>SINO</b></span></div><div>© ${new Date().getFullYear()} Fakesino · Play money only</div><div class="badge-18">18+</div></div>
   </footer>`;

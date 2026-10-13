@@ -3800,3 +3800,37 @@ textarea.input {
     align-items: flex-start;
   }
 }
+
+/* Help Center */
+.help .input[type='search'] {
+  margin-bottom: 12px;
+}
+.help-list {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+.help-cat {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  margin: 12px 0 6px;
+}
+.help-item {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+.help-item summary {
+  cursor: pointer;
+  padding: 11px 12px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.help-a {
+  padding: 0 12px 12px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.55;
+}

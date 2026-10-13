@@ -89,6 +89,9 @@ async function syncModal(q) {
     case 'bet':
       done(await (await import('./ui/betmodal.js')).openBetModal(q.id));
       break;
+    case 'help':
+      done((await import('./ui/help.js')).openHelpModal());
+      break;
     case 'wallet-settings':
       done((await import('./ui/walletsettings.js')).openWalletSettingsModal());
       break;

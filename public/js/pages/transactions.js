@@ -173,7 +173,7 @@ function methodLabel(t) {
   if (t.type === 'rain') return `${icon('coins', 16)} ${d.direction === 'out' ? `Rain · ${d.users} user${d.users === 1 ? '' : 's'}` : `Rain from ${esc(d.from || 'a player')}`}`;
   if (t.method === 'rain') return `${icon('coins', 16)} Rain from ${esc(d.from || 'RainBot')}`;
   if (t.method === 'daily_reload') return `${icon('gift', 16)} Daily reload`;
-  const BONUS = { daily: 'Daily bonus', weekly: 'Weekly bonus', monthly: 'Monthly bonus', levelup: 'Level-up bonus', reload: 'Reload', welcome: 'Welcome offer', drop: 'Bonus drop' };
+  const BONUS = { daily: 'Daily bonus', weekly: 'Weekly bonus', monthly: 'Monthly bonus', levelup: 'Level-up bonus', reload: 'Reload', welcome: 'Welcome offer', drop: 'Bonus drop', race: 'Daily Race prize' };
   if (BONUS[t.method]) return `${icon('gift', 16)} ${BONUS[t.method]}`;
   if (t.method === 'rakeback') return `${icon('coins', 16)} Rakeback`;
   if (t.method === 'affiliate') return `${icon('users', 16)} Affiliate commission`;
