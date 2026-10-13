@@ -108,11 +108,16 @@ export default function settingsPage(page, { tab = 'general' }) {
         return `<label class="setting-row"><div><div class="t">${t}</div><div class="d">${d}</div></div><input type="checkbox" class="toggle" data-k="${k}" data-where="${where}" ${v ? 'checked' : ''}></label>`;
       })
       .join('')}
+      <label class="setting-row"><div><div class="t">Odds format</div><div class="d">How sportsbook odds are shown.</div></div>
+        <select class="select" data-odds style="width:auto"><option value="decimal">Decimal (2.50)</option><option value="fractional">Fractional (3/2)</option><option value="american">American (+150)</option></select></label>
       <h3 style="margin-top:24px">Ignored users</h3><div class="ignored-list">${
         (state.prefs.ignored || []).length
           ? state.prefs.ignored.map((n) => `<span class="sr-chip"><button>${esc(n)}</button><button data-unignore="${esc(n)}" aria-label="Unignore">${icon('close', 12)}</button></span>`).join('')
           : '<div class="muted" style="font-size:13px">Nobody. Ignore players from their name in chat.</div>'
       }</div>`;
+    const oddsSel = body.querySelector('[data-odds]');
+    oddsSel.value = state.prefs.oddsFormat || 'decimal';
+    oddsSel.addEventListener('change', () => savePrefs({ oddsFormat: oddsSel.value }));
     on(body, 'click', '[data-unignore]', (e, b) => {
       savePrefs({ ignored: (state.prefs.ignored || []).filter((n) => n !== b.dataset.unignore) });
       b.parentElement.remove();

@@ -37,7 +37,7 @@ export async function openStatsModal() {
       ${
         games.length
           ? `<div class="field-label" style="margin:14px 0 6px">By game</div><div class="table-wrap"><table class="table"><thead><tr><th>Game</th><th class="r">Bets</th><th class="r">Wagered</th><th class="r">Profit</th></tr></thead><tbody>${games
-              .map(([g, s]) => `<tr><td><span class="cell-game">${icon(g, 16)} ${esc(bySlug[g]?.name || g)}</span></td><td class="r">${s.bets}</td><td class="r">${fmt.fiat(s.wageredUsd)}</td><td class="r ${s.profitUsd >= 0 ? 'win-text' : 'loss-text'}">${s.profitUsd < 0 ? '-' : ''}${fmt.fiat(Math.abs(s.profitUsd))}</td></tr>`)
+              .map(([g, s]) => `<tr><td><span class="cell-game">${icon(g, 16)} ${esc(bySlug[g]?.name || (g === 'sports' ? 'Sports' : g))}</span></td><td class="r">${s.bets}</td><td class="r">${fmt.fiat(s.wageredUsd)}</td><td class="r ${s.profitUsd >= 0 ? 'win-text' : 'loss-text'}">${s.profitUsd < 0 ? '-' : ''}${fmt.fiat(Math.abs(s.profitUsd))}</td></tr>`)
               .join('')}</tbody></table></div>`
           : '<div class="empty">No bets yet.</div>'
       }`);

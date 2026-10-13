@@ -873,6 +873,51 @@ test('daily race: standings, my position, and prizes paid when the day ends', as
   assert.equal((await a.get('/api/me')).data.user.balances.USD, after);
 });
 
+test('sportsbook: lobby, singles, multis, odds changes, cash out and settlement', async () => {
+  const c = await newPlayer(1000);
+  const { sports } = (await c.get('/api/sports')).data;
+  assert.deepEqual(sports.map((s) => s.key), ['soccer', 'basketball', 'tennis', 'icehockey', 'esports']);
+  const lobby = (await c.get('/api/sports/lobby')).data;
+  assert.ok(lobby.upcoming.length >= 5);
+  assert.ok(lobby.upcoming.every((m) => m.status === 'upcoming' && m.seedHash && !m.seed));
+  const [m1, m2] = lobby.upcoming.filter((m) => m.markets[0].outcomes[0].odds);
+  const full = (await c.get(`/api/sports/match/${m1.id}`)).data.match;
+  assert.ok(full.markets.length >= 2);
+  const sel = (m, o = m.markets[0].outcomes[0]) => ({ matchId: m.id, market: m.markets[0].key, outcome: o.key, odds: o.odds });
+  // Single
+  const single = await c.post('/api/sports/bet', { selections: [sel(m1)], stake: 10, currency: 'USD' });
+  assert.equal(single.status, 200, JSON.stringify(single.data));
+  assert.equal(single.data.bet.type, 'single');
+  assert.equal(single.data.user.balances.USD, 990);
+  // Multi across two matches; same-match multi refused.
+  const multi = await c.post('/api/sports/bet', { selections: [sel(m1), sel(m2)], stake: 5, currency: 'USD' });
+  assert.equal(multi.status, 200, JSON.stringify(multi.data));
+  assert.equal(multi.data.bet.odds, Math.round(m1.markets[0].outcomes[0].odds * m2.markets[0].outcomes[0].odds * 100) / 100);
+  assert.equal((await c.post('/api/sports/bet', { selections: [sel(m1), sel(m1, m1.markets[0].outcomes[1])], stake: 5, currency: 'USD' })).data.code, 'same_match');
+  // Asking for better odds than offered: 409 with the current price.
+  const better = await c.post('/api/sports/bet', { selections: [{ ...sel(m1), odds: 49 }], stake: 5, currency: 'USD' });
+  assert.equal(better.status, 409);
+  assert.equal(better.data.code, 'odds_changed');
+  assert.equal((await c.post('/api/sports/bet', { selections: [{ ...sel(m1), odds: 49 }], stake: 5, currency: 'USD', acceptOdds: 'any' })).status, 200);
+  // Cash out the single before kick-off (worth a bit less than the stake).
+  const active = (await c.get('/api/sports/bets')).data.bets;
+  assert.equal(active.length, 3);
+  const s1 = active.find((b) => b.id === single.data.bet.id);
+  assert.ok(s1.cashout > 0 && s1.cashout < 10, String(s1.cashout));
+  const co = await c.post('/api/sports/cashout', { id: s1.id, amount: s1.cashout });
+  assert.equal(co.status, 200, JSON.stringify(co.data));
+  assert.equal(co.data.bet.status, 'cashout');
+  // Fast-forward past full time: everything settles exactly once, by the shared rules.
+  app.plugins.sports.settle(Date.now() + 3 * 3600000);
+  const settled = (await c.get('/api/sports/bets?status=settled')).data.bets;
+  assert.equal(settled.length, 3);
+  assert.equal((await c.get('/api/sports/bets')).data.bets.length, 0);
+  const ended = (await c.get(`/api/sports/match/${m1.id}`)).data.match;
+  for (const b of settled.filter((x) => x.status !== 'cashout')) assert.equal(b.payout > 0, b.status === 'won');
+  // Ended matches reveal their seed, which hashes to the published commitment.
+  if (ended.status === 'ended') assert.equal(crypto.createHash('sha256').update(ended.seed).digest('hex'), ended.seedHash);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');

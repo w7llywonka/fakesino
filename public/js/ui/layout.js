@@ -8,6 +8,8 @@ import { GAMES, CATEGORIES } from '../games/registry.js';
 import * as fmt from '../format.js';
 import { setQuery } from '../router.js';
 import { createChat } from './chat.js';
+import { slip, createSlipPanel } from './betslip.js';
+import { SPORTS, LEAGUES } from '../shared/sports.js';
 
 export function renderShell(app) {
   app.innerHTML = '';
@@ -15,9 +17,9 @@ export function renderShell(app) {
     <aside class="sidebar">
       <div class="sidebar-top">
         <button class="icon-btn" data-act="collapse" aria-label="Toggle menu">${icon('menu', 20)}</button>
-        <div class="sidebar-tabs"><a href="/casino" class="sidebar-tab active">Casino</a><a href="/promotions" class="sidebar-tab">Promos</a></div>
+        <div class="sidebar-tabs"><a href="/casino" class="sidebar-tab" data-section="casino">Casino</a><a href="/sports" class="sidebar-tab" data-section="sports">Sports</a></div>
       </div>
-      <nav class="sidebar-scroll">${sidebarNav()}</nav>
+      <nav class="sidebar-scroll" data-section="casino">${sidebarNav()}</nav>
       <div class="sidebar-foot">Play money only. Nothing here can be cashed out.</div>
     </aside>
     <div class="scrim"></div>
@@ -35,9 +37,9 @@ export function renderShell(app) {
     <div class="chat-slot"></div>
     <nav class="mobile-nav">
       <button data-act="mobile-menu">${icon('menu', 20)}<span>Browse</span></button>
-      <button data-act="mobile-search">${icon('search', 20)}<span>Search</span></button>
       <a href="/casino">${icon('casino', 20)}<span>Casino</span></a>
       <a href="/transactions/bets">${icon('list', 20)}<span>Bets</span></a>
+      <a href="/sports">${icon('sports', 20)}<span>Sports</span></a>
       <button data-act="chat">${icon('chat', 20)}<span>Chat</span></button>
     </nav>
   </div>`);
@@ -63,10 +65,13 @@ export function renderShell(app) {
     setQuery({ modal: b.dataset.modal, tab: b.dataset.tab || null });
   });
 
+  // The right-hand drawer holds either chat or the sports bet slip.
   const chatSlot = shell.querySelector('.chat-slot');
   let chat = null;
+  let slipPanel = null;
   function toggleChat(force) {
     const open = force ?? !chat;
+    if (open && slipPanel) toggleSlip(false);
     if (open && !chat) chat = createChat(chatSlot, () => toggleChat(false));
     if (!open && chat) {
       chat.destroy();
@@ -75,12 +80,34 @@ export function renderShell(app) {
     savePrefs({ chatOpen: !!chat });
     shell.querySelectorAll('[data-act=chat]').forEach((b) => b.classList.toggle('active', !!chat));
   }
+  function toggleSlip(force) {
+    const open = force ?? !slipPanel;
+    if (open && chat) toggleChat(false);
+    if (open && !slipPanel) slipPanel = createSlipPanel(chatSlot, () => toggleSlip(false));
+    if (!open && slipPanel) {
+      slipPanel.destroy();
+      slipPanel = null;
+    }
+    shell.querySelectorAll('[data-act=slip]').forEach((b) => b.classList.toggle('active', !!slipPanel));
+  }
+  on(shell, 'click', '[data-act=slip]', () => toggleSlip());
+  bus.on('slip:open', () => toggleSlip(true));
+  const syncSlipBadge = () =>
+    shell.querySelectorAll('.slip-badge').forEach((b) => {
+      b.textContent = slip.selections.length;
+      b.hidden = !slip.selections.length;
+    });
+  bus.on('slip', syncSlipBadge);
   if (state.prefs.chatOpen && window.innerWidth > 1100) toggleChat(true);
 
   renderHeader(shell);
-  bus.on('user', () => renderHeader(shell));
+  bus.on('user', () => {
+    renderHeader(shell);
+    syncSlipBadge();
+  });
   bus.on('route', ({ path }) => highlightNav(shell, path));
   highlightNav(shell, location.pathname);
+  syncSlipBadge();
   return { shell, page: shell.querySelector('#page'), toggleChat };
 }
 
@@ -101,6 +128,11 @@ function sidebarNav() {
         <button class="nav-item" data-toggle>${icon(c.icon, 18)}<span>${esc(c.name)}</span><span class="chev">${icon('down', 16)}</span></button>
         <div class="nav-sub">${gameLinks(c.key)}</div></div>`,
     ).join('')}
+    ${siteNav()}`;
+}
+
+function siteNav() {
+  return `
     <div class="nav-group">
       <a class="nav-item" href="/promotions">${icon('gift', 18)}<span>Promotions</span></a>
       <a class="nav-item" href="/challenges">${icon('trophy', 18)}<span>Challenges</span></a>
@@ -116,7 +148,33 @@ function sidebarNav() {
     </div>`;
 }
 
+function sportsNav() {
+  return `
+    <div class="nav-group">
+      <a class="nav-item" href="/sports">${icon('home', 18)}<span>Sports Lobby</span></a>
+      <a class="nav-item" href="/sports/my-bets">${icon('ticket', 18)}<span>My Bets</span></a>
+      <button class="nav-item" data-act="slip">${icon('list', 18)}<span>Bet Slip</span><span class="slip-badge pill" hidden></span></button>
+    </div>
+    <div class="nav-group open">
+      <button class="nav-item" data-toggle>${icon('sports', 18)}<span>Top Sports</span><span class="chev">${icon('down', 16)}</span></button>
+      <div class="nav-sub">${Object.entries(SPORTS)
+        .map(([k, sp]) => `<a class="nav-item" href="/sports/${k}">${icon(k, 18)}<span>${esc(sp.name)}</span></a>`)
+        .join('')}</div></div>
+    <div class="nav-group">
+      <button class="nav-item" data-toggle>${icon('trophy', 18)}<span>Leagues</span><span class="chev">${icon('down', 16)}</span></button>
+      <div class="nav-sub">${LEAGUES.map((l) => `<a class="nav-item" href="/sports/${l.sport}">${icon(l.sport, 18)}<span>${esc(l.name)}</span></a>`).join('')}</div></div>
+    ${siteNav()}`;
+}
+
 function highlightNav(shell, path) {
+  const section = path.startsWith('/sports') ? 'sports' : 'casino';
+  const nav = shell.querySelector('.sidebar-scroll');
+  if (nav.dataset.section !== section) {
+    nav.dataset.section = section;
+    nav.innerHTML = section === 'sports' ? sportsNav() : sidebarNav();
+  }
+  shell.querySelectorAll('.sidebar-tab').forEach((t) => t.classList.toggle('active', t.dataset.section === section));
+  shell.classList.toggle('in-sports', section === 'sports');
   shell.querySelectorAll('.sidebar a.nav-item').forEach((a) => {
     const href = a.getAttribute('href');
     a.classList.toggle('active', href === path || (href !== '/casino' && path.startsWith(href + '/')));
@@ -158,6 +216,7 @@ function renderHeader(shell) {
   right.innerHTML = `
     <button class="icon-btn hide-mobile" data-act="search" aria-label="Search">${icon('search', 20)}</button>
     <span class="nt-slot"></span>
+    <button class="icon-btn slip-btn" data-act="slip" aria-label="Bet slip">${icon('ticket', 20)}<span class="slip-badge" hidden></span></button>
     <div style="position:relative">
       <button class="icon-btn" data-act="user" aria-label="Account">${icon('user', 20)}</button>
     </div>
