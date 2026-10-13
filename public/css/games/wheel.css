@@ -1,0 +1,132 @@
+.wheel-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.wheel-center {
+  padding: 28px 20px 8px;
+}
+
+.wheel-wrap {
+  position: relative;
+  width: min(100%, 440px);
+  aspect-ratio: 228 / 236;
+  container-type: inline-size;
+}
+
+.wheel-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.45));
+}
+
+.wheel-svg .wseg {
+  stroke: #0a1118;
+  stroke-width: 0.9;
+}
+
+.wheel-svg .wseg.hit {
+  stroke: #fff;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  animation: wheelhit 0.3s ease-out;
+}
+
+@keyframes wheelhit {
+  from {
+    filter: brightness(1.8);
+  }
+}
+
+.wheel-pointer {
+  color: var(--red);
+  transition: color 0.2s;
+}
+
+/* Centre of the hub (the svg viewBox centre sits at 114/228, 122/236). */
+.wheel-result {
+  --c: var(--text);
+  position: absolute;
+  left: 50%;
+  top: calc(122 / 236 * 100%);
+  transform: translate(-50%, -50%);
+  width: 54%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.wheel-result span {
+  font-size: clamp(22px, 10cqw, 46px);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--c);
+  opacity: 0;
+  transform: scale(0.6);
+  white-space: nowrap;
+}
+
+.wheel-result.show span {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.15s, transform 0.3s cubic-bezier(0.2, 1.5, 0.4, 1);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--c) 45%, transparent);
+}
+
+.wheel-result.zero span {
+  color: var(--text-2);
+}
+
+/* ---------- Legend ---------- */
+
+.wheel-legend {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr));
+  gap: 8px;
+}
+
+.wl-chip {
+  position: relative;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  overflow: hidden;
+  cursor: default;
+  box-shadow: inset 0 -4px 0 var(--c);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+
+.wl-chip:hover {
+  background: var(--surface-3);
+}
+
+.wl-chip.active {
+  background: var(--surface-4);
+  transform: translateY(-3px);
+  box-shadow: inset 0 -4px 0 var(--c), inset 0 0 0 2px var(--c), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 600px) {
+  .wheel-center {
+    padding: 18px 12px 4px;
+  }
+  .wheel-wrap {
+    width: min(100%, 320px);
+  }
+  .wheel-legend {
+    gap: 5px;
+  }
+  .wl-chip {
+    height: 38px;
+    font-size: 12px;
+  }
+}

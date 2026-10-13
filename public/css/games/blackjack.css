@@ -27,6 +27,11 @@
   transform: translate(-50%, -54%);
   pointer-events: none;
   z-index: 0;
+  transition: opacity 0.25s;
+}
+
+.bj-stage.prompting .bj-felt {
+  opacity: 0.2;
 }
 
 .bj-felt svg {
@@ -109,13 +114,17 @@
   width: var(--cw);
   height: var(--ch);
   border-radius: 10px;
-  border: 2px dashed rgba(167, 182, 200, 0.13);
-  margin: 0 -40px;
+  border: 2px dashed rgba(167, 182, 200, 0.14);
+  display: grid;
+  place-items: center;
 }
 
-.bj-spot + .bj-spot {
-  margin-left: calc(var(--cw) * -0.54 + 40px);
-  transform: translateY(-4px);
+.bj-spot span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(167, 182, 200, 0.28);
 }
 
 .bj-hand {
@@ -347,18 +356,31 @@
   top: 50%;
   transform: translate(-50%, -50%) scale(0.9);
   z-index: 4;
-  padding: 8px 18px;
-  border-radius: 999px;
+  padding: 10px 22px;
+  border-radius: var(--radius-lg);
   background: var(--surface-2);
   border: 2px solid var(--gold);
-  color: var(--gold);
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: 0.04em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s, transform 0.2s;
   box-shadow: var(--shadow);
+}
+
+.bj-prompt b {
+  color: var(--gold);
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.bj-prompt span {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .bj-prompt.show {

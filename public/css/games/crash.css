@@ -1,0 +1,456 @@
+/* Crash — every selector is scoped to cr-* classes so nothing leaks into
+   other games once this stylesheet has been loaded. */
+
+.cr-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------- history strip ---------- */
+
+.cr-history {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 48px);
+  mask-image: linear-gradient(90deg, transparent 0, #000 48px);
+}
+
+.cr-history .chip {
+  animation: none;
+  min-width: 62px;
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.cr-history .chip:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.12);
+}
+
+.cr-history .chip.fresh {
+  animation: chipin 0.35s ease-out;
+}
+
+.cr-history .chip.cr-hi {
+  background: var(--gold);
+  color: #2a1a00;
+}
+
+/* ---------- graph ---------- */
+
+.cr-graph {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  container-type: inline-size;
+  background: radial-gradient(90% 70% at 30% 100%, rgba(255, 150, 60, 0.07), transparent 70%), radial-gradient(60% 50% at 85% 10%, rgba(47, 124, 246, 0.05), transparent 70%);
+}
+
+.cr-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.cr-center {
+  position: absolute;
+  inset: 0 0 34px 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 8%;
+  pointer-events: none;
+  text-align: center;
+}
+
+.cr-mult {
+  font-size: 84px;
+  font-size: clamp(40px, 11cqi, 92px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 0 28px rgba(10, 17, 24, 0.9), 0 6px 24px rgba(0, 0, 0, 0.55);
+  transition: color 0.2s;
+}
+
+.cr-center.is-loading .cr-mult,
+.cr-center.is-betting .cr-mult {
+  font-size: 34px;
+  font-size: clamp(22px, 5.4cqi, 40px);
+  letter-spacing: 0;
+}
+
+.cr-center.is-crashed .cr-mult {
+  font-size: 50px;
+  font-size: clamp(28px, 6.4cqi, 56px);
+  color: var(--red);
+  animation: cr-crash 0.45s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+.cr-center.cr-flash .cr-mult {
+  color: var(--accent);
+  animation: cr-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes cr-pop {
+  from {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes cr-crash {
+  from {
+    transform: scale(1.18);
+    opacity: 0.4;
+  }
+}
+
+.cr-note {
+  margin-top: 12px;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+}
+
+.cr-note.win {
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.cr-center.is-crashed .cr-note.win {
+  font-size: 15px;
+}
+
+.cr-note.lose {
+  color: var(--red);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.cr-note .coin {
+  flex-shrink: 0;
+}
+
+.cr-progress {
+  margin-top: 14px;
+  width: min(280px, 62%);
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.cr-progress[hidden] {
+  display: none;
+}
+
+.cr-progress-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #ffd166, #ff9f43 60%, #ff6b3d);
+  box-shadow: 0 0 12px rgba(255, 150, 60, 0.6);
+}
+
+/* ---------- stage footer ---------- */
+
+.cr-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 16px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-round,
+.cr-foot-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cr-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.cr-dot.betting {
+  background: var(--gold);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.cr-dot.running {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.cr-dot.crashed {
+  background: var(--red);
+}
+
+/* ---------- main button states ---------- */
+
+.bp-bet.cr-two {
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.cr-btn-l {
+  font-size: 15px;
+}
+
+.cr-btn-s {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+.bp-bet.cr-cashout {
+  background: linear-gradient(180deg, #35e47c, #1cc35f);
+  animation: cr-glow 1.4s ease-in-out infinite;
+}
+
+.bp-bet.cr-cashout .cr-btn-s {
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 1;
+}
+
+@keyframes cr-glow {
+  50% {
+    box-shadow: 0 0 0 3px rgba(34, 211, 107, 0.25), 0 6px 22px -4px rgba(34, 211, 107, 0.7);
+  }
+}
+
+.bp-bet.cr-cancel {
+  background: var(--surface-3);
+  color: #ff8a95;
+  box-shadow: inset 0 0 0 2px rgba(255, 77, 94, 0.45);
+}
+
+.bp-bet.cr-cancel:hover:not(:disabled) {
+  background: rgba(255, 77, 94, 0.14);
+}
+
+.bp-bet.cr-cancel .cr-btn-s {
+  color: var(--text-2);
+}
+
+/* ---------- players list (sidebar) ---------- */
+
+.cr-players-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 240px;
+}
+
+.cr-players {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.cr-players-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.cr-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cr-count b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-total {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-cols,
+.cr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 62px minmax(84px, auto);
+  gap: 8px;
+  align-items: center;
+}
+
+.cr-cols {
+  padding: 0 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.cr-cols span:nth-child(n + 2),
+.cr-row > span:nth-child(n + 2) {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.cr-players-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 4px 6px;
+  scrollbar-width: thin;
+}
+
+.cr-row {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cr-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.cr-row.fresh {
+  animation: cr-row 0.3s ease-out;
+}
+
+@keyframes cr-row {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.cr-row.me {
+  background: rgba(47, 124, 246, 0.14);
+  box-shadow: inset 2px 0 0 var(--blue);
+}
+
+.cr-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.cr-name .user-hidden {
+  font-size: 12px;
+}
+
+.cr-at {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.cr-amt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cr-row.won .cr-at,
+.cr-row.won .cr-amt {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.cr-row.lost .cr-amt {
+  color: var(--red);
+}
+
+.cr-row.lost .cr-name {
+  color: var(--text-2);
+}
+
+.cr-wait {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-4);
+  vertical-align: middle;
+}
+
+.cr-empty {
+  padding: 22px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .cr-graph {
+    min-height: 280px;
+  }
+  .cr-players-wrap {
+    flex: none;
+    min-height: 0;
+  }
+  .cr-players {
+    position: static;
+  }
+  .cr-players-body {
+    max-height: 320px;
+  }
+}
+
+@media (max-width: 520px) {
+  .cr-center {
+    inset: 0 0 28px 40px;
+  }
+  .cr-history .chip {
+    min-width: 54px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .cr-note {
+    font-size: 13px;
+  }
+  .cr-note.win {
+    font-size: 17px;
+  }
+  .cr-foot {
+    padding: 4px 12px 10px;
+  }
+}

@@ -206,14 +206,14 @@
 }
 
 .tw-row.active .tw-tile:not(.revealed):hover,
-.tw-wrap.auto .tw-row.selectable .tw-tile:not(.revealed):hover {
+.tw-wrap.selecting .tw-row.selectable .tw-tile:not(.revealed):hover {
   background: var(--tw-hover);
   transform: translateY(-4px);
   box-shadow: 0 6px 0 var(--tw-edge);
 }
 
 .tw-row.active .tw-tile:not(.revealed):active,
-.tw-wrap.auto .tw-row.selectable .tw-tile:not(.revealed):active {
+.tw-wrap.selecting .tw-row.selectable .tw-tile:not(.revealed):active {
   transform: translateY(1px);
   box-shadow: 0 1px 0 var(--tw-edge);
 }
@@ -236,11 +236,11 @@
 }
 
 /* Auto selection */
-.tw-wrap.auto .tw-row:not(.selectable) .tw-tile:not(.selected) {
+.tw-wrap.selecting .tw-row:not(.selectable) .tw-tile:not(.selected) {
   opacity: 0.55;
 }
 
-.tw-wrap.auto .tw-row.selectable .tw-tile {
+.tw-wrap.selecting .tw-row.selectable .tw-tile {
   cursor: pointer;
 }
 
@@ -250,7 +250,7 @@
   box-shadow: 0 4px 0 #5b37b8, 0 0 16px -4px rgba(139, 92, 246, 0.8);
 }
 
-.tw-wrap.auto .tw-row.selectable .tw-tile.selected:hover {
+.tw-wrap.selecting .tw-row.selectable .tw-tile.selected:hover {
   background: #a07bff;
   box-shadow: 0 6px 0 #5b37b8;
 }

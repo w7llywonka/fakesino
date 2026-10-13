@@ -82,22 +82,21 @@
   box-shadow: 0 6px 0 #5b33c2;
 }
 
-.keno-grid.full .keno-tile:not(.picked):hover,
-.keno-grid.drawing .keno-tile:hover {
+.keno-grid.full .keno-tile:not(.picked):not(.miss):hover,
+.keno-grid.drawing .keno-tile:not(.picked):not(.miss):hover {
   transform: none;
   box-shadow: 0 4px 0 #1d2c39;
   background: #2f4556;
   cursor: default;
 }
 
-.keno-grid.drawing .keno-tile.picked:hover {
+.keno-grid.drawing .keno-tile.picked:not(.hit):hover {
   background: var(--purple);
   box-shadow: 0 4px 0 #5b33c2;
 }
 
 /* Drawn and picked: green gem. */
-.keno-tile.hit,
-.keno-tile.hit:hover,
+.keno-grid .keno-tile.hit,
 .keno-grid .keno-tile.hit:hover {
   background: #123524;
   box-shadow: 0 4px 0 #0a2117, inset 0 0 0 2px #22d36b, 0 0 22px rgba(34, 211, 107, 0.35);
@@ -105,19 +104,18 @@
   transform: none;
 }
 
-.keno-tile.hit .kt-gem {
+.keno-grid .keno-tile.hit .kt-gem {
   opacity: 1;
   transform: none;
 }
 
-.keno-tile.hit .kt-num {
+.keno-grid .keno-tile.hit .kt-num {
   margin-top: -8%;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 /* Drawn but not picked. */
-.keno-tile.miss,
-.keno-tile.miss:hover,
+.keno-grid .keno-tile.miss,
 .keno-grid .keno-tile.miss:hover {
   background: var(--bg-deep);
   box-shadow: 0 4px 0 #070c11, inset 0 0 0 2px #1a2733;
@@ -193,6 +191,10 @@
   transition: background 0.15s, color 0.15s;
 }
 
+.kp-short {
+  display: none;
+}
+
 .kp-hits {
   background: var(--surface-2);
   border-radius: var(--radius);
@@ -248,9 +250,17 @@
   color: var(--accent);
 }
 
+.kp-hits:not(.dense) .kt-gem,
+.kp-hits.dense .kp-word {
+  display: none;
+}
+
 @media (max-width: 1100px) {
-  .kp-word {
+  .kp-hits .kp-word {
     display: none;
+  }
+  .kp-hits:not(.dense) .kt-gem {
+    display: block;
   }
 }
 
@@ -272,6 +282,12 @@
   }
   .keno-pay-row {
     gap: 3px;
+  }
+  .kp-mults.dense .kp-long {
+    display: none;
+  }
+  .kp-mults.dense .kp-short {
+    display: inline;
   }
   .kp-m {
     height: 30px;

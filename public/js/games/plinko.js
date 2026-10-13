@@ -108,20 +108,19 @@ export default function mountPlinko(ctx) {
     const family = getComputedStyle(board).fontFamily || 'system-ui, sans-serif';
 
     // One font size for every bucket label: shrink until the widest fits.
-    const maxW = BUCKET_W * g - 4;
-    let size = Math.max(7, Math.min(15, g * 0.36));
-    const widest = (withX) => {
-      g2d.font = `800 ${size}px ${family}`;
-      return Math.max(...table.map((m) => g2d.measureText(withX ? multLabel(m) : String(m)).width));
+    // Drop the "×" only when it would make the text too small to read.
+    const maxW = BUCKET_W * g - 6;
+    const base = Math.max(7, Math.min(15, g * 0.36));
+    const fit = (withX) => {
+      g2d.font = `800 ${base}px ${family}`;
+      const tw = Math.max(...table.map((m) => g2d.measureText(withX ? multLabel(m) : String(m)).width));
+      return tw > maxW ? (base * maxW * 0.96) / tw : base;
     };
     let withX = true;
-    let tw = widest(true);
-    if (tw > maxW) size = Math.max(6, (size * maxW) / tw);
-    if (widest(true) > maxW) {
+    let size = fit(true);
+    if (size < 8) {
       withX = false;
-      size = Math.max(7, Math.min(15, g * 0.36));
-      tw = widest(false);
-      if (tw > maxW) size = Math.max(5.5, (size * maxW) / tw);
+      size = Math.max(5.5, fit(false));
     }
     L = {
       w,

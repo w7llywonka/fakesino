@@ -1,0 +1,417 @@
+/* ---------- Roulette ---------- */
+
+.roulette-stage {
+  --rl-red: #e5384d;
+  --rl-black: #263847;
+  --rl-green: #1a9e55;
+  --rl-line: #34495b;
+  --rl-cell-h: 50px;
+  --rl-row-h: 40px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 16px 14px;
+}
+
+.rl-history {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 14px 0 0;
+  max-width: calc(50% - 160px);
+  z-index: 2;
+}
+
+.rl-hchip {
+  min-width: 40px !important;
+  width: 40px;
+  padding: 0 !important;
+  color: #fff;
+}
+
+.rl-hchip.red {
+  background: var(--rl-red) !important;
+}
+
+.rl-hchip.black {
+  background: var(--rl-black) !important;
+}
+
+.rl-hchip.green {
+  background: var(--rl-green) !important;
+}
+
+.rl-history .rl-hchip:last-child {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+/* Wheel */
+.rl-top {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0 12px;
+  min-height: 220px;
+}
+
+.rl-wheel-wrap {
+  position: relative;
+  width: clamp(200px, 25vw, 290px);
+  aspect-ratio: 1;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.55));
+}
+
+.rl-wheel {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.rl-labels text {
+  fill: #fff;
+  font-size: 7.4px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-family: var(--font);
+}
+
+.rl-ball {
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.7));
+}
+
+.rl-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 27%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: clamp(20px, 2.6vw, 28px);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  background: #16222d;
+  box-shadow: inset 0 0 0 2px rgba(217, 181, 108, 0.9), 0 4px 14px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  transition: background 0.2s;
+}
+
+.rl-badge.idle,
+.rl-badge.spinning {
+  color: var(--text-3);
+}
+
+.rl-badge.spinning span {
+  width: 36%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #d9b56c;
+  animation: spin 0.7s linear infinite;
+}
+
+.rl-badge.red {
+  background: var(--rl-red);
+}
+
+.rl-badge.black {
+  background: #121c25;
+}
+
+.rl-badge.green {
+  background: var(--rl-green);
+}
+
+.rl-badge.pop {
+  animation: rlbadge 0.45s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+@keyframes rlbadge {
+  from {
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+}
+
+.rl-top .result-pop {
+  top: 50%;
+  left: calc(50% + clamp(200px, 25vw, 290px) / 2 + 110px);
+}
+
+/* Table */
+.rl-table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 2px 14px;
+  margin: 0 -2px;
+  scrollbar-width: thin;
+}
+
+.rl-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  grid-template-rows: repeat(3, var(--rl-cell-h)) repeat(2, var(--rl-row-h));
+  min-width: 600px;
+  max-width: 860px;
+  margin: 0 auto;
+  user-select: none;
+}
+
+.rl-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  cursor: pointer;
+  isolation: isolate;
+}
+
+/* Visual tile inset inside the exact grid cell so hit-areas line up with borders. */
+.rl-cell::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 6px;
+  z-index: -1;
+  transition: filter 0.12s, box-shadow 0.12s, opacity 0.2s, background 0.12s;
+}
+
+.rl-num.red::before {
+  background: var(--rl-red);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.rl-num.black::before {
+  background: var(--rl-black);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.rl-num.green::before {
+  background: var(--rl-green);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.rl-zero {
+  font-size: 18px;
+}
+
+.rl-zero::before {
+  border-radius: 22px 6px 6px 22px;
+}
+
+.rl-out {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rl-out::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--rl-line);
+}
+
+.rl-out:hover::before,
+.rl-out.hl::before {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rl-diamond {
+  width: 34px;
+  height: 20px;
+}
+
+.rl-cell.hl::before {
+  filter: brightness(1.28);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75);
+}
+
+.rl-cell > span {
+  pointer-events: none;
+}
+
+/* Bet hit-areas over borders and intersections */
+.rl-hits {
+  position: relative;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.rl-hit {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.rl-hit:hover,
+.rl-hit.hl {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Placed chips */
+.rl-chip {
+  --size: 26px;
+  left: calc(50% - var(--size) / 2);
+  top: calc(50% - var(--size) / 2);
+  width: var(--size);
+  height: var(--size);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  transition: opacity 0.3s, box-shadow 0.3s;
+}
+
+.rl-chip.multi {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85), inset 0 0 0 4px var(--chip), 0 3px 0 -1px var(--chip), 0 3px 0 0 rgba(0, 0, 0, 0.35),
+    0 6px 0 -1px var(--chip), 0 7px 5px -1px rgba(0, 0, 0, 0.5);
+}
+
+.rl-hit .rl-chip {
+  z-index: 4;
+}
+
+.rl-board.locked {
+  pointer-events: none;
+}
+
+/* Result */
+.rl-board.settled .rl-num:not(.win-num)::before {
+  opacity: 0.55;
+}
+
+.rl-cell.win-num::before {
+  filter: brightness(1.2);
+  box-shadow: inset 0 0 0 3px #fff, 0 0 22px rgba(255, 255, 255, 0.45);
+  opacity: 1;
+  animation: rlwin 1s ease-in-out infinite alternate;
+}
+
+@keyframes rlwin {
+  to {
+    box-shadow: inset 0 0 0 3px #fff, 0 0 8px rgba(255, 255, 255, 0.2);
+  }
+}
+
+.rl-out.win::before {
+  background: rgba(34, 211, 107, 0.12);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.rl-chip.won {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.85), inset 0 0 0 4px var(--chip), 0 0 0 2px var(--gold), 0 0 14px 2px rgba(245, 184, 61, 0.75);
+  animation: rlchipwin 0.5s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+@keyframes rlchipwin {
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+.rl-chip.lost {
+  opacity: 0.32;
+}
+
+.rl-info {
+  min-height: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.rl-info b {
+  color: var(--text);
+}
+
+.rl-tools .btn {
+  height: 38px;
+}
+
+.bet-panel .chip-rack {
+  justify-content: space-between;
+  background: var(--bg-deep);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+
+.bet-panel .chip-rack .chip-btn {
+  width: 34px;
+  height: 34px;
+  font-size: 10px;
+}
+
+@media (max-width: 1200px) {
+  .rl-top .result-pop {
+    left: 50%;
+  }
+}
+
+@media (max-width: 900px) {
+  .roulette-stage {
+    padding: 0 12px 10px;
+  }
+  .rl-top {
+    flex-direction: column;
+    padding-top: 0;
+  }
+  .rl-history {
+    position: static;
+    max-width: none;
+    align-self: stretch;
+    padding-bottom: 10px;
+  }
+}
+
+@media (max-width: 600px) {
+  .roulette-stage {
+    --rl-cell-h: 44px;
+    --rl-row-h: 36px;
+  }
+  .rl-top {
+    min-height: 180px;
+    padding-bottom: 8px;
+  }
+  .rl-wheel-wrap {
+    width: 196px;
+  }
+  .rl-badge {
+    font-size: 20px;
+  }
+  .rl-board {
+    min-width: 580px;
+  }
+  .rl-cell {
+    font-size: 13px;
+  }
+  .rl-out {
+    font-size: 11px;
+  }
+  .rl-chip {
+    --size: 22px;
+    font-size: 8px;
+  }
+  .rl-hchip {
+    width: 34px;
+    min-width: 34px !important;
+  }
+  .rl-info {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rl-cell.win-num::before,
+  .rl-badge.pop,
+  .rl-chip.won {
+    animation: none;
+  }
+}

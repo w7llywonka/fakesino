@@ -49,7 +49,7 @@ export default function mountBlackjack(ctx) {
         keepEnabled: true,
         render(box) {
           box.innerHTML = `<div class="bj-moves">${MOVES.map(
-            (m) => `<button type="button" class="btn btn-secondary bj-move" data-act="${m.key}" data-tip="${m.label} (${m.hotkey})" disabled><span>${m.label}</span>${m.icon}</button>`,
+            (m) => `<button type="button" class="btn btn-secondary bj-move" data-act="${m.key}" aria-keyshortcuts="${m.hotkey}" disabled><span>${m.label}</span>${m.icon}</button>`,
           ).join('')}</div>
             <div class="bj-insure bj-hide">
               <button type="button" class="btn btn-secondary bj-move" data-act="insurance"><span>Accept Insurance</span>${svg('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>')}</button>
@@ -108,8 +108,8 @@ export default function mountBlackjack(ctx) {
   }
 
   function showIdle() {
-    dealerRow.innerHTML = '<div class="bj-spot"></div><div class="bj-spot"></div>';
-    playerRow.innerHTML = '<div class="bj-spot"></div><div class="bj-spot"></div>';
+    dealerRow.innerHTML = '<div class="bj-spot"><span>Dealer</span></div>';
+    playerRow.innerHTML = '<div class="bj-spot"><span>Player</span></div>';
     playerRow.classList.remove('split');
     stage.classList.add('idle');
     dealer = null;
@@ -175,8 +175,9 @@ export default function mountBlackjack(ctx) {
   }
 
   function setPrompt(text) {
-    prompt.textContent = text;
+    prompt.innerHTML = text ? `<b>${text}</b><span>Dealer shows an Ace</span>` : '';
     prompt.classList.toggle('show', !!text);
+    stage.classList.toggle('prompting', !!text);
   }
 
   // Deal one card from the shoe into a hand. Face-up cards flip over in flight.

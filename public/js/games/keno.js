@@ -14,6 +14,7 @@ const RISK_OPTIONS = [
 const GEM = `<svg class="kt-gem" viewBox="0 0 40 36" aria-hidden="true"><path d="M10 2h20l8 10-18 22L2 12z" fill="currentColor" opacity=".9"/><path d="M2 12h36L20 34z" fill="currentColor" opacity=".55"/><path d="M10 2l4 10h12l4-10z" fill="#fff" opacity=".45"/><path d="M14 12l6 22 6-22z" fill="#fff" opacity=".18"/></svg>`;
 
 const multText = (m) => (m >= 100 ? `${m}×` : `${m.toFixed(2)}×`);
+const shortText = (m) => `${Number(m.toFixed(2))}×`; // 17×, 1.4×, 0×
 
 // Probability of exactly k hits with n picks when 10 of 40 are drawn.
 function hitChance(n, k) {
@@ -148,10 +149,10 @@ export default function mountKeno(ctx) {
       return;
     }
     const row = TABLES[risk][n];
-    pay.innerHTML = `<div class="keno-pay-row kp-mults" style="--cols:${n + 1}">${row
-      .map((m, k) => `<div class="kp-m" data-k="${k}">${esc(multText(m))}</div>`)
+    pay.innerHTML = `<div class="keno-pay-row kp-mults ${n >= 8 ? 'dense' : ''}" style="--cols:${n + 1}">${row
+      .map((m, k) => `<div class="kp-m" data-k="${k}"><span class="kp-long">${esc(multText(m))}</span><span class="kp-short">${esc(shortText(m))}</span></div>`)
       .join('')}</div>
-      <div class="keno-pay-row kp-hits" style="--cols:${n + 1}">${row
+      <div class="keno-pay-row kp-hits ${n >= 8 ? 'dense' : ''}" style="--cols:${n + 1}">${row
         .map((m, k) => `<div class="kp-h" data-k="${k}" data-tip="${esc(`${multText(m)} · ${fmt.percent(hitChance(n, k) * 100, hitChance(n, k) < 0.0001 ? 4 : 2)} chance`)}"><b>${k}</b><span class="kp-word">${k === 1 ? 'hit' : 'hits'}</span>${GEM}</div>`)
         .join('')}</div>`;
   }

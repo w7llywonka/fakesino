@@ -66,6 +66,8 @@ const DIFF_OPTIONS = [
 ];
 
 const floor2 = (m) => Math.floor(m * 100 + 1e-9) / 100;
+// Tile labels: keep huge Master multipliers short enough for narrow tiles.
+const tileLabel = (m) => (m >= 1000 ? `${Math.floor(m).toLocaleString('en-US')}×` : `${floor2(m).toFixed(2)}×`);
 
 export default function mountTower(ctx) {
   const { api, fmt, sound } = ctx;
@@ -73,6 +75,7 @@ export default function mountTower(ctx) {
   let busy = false;
   let destroyed = false;
   let showingResult = false;
+  let animating = false; // auto round playing out
   let difficulty = 'easy';
   let autoPath = [];
   const timers = new Set();
@@ -130,7 +133,7 @@ export default function mountTower(ctx) {
       const m = multiplierFor(diff, r + 1);
       const row = el(`<div class="tw-row" data-r="${r}">${Array.from(
         { length: cols },
-        (_, c) => `<button type="button" class="tw-tile" data-r="${r}" data-c="${c}" aria-label="Row ${r + 1}, tile ${c + 1}"><span class="tw-mult">${fmt.multiplier(floor2(m))}</span></button>`,
+        (_, c) => `<button type="button" class="tw-tile" data-r="${r}" data-c="${c}" aria-label="Row ${r + 1}, tile ${c + 1}"><span class="tw-mult">${tileLabel(m)}</span></button>`,
       ).join('')}</div>`);
       rowsEl.appendChild(row);
       rows.push({ el: row, tiles: [...row.children] });
@@ -173,7 +176,9 @@ export default function mountTower(ctx) {
   function renderAutoSelection() {
     const auto = panel.mode === 'auto';
     wrap.classList.toggle('auto', auto);
-    if (!auto || showingResult) {
+    const selecting = auto && !showingResult && !animating;
+    wrap.classList.toggle('selecting', selecting);
+    if (!selecting) {
       rows.forEach((row) => row.el.classList.remove('selectable'));
       return;
     }
@@ -376,8 +381,8 @@ export default function mountTower(ctx) {
     if (destroyed) return null;
     ctx.debitView(res);
     sound.bet();
+    animating = true;
     clearTower();
-    rows.forEach((row) => row.el.classList.remove('selectable'));
     const view = res.game.state;
     const anim = ctx.animations();
     for (let r = 0; r < view.picks.length; r++) {
@@ -389,6 +394,7 @@ export default function mountTower(ctx) {
     }
     if (anim) await wait(view.lost ? 320 : 120);
     if (destroyed) return null;
+    animating = false;
     revealAll(view);
     finish(res, { lost: view.lost, quick: true });
     const bet = res.bet;
