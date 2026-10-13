@@ -9,6 +9,8 @@ import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toastSuccess, toastError, toast } from './toast.js';
 import { showFieldErrors } from './forms.js';
+import { qrSvg } from '../shared/qr.js';
+import { networksFor, networkFor, validAddress } from '../shared/networks.js';
 
 const TABS = [
   ['deposit', 'Deposit'],
@@ -387,44 +389,30 @@ function paymentFailed(container, payment, opts) {
 
 // --- crypto deposit -----------------------------------------------------------
 
-function fakeQr(text, size = 29) {
-  let h = 2166136261;
-  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  const rand = () => {
-    h ^= h << 13;
-    h ^= h >>> 17;
-    h ^= h << 5;
-    return (h >>> 0) / 4294967296;
-  };
-  const cells = [];
-  const finder = (x, y) => {
-    for (const [fx, fy] of [[0, 0], [size - 7, 0], [0, size - 7]]) {
-      const dx = x - fx;
-      const dy = y - fy;
-      if (dx >= 0 && dx < 7 && dy >= 0 && dy < 7) return dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4) ? 1 : 0;
-      if (dx >= -1 && dx <= 7 && dy >= -1 && dy <= 7) return 0;
-    }
-    return null;
-  };
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
-      const f = finder(x, y);
-      if (f === 1 || (f === null && rand() < 0.48)) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
-    }
-  return `<svg class="qr" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><g fill="#0f1822">${cells.join('')}</g></svg>`;
+
+// Remember the last network picked per coin.
+const lastNetwork = {};
+
+function networkSelect(code, selected, name = 'network') {
+  const list = networksFor(code);
+  if (list.length < 2) return `<div class="field"><div class="field-label"><span>Network</span></div><div class="input" style="display:flex;align-items:center">${esc(list[0]?.label || '')}</div></div>`;
+  return `<div class="field"><div class="field-label"><span>Choose network</span></div><select class="select" name="${name}">${list.map((n) => `<option value="${n.id}" ${n.id === selected ? 'selected' : ''}>${esc(n.label)}</option>`).join('')}</select></div>`;
 }
 
 function cryptoDeposit(container, code, offs) {
   const view = el('<div><div class="spinner"></div></div>');
   container.appendChild(view);
+  const network = networkFor(code, lastNetwork[code]).id;
   api
-    .post('/api/payments/crypto/address', { currency: code })
+    .post('/api/payments/crypto/address', { currency: code, network })
     .then((info) => {
+      const net = networkFor(code, info.network.id);
       view.innerHTML = `
-        <div class="field"><div class="field-label"><span>Network</span></div><div class="input" style="display:flex;align-items:center">${esc(info.network)}</div></div>
+        ${networkSelect(code, net.id)}
         <div class="field"><div class="field-label"><span>Your ${code} deposit address</span><button class="link" data-act="regen" style="font-size:12px">New address</button></div>
           <div class="address-box"><span style="flex:1" class="addr">${esc(info.address)}</span><button class="btn btn-secondary btn-sm" data-act="copy">${icon('copy', 14)} Copy</button></div></div>
-        <div class="qr-wrap">${fakeQr(info.address)}<div class="muted" style="font-size:12.5px">Only send <b>${code}</b> to this address. Credited after <b>${info.confirmations}</b> confirmation${info.confirmations > 1 ? 's' : ''}.
+        <div class="qr-wrap">${qrSvg(info.address)}<div class="muted" style="font-size:12.5px">Only send <b>${code}</b> via <b>${esc(net.label)}</b> to this address. Other coins or networks will be lost. ${info.confirmations} confirmation${info.confirmations > 1 ? 's' : ''} required.
+          <div style="margin-top:8px">Minimum deposit: <b>${fmt.amount(info.minimum, code)} ${code}</b></div>
           <div class="demo-notice warn" style="margin:10px 0 0">${icon('alert', 16)}<div>This is a fake address that exists on no blockchain. Never send real crypto to it — it would be lost.</div></div></div></div>
         <div class="divider"></div>
         <div style="font-weight:800;margin-bottom:8px">Simulate an incoming transfer</div>
@@ -434,6 +422,11 @@ function cryptoDeposit(container, code, offs) {
           ${[100, 1000].map((u) => `<button class="addon" data-usd="${u}">$${u >= 1000 ? `${u / 1000}k` : u}</button>`).join('')}</div><div class="field-error"></div></div>
         <button class="btn btn-primary btn-block btn-lg" data-act="send">Send test transaction</button>
         <div class="tx-list"></div>`;
+      view.querySelector('select[name=network]')?.addEventListener('change', (e) => {
+        lastNetwork[code] = e.target.value;
+        container.innerHTML = '';
+        cryptoDeposit(container, code, offs);
+      });
       const amountInput = view.querySelector('[data-field=amount] input');
       const aux = view.querySelector('.aux');
       const updateAux = () => (aux.textContent = `≈ ${fmt.fiat(fmt.usdOf(Number(amountInput.value) || 0, code))}`);
@@ -448,7 +441,7 @@ function cryptoDeposit(container, code, offs) {
         toast({ type: 'success', title: 'Address copied' });
       });
       view.querySelector('[data-act=regen]').addEventListener('click', async () => {
-        await api.post('/api/payments/crypto/address', { currency: code, regenerate: true });
+        await api.post('/api/payments/crypto/address', { currency: code, network: net.id, regenerate: true });
         container.innerHTML = '';
         cryptoDeposit(container, code, offs);
       });
@@ -457,7 +450,7 @@ function cryptoDeposit(container, code, offs) {
         const btn = e.currentTarget;
         btn.classList.add('loading');
         try {
-          const { transaction } = await api.post('/api/payments/crypto/simulate', { currency: code, amount: Number(amountInput.value) });
+          const { transaction } = await api.post('/api/payments/crypto/simulate', { currency: code, network: net.id, amount: Number(amountInput.value) });
           txList.prepend(txRow(transaction));
         } catch (err) {
           showFieldErrors(view, err);
@@ -481,7 +474,7 @@ function txRow(tx) {
   const pct = d.required ? Math.min(100, (d.confirmations / d.required) * 100) : 100;
   return el(`<div class="tx-progress" data-tx="${tx.id}">${coin(tx.currency, 22)}
     <div style="flex:1;min-width:0"><div class="row between"><b>${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b>
-      ${tx.status === 'completed' ? '<span class="pill green">Confirmed</span>' : `<span class="pill yellow">${d.confirmations}/${d.required} confirmations</span>`}</div>
+      ${tx.status === 'completed' ? '<span class="pill green">Confirmed</span>' : tx.status === 'failed' ? `<span class="pill red">${esc(d.reason || 'Failed')}</span>` : `<span class="pill yellow">${d.confirmations}/${d.required} confirmations</span>`}</div>
       <div class="progress" style="margin-top:8px"><div style="width:${pct}%"></div></div></div></div>`);
 }
 
@@ -528,12 +521,13 @@ function withdrawTab({ body, offs }) {
     content.innerHTML = '';
     const cfg = state.config.payments;
     const isCrypto = CURRENCIES[code].type === 'crypto';
-    const fee = isCrypto ? roundDown(code, cfg.fees[code] / CURRENCIES[code].usd) : 0;
+    const net = isCrypto ? networkFor(code, lastNetwork[code]) : null;
+    const fee = isCrypto ? net.withdrawFee : 0;
     const cards = state.user.cards || [];
     const view = el(`<form novalidate>
       ${
         isCrypto
-          ? `<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(CURRENCIES[code].network)}</span></label><input class="input mono" name="address" placeholder="Paste any address (demo)" autocomplete="off"><div class="field-error"></div></div>`
+          ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(net.label)}</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>`
           : cards.length
             ? `<div class="field" data-field="card"><div class="field-label">Withdraw to</div><div class="method-list">${cards
                 .map((c, i) => `<label class="method ${i === 0 ? 'selected' : ''}"><input type="radio" name="cardId" value="${c.id}" ${i === 0 ? 'checked' : ''} hidden>${icon('card', 20)}<div><div class="m-title">•••• ${esc(c.last4)}</div><div class="m-sub">${esc(c.name)}</div></div><div class="m-right">${brandChip(c.brand)}</div></label>`)
@@ -546,11 +540,23 @@ function withdrawTab({ body, offs }) {
       <div class="summary"></div>
       <div class="field-error form-error" style="margin-bottom:10px"></div>
       <button class="btn btn-primary btn-block btn-lg" type="submit" ${!isCrypto && !cards.length ? 'disabled' : ''}>Withdraw</button>
-      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Minimum withdrawal $${cfg.withdrawMinUsd} equivalent. Play money leaves your balance and lands nowhere real.</div>
+      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">${isCrypto ? `Minimum withdrawal: ${fmt.amount(net.withdrawMin, code)} ${code} · Network fee: ${fmt.amount(net.withdrawFee, code)} ${code}` : `Minimum withdrawal $${cfg.withdrawMinUsd} equivalent`}. Play money leaves your balance and lands nowhere real.</div>
     </form>`);
     content.appendChild(view);
     const amountInput = view.querySelector('[name=amount]');
     const summary = view.querySelector('.summary');
+    view.querySelector('select[name=network]')?.addEventListener('change', (e) => {
+      lastNetwork[code] = e.target.value;
+      render();
+    });
+    // Flag a malformed address as you type.
+    view.querySelector('[name=address]')?.addEventListener('input', (e) => {
+      const f = view.querySelector('[data-field=address]');
+      const v = e.target.value.trim();
+      const bad = v.length > 6 && !validAddress(code, net.id, v);
+      f.classList.toggle('invalid', bad);
+      f.querySelector('.field-error').textContent = bad ? `Invalid ${code} (${net.label}) address` : '';
+    });
     const update = () => {
       const a = Number(amountInput.value) || 0;
       view.querySelector('.aux').textContent = `Balance ${fmt.amount(balanceOf(code), code)}`;
@@ -571,7 +577,7 @@ function withdrawTab({ body, offs }) {
       btn.classList.add('loading');
       const fd = Object.fromEntries(new FormData(view));
       try {
-        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, amount: Number(fd.amount), address: fd.address, cardId: fd.cardId });
+        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, cardId: fd.cardId });
         setUser(user);
         picker.refresh();
         content.innerHTML = '';
@@ -711,5 +717,15 @@ function tipTab({ body }) {
     if (!pre.username) view.to.focus();
   }
   render();
+}
+
+// Placeholder showing the address format a network expects.
+function addressExample(code, network) {
+  if (code === 'BTC') return 'bc1q… or 1… / 3…';
+  if (code === 'LTC') return 'ltc1… or L… / M…';
+  if (code === 'DOGE') return 'D…';
+  if (network === 'trc20') return 'T… (34 characters)';
+  if (network === 'sol' || code === 'SOL') return 'Base58, 32–44 characters';
+  return '0x… (42 characters)';
 }
 

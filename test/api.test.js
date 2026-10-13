@@ -251,20 +251,32 @@ test('card checkout: 3-D Secure challenge and buying crypto', async () => {
 test('crypto deposits confirm block by block; withdrawals debit immediately', async () => {
   const c = await newPlayer(0);
   const addr = await c.post('/api/payments/crypto/address', { currency: 'LTC' });
-  assert.match(addr.data.address, /^fakeltc1/);
+  assert.match(addr.data.address, /^fakeltc-litecoin1/);
+  assert.equal(addr.data.minimum, 0.001);
   const sim = await c.post('/api/payments/crypto/simulate', { currency: 'LTC', amount: 2 });
   assert.equal(sim.data.transaction.status, 'pending');
+  const dust = await c.post('/api/payments/crypto/simulate', { currency: 'LTC', amount: 0.0001 });
+  assert.equal(dust.data.transaction.status, 'failed');
+  assert.match(dust.data.transaction.details.reason, /below minimum/);
   await new Promise((r) => setTimeout(r, 200));
   const me = await c.get('/api/me');
-  assert.equal(me.data.user.balances.LTC, 2);
-  const tooSmall = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 0.01, address: 'Lsomewhere1234567' });
-  assert.equal(tooSmall.status, 400);
-  const w = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 1, address: 'Lsomewhere1234567' });
+  assert.equal(me.data.user.balances.LTC, 2, 'the dust deposit is never credited');
+  const ltc = 'LcHKk2ayiXbHfBGiyM9x5i1PcybPbWRUW3';
+  assert.match((await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 1, address: 'Lsomewhere1234567' })).data.error, /Invalid LTC \(Litecoin\) address/);
+  const tooSmall = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 0.01, address: ltc });
+  assert.match(tooSmall.data.error, /Minimum withdrawal: 0.01857329 LTC/);
+  const w = await c.post('/api/payments/withdraw', { currency: 'LTC', amount: 1, address: ltc });
   assert.equal(w.data.transaction.status, 'pending');
+  assert.equal(w.data.transaction.details.fee, 0.000138);
   assert.equal(w.data.user.balances.LTC, 1);
   await new Promise((r) => setTimeout(r, 100));
   const txs = await c.get('/api/wallet/transactions?type=withdrawal');
   assert.equal(txs.data.transactions[0].status, 'completed');
+  // USDT has several networks, each with its own address format.
+  const trc = await c.post('/api/payments/crypto/address', { currency: 'USDT', network: 'trc20' });
+  assert.match(trc.data.address, /^fakeusdt-trc201/);
+  assert.equal(trc.data.networks.length, 5);
+  assert.match((await c.post('/api/payments/withdraw', { currency: 'USDT', network: 'trc20', amount: 5, address: '0x' + 'a'.repeat(40) })).data.error, /Invalid USDT \(Tron \(TRC20\)\) address/);
 });
 
 test('dice bets are settled server-side and verifiable after rotation', async () => {

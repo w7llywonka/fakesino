@@ -2019,11 +2019,11 @@ textarea.input {
 }
 
 .qr-wrap svg.qr {
+  flex-shrink: 0;
   background: #fff;
   border-radius: var(--radius-sm);
-  padding: 8px;
-  width: 132px;
-  height: 132px;
+  width: 148px;
+  height: 148px;
 }
 
 .tx-progress {

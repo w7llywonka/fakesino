@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
 import { amountText } from './notify.js';
+import { NETWORKS, networkFor, validAddress } from '../public/js/shared/networks.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
 import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit } from './accounts.js';
@@ -11,13 +12,13 @@ export const CONFIRMATIONS = { BTC: 2, ETH: 6, LTC: 3, SOL: 1, DOGE: 3, USDT: 6,
 export const NETWORK_FEES_USD = { BTC: 2, ETH: 1.5, LTC: 0.05, SOL: 0.01, DOGE: 0.2, USDT: 1, TRX: 1 };
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
-function fakeAddress(currency) {
-  // Deliberately not a valid on-chain address: the "fake" prefix makes it
-  // impossible to send real funds here by mistake.
+function fakeAddress(currency, network = '') {
+  // Deliberately not a valid on-chain address: the "fake" prefix (plus the
+  // network id) makes it impossible to send real funds here by mistake.
   const bytes = crypto.randomBytes(28);
   let body = '';
   for (const b of bytes) body += BASE32[b % 32];
-  return `fake${currency.toLowerCase()}1${body}`;
+  return `fake${currency.toLowerCase()}${network ? `-${network}` : ''}1${body}`;
 }
 
 function txId() {
@@ -230,15 +231,18 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   function depositAddress(user, body) {
     const currency = parseCurrency(user, body.currency);
     if (CURRENCIES[currency].type !== 'crypto') throw badRequest('Choose a crypto currency');
+    const net = networkFor(currency, body.network);
+    const key = `${currency}:${net.id}`;
     user.addresses ||= {};
-    if (!user.addresses[currency] || body.regenerate) user.addresses[currency] = fakeAddress(currency);
+    if (!user.addresses[key] || body.regenerate) user.addresses[key] = fakeAddress(currency, net.id);
     store.save();
     return {
       currency,
-      network: CURRENCIES[currency].network,
-      address: user.addresses[currency],
-      confirmations: CONFIRMATIONS[currency],
-      minimum: roundDown(currency, fromUsd(currency, 1)),
+      network: { id: net.id, label: net.label },
+      networks: NETWORKS[currency].map(({ id, label }) => ({ id, label })),
+      address: user.addresses[key],
+      confirmations: net.confirmations,
+      minimum: net.depositMin,
     };
   }
 
@@ -251,19 +255,28 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     if (amount <= 0) throw badRequest('Enter an amount');
     if (toUsd(currency, amount) > 1_000_000) throw badRequest('Maximum simulated deposit is $1,000,000 equivalent');
     assertNotOnBreak(user);
+    const net = networkFor(currency, body.network);
+    const address = user.addresses?.[`${currency}:${net.id}`] || null;
+    if (amount < net.depositMin) {
+      // Like a real chain: the transfer happens, but it is never credited.
+      const tx = addTx(user, { type: 'deposit', method: 'crypto', status: 'failed', currency, amount, details: { address, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), reason: 'Not credited: below minimum', minimum: net.depositMin } });
+      store.save();
+      return { transaction: publicTx(tx) };
+    }
     assertDepositLimit(store, user, toUsd(currency, amount));
-    const required = CONFIRMATIONS[currency];
+    const required = net.confirmations;
     const tx = addTx(user, {
       type: 'deposit',
       method: 'crypto',
       status: 'pending',
       currency,
       amount,
-      details: { address: user.addresses?.[currency] || null, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required },
+      details: { address, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required },
     });
     store.save();
     notify(user.id, { kind: 'deposit', title: 'Deposit detected', message: `${amountText(amount, currency)} is on its way · 0/${required} confirmations.`, link: '/transactions/deposits' });
-    const step = Number(process.env.FAKESINO_CONFIRM_MS ?? 1500);
+    // Long confirmation counts (Polygon, BSC) are compressed to ~20 s overall.
+    const step = Math.min(Number(process.env.FAKESINO_CONFIRM_MS ?? 1500), 20000 / required);
     const confirm = () => {
       tx.details.confirmations++;
       tx.updatedAt = Date.now();
@@ -285,16 +298,18 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   function withdraw(user, body) {
     const currency = parseCurrency(user, body.currency);
     const amount = parseAmount(currency, body.amount);
-    if (toUsd(currency, amount) < WITHDRAW_MIN_USD) throw badRequest(`Minimum withdrawal is $${WITHDRAW_MIN_USD} equivalent`, { field: 'amount' });
     const isCrypto = CURRENCIES[currency].type === 'crypto';
+    if (!isCrypto && toUsd(currency, amount) < WITHDRAW_MIN_USD) throw badRequest(`Minimum withdrawal is $${WITHDRAW_MIN_USD} equivalent`, { field: 'amount' });
     let details;
     let fee = 0;
     if (isCrypto) {
+      const net = networkFor(currency, body.network);
       const address = String(body.address || '').trim();
-      if (address.length < 10 || address.length > 120 || /\s/.test(address)) throw badRequest('Enter a valid withdrawal address', { field: 'address' });
-      fee = roundDown(currency, fromUsd(currency, NETWORK_FEES_USD[currency]));
+      if (!validAddress(currency, net.id, address)) throw badRequest(`Invalid ${currency} (${net.label}) address`, { field: 'address' });
+      if (amount < net.withdrawMin) throw badRequest(`Minimum withdrawal: ${amountText(net.withdrawMin, currency)}`, { field: 'amount' });
+      fee = net.withdrawFee;
       if (amount <= fee) throw badRequest('Amount must be larger than the network fee', { field: 'amount' });
-      details = { address, network: CURRENCIES[currency].network, fee };
+      details = { address, network: net.id, networkLabel: net.label, fee };
     } else {
       const saved = (user.cards || []).find((c) => c.id === body.cardId);
       if (!saved) throw badRequest('Choose a saved card to withdraw to', { field: 'card' });
@@ -411,6 +426,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       limits: DEPOSIT_LIMITS,
       confirmations: CONFIRMATIONS,
       fees: NETWORK_FEES_USD,
+      networks: NETWORKS,
       withdrawMinUsd: WITHDRAW_MIN_USD,
       threeDSCode: DEMO_3DS_CODE,
     }),
