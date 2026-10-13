@@ -678,6 +678,32 @@ test('unhash reveals a rotated server seed, never the active one', async () => {
   assert.equal((await other.get(`/api/fair/unhash?hash=${active.serverSeedHash}`)).status, 404);
 });
 
+test('my bets page back with a cursor; daily archive', async () => {
+  const c = await newPlayer(100);
+  for (let i = 0; i < 7; i++) {
+    const game = i % 2 ? 'limbo' : 'dice';
+    const params = game === 'dice' ? { target: 50, condition: 'over' } : { target: 2 };
+    assert.equal((await c.post(`/api/games/${game}/bet`, { amount: 0.1, currency: 'USD', params })).status, 200);
+  }
+  const p1 = (await c.get('/api/bets/mine?limit=3')).data;
+  assert.equal(p1.bets.length, 3);
+  assert.equal(p1.hasMore, true);
+  const p2 = (await c.get(`/api/bets/mine?limit=3&before=${p1.bets[2].id}`)).data;
+  assert.ok(p2.bets.every((b) => b.id < p1.bets[2].id));
+  const p3 = (await c.get(`/api/bets/mine?limit=3&before=${p2.bets[2].id}`)).data;
+  assert.equal(p3.bets.length, 1);
+  assert.equal(p3.hasMore, false);
+  const dice = (await c.get('/api/bets/mine?limit=50&game=dice')).data.bets;
+  assert.equal(dice.length, 4);
+  const { days } = (await c.get('/api/bets/archive')).data;
+  assert.equal(days.length, 1);
+  assert.equal(days[0].bets, 7);
+  const day = (await c.get(`/api/bets/archive/${days[0].day}`)).data;
+  assert.equal(day.bets.length, 7);
+  assert.ok(day.bets.every((b) => !('userId' in b)));
+  assert.equal((await c.get('/api/bets/archive/yesterday')).status, 400);
+});
+
 test('wallet display settings: hide zero, display fiat currency', async () => {
   const c = await newPlayer(0);
   assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');

@@ -2,7 +2,8 @@ import { el, esc, on } from '../dom.js';
 import { icon, coin } from '../icons.js';
 import { api } from '../api.js';
 import { state, bus } from '../state.js';
-import { bySlug } from '../games/registry.js';
+import { bySlug, GAMES } from '../games/registry.js';
+import { toastError } from '../ui/toast.js';
 import { navigate, setQuery } from '../router.js';
 import { brandChip } from '../ui/wallet.js';
 import * as fmt from '../format.js';
@@ -16,6 +17,7 @@ const TABS = [
   ['bonuses', 'Bonuses', 'bonus'],
   ['vault', 'Vault', 'vault'],
   ['bets', 'Bets', null],
+  ['archive', 'Archive', null],
 ];
 
 const STATUS = { completed: 'green', pending: 'yellow', failed: 'red' };
@@ -41,18 +43,42 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
     <div class="tabs tx-tabs" style="margin-bottom:16px">${TABS.map(([k, l]) => `<a class="tab ${k === tab ? 'active' : ''}" href="/transactions/${k}">${l}</a>`).join('')}</div>
     <div class="row tx-filters" style="gap:10px;margin-bottom:12px;flex-wrap:wrap">
       ${tab === 'bonuses' ? '<div class="segmented" data-bonus><button type="button" data-v="claimed" class="active">Claimed</button><button type="button" data-v="unclaimed">Unclaimed</button></div>' : ''}
-      ${tab !== 'bets' && tab !== 'vault' ? `<select class="select" data-status style="width:auto;min-width:150px"><option value="">All statuses</option><option value="completed">Completed</option><option value="pending">Pending</option><option value="failed">Failed</option></select>` : ''}
+      ${tab === 'bets' ? `<select class="select" data-game style="width:auto;min-width:170px"><option value="">All games</option>${GAMES.map((g) => `<option value="${g.slug}">${esc(g.name)}</option>`).join('')}</select>` : ''}
+      ${!['bets', 'vault', 'archive'].includes(tab) ? `<select class="select" data-status style="width:auto;min-width:150px"><option value="">All statuses</option><option value="completed">Completed</option><option value="pending">Pending</option><option value="failed">Failed</option></select>` : ''}
     </div>
-    <div class="table-wrap"><table class="table"><thead></thead><tbody><tr><td><div class="spinner"></div></td></tr></tbody></table></div></div>`);
+    <div class="table-wrap"><table class="table"><thead></thead><tbody><tr><td><div class="spinner"></div></td></tr></tbody></table></div>
+    <div class="pager" hidden><button class="btn btn-secondary btn-sm" data-page="prev">${icon('left', 14)} Previous</button><span class="dim pager-label"></span><button class="btn btn-secondary btn-sm" data-page="next">Next ${icon('right', 14)}</button></div></div>`);
   page.appendChild(root);
   const thead = root.querySelector('thead');
   const tbody = root.querySelector('tbody');
   const filters = root.querySelector('.tx-filters');
   if (!filters.children.length) filters.remove();
 
+  const pager = root.querySelector('.pager');
+  let game = '';
+  const cursors = []; // `before` ids of the pages behind this one
+  let before = null;
+  const PAGE = 25;
+
   const load = async () => {
+    if (tab === 'archive') {
+      const { days } = await api.get('/api/bets/archive');
+      thead.innerHTML = '<tr><th>Date (UTC)</th><th class="r">Bets</th><th class="r hide-mobile">Wagered</th><th class="r"></th></tr>';
+      tbody.innerHTML = days.length
+        ? days
+            .map((d) => `<tr><td>${esc(d.day)}</td><td class="r">${d.bets.toLocaleString()}</td><td class="r hide-mobile">${fmt.fiat(d.wageredUsd)}</td>
+              <td class="r"><button class="btn btn-secondary btn-sm" data-archive="${esc(d.day)}">${icon('arrowDown', 14)} JSON</button></td></tr>`)
+            .join('')
+        : '<tr><td colspan="4"><div class="empty">No bets to archive yet.</div></td></tr>';
+      return;
+    }
     if (tab === 'bets') {
-      const { bets } = await api.get('/api/bets/mine?limit=100');
+      const { bets, hasMore } = await api.get(`/api/bets/mine?limit=${PAGE}${game ? `&game=${game}` : ''}${before ? `&before=${before}` : ''}`);
+      pager.hidden = !cursors.length && !hasMore;
+      pager.querySelector('[data-page=prev]').disabled = !cursors.length;
+      pager.querySelector('[data-page=next]').disabled = !hasMore;
+      pager.querySelector('[data-page=next]').dataset.before = bets.length ? bets[bets.length - 1].id : '';
+      pager.querySelector('.pager-label').textContent = `Page ${cursors.length + 1}`;
       thead.innerHTML = '<tr><th>Game</th><th>Bet ID</th><th class="hide-mobile">Date</th><th class="r">Bet Amount</th><th class="r">Multiplier</th><th class="r">Payout</th></tr>';
       tbody.innerHTML = bets.length
         ? bets
@@ -90,6 +116,35 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
   const reload = () => load().catch((err) => (tbody.innerHTML = `<tr><td><div class="empty">${esc(err.message)}</div></td></tr>`));
 
   on(root, 'click', 'tr[data-bet]', (e, tr) => setQuery({ modal: 'bet', id: tr.dataset.bet }));
+  root.querySelector('[data-game]')?.addEventListener('change', (e) => {
+    game = e.target.value;
+    cursors.length = 0;
+    before = null;
+    reload();
+  });
+  on(root, 'click', '[data-page]', (e, b) => {
+    if (b.dataset.page === 'next') {
+      cursors.push(before);
+      before = Number(b.dataset.before);
+    } else before = cursors.pop() ?? null;
+    reload();
+  });
+  on(root, 'click', '[data-archive]', async (e, b) => {
+    b.classList.add('loading');
+    try {
+      const data = await api.get(`/api/bets/archive/${b.dataset.archive}`);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: `fakesino-bets-${data.day}.json` });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      b.classList.remove('loading');
+    }
+  });
   on(root, 'click', 'tr[data-tx]', (e, tr) => setQuery({ modal: 'tx', id: tr.dataset.tx }));
   root.querySelector('[data-status]')?.addEventListener('change', (e) => {
     status = e.target.value;
@@ -101,7 +156,7 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
     root.querySelector('[data-status]').hidden = bonusView === 'unclaimed';
     reload();
   });
-  const off = bus.on('live:tx', () => tab !== 'bets' && reload());
+  const off = bus.on('live:tx', () => tab !== 'bets' && tab !== 'archive' && reload());
   reload();
   return () => off();
 }

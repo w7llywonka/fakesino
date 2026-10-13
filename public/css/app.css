@@ -3698,3 +3698,11 @@ textarea.input {
   overflow-x: auto;
   max-width: 100%;
 }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+}

@@ -248,14 +248,41 @@ export function createEngine({ store, live }) {
     return out;
   }
 
-  function myBets(user, { limit = 50, game } = {}) {
+  // Newest first; `before` (a bet id) pages further back.
+  function myBets(user, { limit = 50, game, before } = {}) {
     const out = [];
     const bets = store.data.bets;
-    for (let i = bets.length - 1; i >= 0 && out.length < limit; i--) {
+    let more = false;
+    for (let i = bets.length - 1; i >= 0; i--) {
       const b = bets[i];
-      if (b.userId === user.id && (!game || b.game === game)) out.push(myBet(b));
+      if (b.userId !== user.id || (game && b.game !== game) || (before && b.id >= before)) continue;
+      if (out.length === limit) {
+        more = true;
+        break;
+      }
+      out.push(myBet(b));
     }
+    out.hasMore = more;
     return out;
+  }
+
+  // Bet archive: one JSON file per UTC day.
+  const dayOf = (ts) => new Date(ts).toISOString().slice(0, 10);
+  function archiveDays(user) {
+    const days = new Map();
+    for (const b of store.data.bets) {
+      if (b.userId !== user.id) continue;
+      const d = dayOf(b.createdAt);
+      const e = days.get(d) || { day: d, bets: 0, wageredUsd: 0 };
+      e.bets++;
+      e.wageredUsd += b.amountUsd || 0;
+      days.set(d, e);
+    }
+    return [...days.values()].reverse().map((e) => ({ ...e, wageredUsd: Math.round(e.wageredUsd * 100) / 100 }));
+  }
+  function archiveDay(user, day) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw badRequest('Use a YYYY-MM-DD date');
+    return store.data.bets.filter((b) => b.userId === user.id && dayOf(b.createdAt) === day).map(myBet);
   }
 
   function recentBets({ limit = 30, minUsd = 0, game } = {}) {
@@ -270,5 +297,5 @@ export function createEngine({ store, live }) {
     return out;
   }
 
-  return { playInstant, startStateful, actStateful, getActive, betDetails, myBets, recentBets, recordBet, publicBet, myBet, onBet };
+  return { playInstant, startStateful, actStateful, getActive, betDetails, myBets, archiveDays, archiveDay, recentBets, recordBet, publicBet, myBet, onBet };
 }

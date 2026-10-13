@@ -270,7 +270,15 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.post('/api/crash/cancel', authed((ctx) => crash.cancelBet(ctx.user)));
 
   // --- Bets & stats -------------------------------------------------------------------
-  router.get('/api/bets/mine', authed((ctx) => ({ bets: engine.myBets(ctx.user, { limit: Math.min(200, Number(ctx.query.get('limit')) || 50), game: ctx.query.get('game') || undefined }) })));
+  router.get(
+    '/api/bets/mine',
+    authed((ctx) => {
+      const bets = engine.myBets(ctx.user, { limit: Math.min(200, Number(ctx.query.get('limit')) || 50), game: ctx.query.get('game') || undefined, before: Number(ctx.query.get('before')) || undefined });
+      return { bets, hasMore: bets.hasMore };
+    }),
+  );
+  router.get('/api/bets/archive', authed((ctx) => ({ days: engine.archiveDays(ctx.user) })));
+  router.get('/api/bets/archive/:day', authed((ctx) => ({ day: ctx.params.day, bets: engine.archiveDay(ctx.user, ctx.params.day) })));
   router.get('/api/bets/recent', (ctx) =>
     ({ bets: engine.recentBets({ limit: Math.min(100, Number(ctx.query.get('limit')) || 30), minUsd: Number(ctx.query.get('minUsd')) || 0, game: ctx.query.get('game') || undefined }) }),
   );
