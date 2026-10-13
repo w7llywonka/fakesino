@@ -2,6 +2,7 @@ import { el, esc, on } from '../dom.js';
 import { setQuery } from '../router.js';
 import { DEMO_CARDS } from '../shared/cards.js';
 import { openModal } from './modal.js';
+import { helpFaq } from '../i18n.js';
 
 // Help Center: searchable answers about how this play-money site works.
 const FAQ = [
@@ -30,15 +31,25 @@ const FAQ = [
   ['Responsible gaming', 'Can I limit myself?', 'Set a daily deposit limit or take a break in <a class="link" href="/settings/limits">Settings → Responsible Gaming</a>. Even with play money, it’s good practice.'],
 ];
 
+const CARDS = Object.keys(DEMO_CARDS)
+  .slice(0, 3)
+  .map((n) => `<code>${n.replace(/(\d{4})(?=\d)/g, '$1 ')}</code>`)
+  .join(', ');
+// Translated entries (same order as FAQ) when a language pack is loaded.
+const entries = () => {
+  const t = helpFaq();
+  return t && t.length === FAQ.length ? t.map(([c, q, a]) => [c, q, a.replace('{cards}', CARDS)]) : FAQ;
+};
+
 export function openHelpModal() {
   const view = el(`<div class="help">
     <input class="input" type="search" placeholder="Search help articles" aria-label="Search help articles">
     <div class="help-list"></div>
-    <div class="muted" style="font-size:12px;margin-top:12px">Fakesino has no human support team — it’s a play-money demo. Can’t find an answer? Ask in <button class="link" data-act="chat">Live Chat</button>.</div></div>`);
+    <div class="muted" style="font-size:12px;margin-top:12px"><span>Fakesino has no human support team — it’s a play-money demo.</span> <button class="link" data-act="chat">Ask in Live Chat</button></div></div>`);
   const list = view.querySelector('.help-list');
   const render = (q = '') => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const hits = FAQ.filter(([cat, qn, a]) => words.every((w) => `${cat} ${qn} ${a}`.toLowerCase().includes(w)));
+    const hits = entries().filter(([cat, qn, a]) => words.every((w) => `${cat} ${qn} ${a}`.toLowerCase().includes(w)));
     let lastCat = null;
     list.innerHTML = hits.length
       ? hits

@@ -86,10 +86,10 @@ export default async function gamePage(page, { slug }) {
     const how = meta.howTo || [];
     const keys = [['Space', 'bet'], ['S', 'double bet'], ['A', 'halve bet'], ['D', 'zero bet'], ...(meta.hotkeys || []).map(([k, l]) => [k, l.toLowerCase()])];
     giBody.innerHTML = `<div class="gi-desc"><div class="thumb">${gameArt(slug, meta.name)}</div><div>
-      <div class="gi-tags"><span class="pill">Provably Fair</span><span class="pill">${esc(catName)}</span><span class="pill">${esc(KIND_TAGS[meta.kind] || 'Instant')}</span><span class="pill green">RTP ${meta.rtp}%</span><span class="pill">House Edge ${(100 - meta.rtp).toFixed(2).replace(/\.?0+$/, '')}%</span></div>
+      <div class="gi-tags"><span class="pill">Provably Fair</span><span class="pill">${esc(catName)}</span><span class="pill">${esc(KIND_TAGS[meta.kind] || 'Instant')}</span><span class="pill green">RTP ${meta.rtp}%</span><span class="pill"><span>House Edge</span> ${(100 - meta.rtp).toFixed(2).replace(/\.?0+$/, '')}%</span></div>
       <p>${esc(meta.desc)}</p>
       ${how.length ? `<div class="gi-how"><b>How to play</b><ol>${how.map((h) => `<li>${esc(h)}</li>`).join('')}</ol></div>` : ''}
-      <p>Every result is generated from ${meta.kind === 'multiplayer' ? "the round's pre-committed hash chain" : 'your server seed, client seed and nonce'} and can be checked independently in <a class="link" href="?modal=fairness&tab=${meta.kind === 'multiplayer' ? 'crash' : 'verify'}">the verifier</a>.</p>
+      <p><span>${meta.kind === 'multiplayer' ? 'Every result comes from the round’s pre-committed hash chain and can be checked independently.' : 'Every result comes from your server seed, client seed and nonce and can be checked independently.'}</span> <a class="link" href="?modal=fairness&tab=${meta.kind === 'multiplayer' ? 'crash' : 'verify'}">Open the verifier</a></p>
       <p class="dim">Hotkeys: ${keys.map(([k, l]) => `<span class="kbd">${esc(k)}</span> ${esc(l)}`).join(' · ')}</p></div></div>`;
   }
   async function wins(type) {

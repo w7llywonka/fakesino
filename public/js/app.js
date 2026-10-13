@@ -158,7 +158,7 @@ async function boot() {
   attachReferral();
   state.config = config;
   initRegistry(config.games);
-  initI18n();
+  await initI18n();
   const { page } = renderShell(document.getElementById('app'));
   pageEl = page;
   initTooltips();

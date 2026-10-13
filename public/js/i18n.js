@@ -1,4 +1,5 @@
 import { ROWS, LANG_ORDER } from './i18n-strings.js';
+import { GAME_EN } from './i18n/game-en.js';
 
 // Interface translation. Pages are written in English; once a language is
 // chosen, text nodes and labels whose whole text is a known UI string are
@@ -46,7 +47,7 @@ export const t = (s) => (dict && dict.get(s)) || s;
 function translateText(node) {
   const raw = node.nodeValue;
   const s = raw.trim();
-  if (!s || s.length > 240) return;
+  if (!s || s.length > 600) return;
   const tr = dict.get(s);
   if (tr && tr !== s) node.nodeValue = raw.replace(s, tr);
 }
@@ -59,15 +60,28 @@ function translateEl(elm) {
   }
 }
 
+// Inputs keep what was typed, but their placeholder and labels translate.
+const FIELDS = 'input, textarea';
+
 function walk(root) {
   if (root.nodeType === 3) {
     if (!root.parentElement?.closest(SKIP)) translateText(root);
     return;
   }
-  if (root.nodeType !== 1 || root.closest(SKIP)) return;
+  if (root.nodeType !== 1) return;
+  if (root.closest(SKIP)) {
+    if (root.matches(FIELDS) && !root.parentElement?.closest(SKIP)) translateEl(root);
+    return;
+  }
   translateEl(root);
   const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
-    acceptNode: (n) => (n.nodeType === 1 && n.matches(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    acceptNode: (n) => {
+      if (n.nodeType === 1 && n.matches(SKIP)) {
+        if (n.matches(FIELDS)) translateEl(n);
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
   });
   for (let n = tw.nextNode(); n; n = tw.nextNode()) {
     if (n.nodeType === 3) translateText(n);
@@ -75,16 +89,28 @@ function walk(root) {
   }
 }
 
-export function initI18n() {
+// Long texts (game descriptions, help answers) for the chosen language.
+let pack = null;
+export const helpFaq = () => pack?.FAQ || null;
+
+export async function initI18n() {
   const lang = currentLanguage();
   document.documentElement.lang = lang;
   if (lang === 'en') return;
   const col = LANG_ORDER.indexOf(lang) + 1;
   dict = new Map(ROWS.map((r) => [r[0], r[col]]));
+  try {
+    pack = await import(`./i18n/${lang}.js`);
+    GAME_EN.forEach((en, i) => pack.GAME[i] && dict.set(en, pack.GAME[i]));
+  } catch {
+    /* short UI strings still apply */
+  }
   walk(document.body);
   new MutationObserver((records) => {
     for (const r of records) {
-      if (r.type === 'attributes') translateEl(r.target);
+      if (r.type === 'attributes') {
+        if (!r.target.closest(SKIP) || r.target.matches(FIELDS)) translateEl(r.target);
+      }
       else if (r.type === 'characterData') {
         if (!r.target.parentElement?.closest(SKIP)) translateText(r.target);
       } else for (const n of r.addedNodes) walk(n);
