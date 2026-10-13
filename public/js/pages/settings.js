@@ -197,9 +197,9 @@ export default function settingsPage(page, { tab = 'general' }) {
         body.innerHTML = `<h3 style="margin-top:0">Offers</h3>
           ${
             welcome.available
-              ? `<div class="offer-card"><div><div class="t">${icon('gift', 18)} Welcome offer</div><div class="d">New wallets can claim ${fmt.fiat(welcome.valueUsd)} of play money once, within 24 hours. Code: <b class="mono">WELCOME</b> · ${Math.max(1, Math.floor(left / 3600000))}h left</div></div><button class="btn btn-primary" data-redeem="WELCOME">Claim</button></div>`
+              ? `<div class="offer-card"><div><div class="t">${icon('gift', 18)} Welcome offer</div><div class="d">New wallets can claim ${fmt.fiat(welcome.valueUsd)} of play money once, within 24 hours (wager it 3× before withdrawing). Code: <b class="mono">WELCOME</b> · ${Math.max(1, Math.floor(left / 3600000))}h left</div></div><button class="btn btn-primary" data-redeem="WELCOME">Claim</button></div>`
               : welcome.claimed
-                ? `<div class="offer-card claimed"><div><div class="t">${icon('check', 18)} Welcome offer claimed</div><div class="d">You used the code ${esc(welcome.claimed)}.</div></div></div>`
+                ? `<div class="offer-card claimed"><div><div class="t">${icon('check', 18)} Welcome offer claimed</div><div class="d">You used the code ${esc(welcome.claimed)}.${state.user.wagering?.remainingUsd > 0 ? ` $${state.user.wagering.remainingUsd.toFixed(2)} left to wager.` : ''}</div></div></div>`
                 : ''
           }
           <form class="offer-form" novalidate><div class="field"><div class="field-label">Redeem bonus drop</div>

@@ -18,6 +18,7 @@ const FAQ = [
   ['Games', 'What is Trenball?', 'Side bets on a Crash round: Red wins if it busts below 2× (pays 1.96×), Green at 2× or more (pays 2×), Moon at 10× or more (pays 10×).'],
   ['Games', 'Are there keyboard shortcuts?', 'Yes. Turn on hotkeys from the keyboard icon under a game: Space bets, S doubles, A halves, D zeroes the amount, plus game-specific keys.'],
   ['Games', 'What are the bet limits?', 'Each currency has a maximum bet and a maximum profit per bet. The Max button picks the largest stake allowed at the current multiplier.'],
+  ['Rewards', 'Do bonuses have wagering requirements?', 'The welcome bonus must be wagered 3× and chat bonus drops 1× before you can withdraw or tip. Progress shows in the Withdraw tab. VIP bonuses, rakeback, race prizes and affiliate commission have no wagering.'],
   ['Rewards', 'How does the VIP Club work?', 'Your rank rises with the amount you wager. Higher ranks unlock rakeback, daily, weekly and monthly bonuses and level-up rewards. See <a class="link" href="/vip">VIP Club</a>.'],
   ['Rewards', 'What is the Daily Race?', 'The top 10 by wager in each UTC day share $2,000 of play money, paid automatically when the day ends. Track it on the <a class="link" href="/leaderboard">Leaderboard</a>.'],
   ['Rewards', 'How does the affiliate program work?', 'Create a campaign in <a class="link" href="/affiliate/campaigns">Affiliate</a> and share its link. New players who join through it earn you house edge × wagered ÷ 2 × 10%, claimable in any currency.'],

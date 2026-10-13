@@ -6,7 +6,7 @@ import { requireTwoFactor } from './totp.js';
 import { PROVIDERS, quote, quotes, BUY_MIN_USD } from '../public/js/shared/onramps.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
-import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit } from './accounts.js';
+import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit, assertWagered } from './accounts.js';
 
 export const DEPOSIT_LIMITS = { min: 10, max: 100000 }; // in fiat units
 export const WITHDRAW_MIN_USD = 5;
@@ -404,6 +404,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       details = { brand: saved.brand, last4: saved.last4 };
     }
     if (!(amount <= (user.balances[currency] || 0) + 1e-12)) throw badRequest('Insufficient balance', { field: 'amount', code: 'insufficient_balance' });
+    assertWagered(user);
     requireTwoFactor(user, body.code);
     debit(user, currency, amount);
     const tx = addTx(user, { type: 'withdrawal', method: isCrypto ? 'crypto' : 'card', status: 'pending', currency, amount, details });

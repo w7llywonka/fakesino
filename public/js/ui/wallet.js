@@ -8,7 +8,7 @@ import * as fmt from '../format.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toastSuccess, toastError, toast } from './toast.js';
-import { showFieldErrors, twoFactorField } from './forms.js';
+import { showFieldErrors, twoFactorField, wageringNotice } from './forms.js';
 import { qrSvg } from '../shared/qr.js';
 import { networksFor, networkFor, validAddress } from '../shared/networks.js';
 
@@ -767,6 +767,7 @@ function withdrawTab({ body, offs }) {
     const fee = isCrypto ? net.withdrawFee : 0;
     const cards = state.user.cards || [];
     const view = el(`<form novalidate>
+      ${wageringNotice(state.user, 'withdraw')}
       ${
         isCrypto
           ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(net.label)}</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>
@@ -1055,6 +1056,7 @@ function tipTab({ body }) {
   function render() {
     content.innerHTML = '';
     const view = el(`<form novalidate>
+      ${wageringNotice(state.user, 'tip')}
       <div class="field" data-field="to"><div class="field-label">Username</div><input class="input" name="to" autocomplete="off" placeholder="Who are you tipping?" value="${esc(pre.username || '')}"><div class="field-error"></div></div>
       <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="aux dim"></span></div>
         <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${fmt.inputAmount(pre.amount || 0, code)}"><span class="suffix">${coin(code)}</span></div><button type="button" class="addon" data-act="max">Max</button></div><div class="field-error"></div></div>

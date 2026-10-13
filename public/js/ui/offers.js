@@ -1,7 +1,7 @@
 import { el, esc } from '../dom.js';
 import { coin } from '../icons.js';
 import { api } from '../api.js';
-import { state, setBalance } from '../state.js';
+import { state, setBalance, setUser } from '../state.js';
 import { CURRENCY_CODES, CURRENCIES } from '../shared/currencies.js';
 import { openModal } from './modal.js';
 import { toastSuccess } from './toast.js';
@@ -23,7 +23,9 @@ export function openRedeem(code = '', { onDone } = {}) {
     try {
       const r = await api.post('/api/offers/redeem', { code: body.code.value.trim(), currency });
       setBalance(r.balance.currency, r.balance.amount);
-      toastSuccess('Bonus redeemed', `${fmt.money(r.amount, r.currency)} ${CURRENCIES[r.currency].type === 'crypto' ? r.currency : ''} added to your wallet`.trim());
+      if (r.user) setUser(r.user);
+      const wager = r.user?.wagering?.remainingUsd > 0 ? ` Wager $${r.user.wagering.remainingUsd.toFixed(2)} before withdrawing.` : '';
+      toastSuccess('Bonus redeemed', `${fmt.money(r.amount, r.currency)}${CURRENCIES[r.currency].type === 'crypto' ? ` ${r.currency}` : ''} added to your wallet.${wager}`);
       modal.close();
       onDone?.(r);
     } catch (err) {

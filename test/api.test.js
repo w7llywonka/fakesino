@@ -676,6 +676,23 @@ test('offers: welcome code once per new wallet, drop codes with wager and claim 
   assert.ok(chat.some((m) => m.code === code), 'DropBot posts the code in chat');
 });
 
+test('bonus wagering: welcome bonus must be wagered 3x before withdrawing or tipping', async () => {
+  const c = await newPlayer(0);
+  const r = await c.post('/api/offers/redeem', { code: 'WELCOME', currency: 'USD' });
+  assert.deepEqual(r.data.user.wagering, { requiredUsd: 60, remainingUsd: 60 });
+  const w = await c.post('/api/payments/withdraw', { currency: 'USD', amount: 10, cardId: 'x' });
+  assert.equal(w.status, 400);
+  const other = await newPlayer(0);
+  const tip = await c.post('/api/tips', { to: (await other.get('/api/me')).data.user.username, amount: 1, currency: 'USD' });
+  assert.equal(tip.data.code, 'wager_requirement');
+  for (let i = 0; i < 4; i++) await c.post('/api/games/limbo/bet', { amount: 10, currency: 'USD', params: { target: 1.01 } });
+  assert.equal((await c.get('/api/me')).data.user.wagering.remainingUsd, 20);
+  assert.match((await c.post('/api/tips', { to: (await other.get('/api/me')).data.user.username, amount: 1, currency: 'USD' })).data.error, /Wager \$20\.00 more/);
+  for (let i = 0; i < 2; i++) await c.post('/api/games/limbo/bet', { amount: 10, currency: 'USD', params: { target: 1.01 } });
+  assert.equal((await c.get('/api/me')).data.user.wagering.remainingUsd, 0);
+  assert.equal((await c.post('/api/tips', { to: (await other.get('/api/me')).data.user.username, amount: 1, currency: 'USD' })).status, 200);
+});
+
 test('new coins: XRP deposits use a shared address plus destination tag; USDC, BNB, BCH credit', async () => {
   const a = await newPlayer(0);
   const b = await newPlayer(0);

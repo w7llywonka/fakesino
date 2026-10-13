@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { HttpError, badRequest, rateLimiter } from '../http.js';
-import { parseCurrency, credit } from '../accounts.js';
+import { parseCurrency, credit, addWagerRequirement, WAGER_TIMES } from '../accounts.js';
 import { roundDown, fromUsd } from '../../public/js/shared/currencies.js';
 import { amountText } from '../notify.js';
 import { postSystem } from '../chatlog.js';
@@ -12,7 +12,7 @@ const DROP_EVERY = 4 * 3600000;
 
 // Promo codes (play money): a one-time welcome code for new wallets, and
 // bonus drops that DropBot posts in chat every four hours.
-export default function register({ router, store, live, payments, notify, authed }) {
+export default function register({ router, store, live, payments, notify, authed, publicUser }) {
   const codes = (store.data.promoCodes ||= {});
   codes[WELCOME_CODE] ||= { code: WELCOME_CODE, kind: 'welcome', valueUsd: WELCOME_USD, maxClaims: null, claims: 0, expiresAt: null, minWager7dUsd: 0, claimedBy: [] };
   const limit = rateLimiter({ windowMs: 10000, max: 6 });
@@ -42,11 +42,12 @@ export default function register({ router, store, live, payments, notify, authed
     promo.claimedBy.push(user.id);
     if (promo.kind === 'welcome') user.welcomeCode = promo.code;
     credit(user, currency, amount);
-    payments.addTx(user, { type: 'bonus', method: promo.kind === 'welcome' ? 'welcome' : 'drop', status: 'completed', currency, amount, details: { code: promo.code } });
+    addWagerRequirement(user, promo.valueUsd, promo.kind);
+    payments.addTx(user, { type: 'bonus', method: promo.kind === 'welcome' ? 'welcome' : 'drop', status: 'completed', currency, amount, details: { code: promo.code, wagerTimes: WAGER_TIMES[promo.kind] } });
     store.save();
     live.toUser(user.id, 'balance', { currency, amount: user.balances[currency] });
     notify(user.id, { kind: 'bonus', category: 'rewards', title: promo.kind === 'welcome' ? 'Welcome bonus claimed' : 'Bonus drop claimed', message: `${amountText(amount, currency)} play money added to your wallet.`, link: '/transactions/bonuses' });
-    return { amount, currency, balance: { currency, amount: user.balances[currency] } };
+    return { amount, currency, balance: { currency, amount: user.balances[currency] }, wagering: user.wagering, user: publicUser(user) };
   }
 
   router.post(

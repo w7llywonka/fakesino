@@ -1,5 +1,5 @@
 import { HttpError, badRequest, rateLimiter } from '../http.js';
-import { vipInfo, parseCurrency, parseAmount, credit, debit } from '../accounts.js';
+import { vipInfo, parseCurrency, parseAmount, credit, debit, assertWagered } from '../accounts.js';
 import { CURRENCIES, roundDown, toUsd, fromUsd } from '../../public/js/shared/currencies.js';
 import { amountText } from '../notify.js';
 import { ROOMS, chatRooms, postChat, postSystem } from '../chatlog.js';
@@ -110,6 +110,7 @@ export default function register({ router, store, live, engine, payments, notify
       if (sc.sentUsd + usd > TIP_DAILY_USD) throw badRequest(`You've reached your daily tip sending limit ($${TIP_DAILY_USD})`);
       if (rc.receivedUsd + usd > TIP_DAILY_USD) throw badRequest(`${to.username} has reached their daily tip receiving limit`);
       if (!(amount <= (from.balances[currency] || 0) + 1e-12)) throw badRequest('Insufficient balance', { field: 'amount', code: 'insufficient_balance' });
+      assertWagered(from, 'tipping');
       requireTwoFactor(from, ctx.body.code);
       debit(from, currency, amount);
       credit(to, currency, amount);
@@ -162,6 +163,7 @@ export default function register({ router, store, live, engine, payments, notify
       if (toUsd(currency, share) < TIP_MIN_USD) throw badRequest('That amount is too small to split');
       const total = roundDown(currency, share * targets.length);
       if (!(total <= (from.balances[currency] || 0) + 1e-12)) throw badRequest('Insufficient balance', { field: 'amount', code: 'insufficient_balance' });
+      assertWagered(from, 'making it rain');
       requireTwoFactor(from, ctx.body.code);
       debit(from, currency, total);
       payments.addTx(from, { type: 'rain', method: 'rain', status: 'completed', currency, amount: total, details: { direction: 'out', users: targets.length } });

@@ -173,6 +173,7 @@ export function publicUser(user) {
     limits: user.limits || { depositDailyUsd: null, breakUntil: 0 },
     cards: (user.cards || []).map(({ id, brand, last4, expMonth, expYear, name }) => ({ id, brand, last4, expMonth, expYear, name })),
     twoFactor: !!user.totp,
+    wagering: { requiredUsd: Math.round((user.wagering?.requiredUsd || 0) * 100) / 100, remainingUsd: Math.ceil((user.wagering?.remainingUsd || 0) * 100) / 100 },
   };
 }
 
@@ -214,6 +215,7 @@ export function recordWagerStats(user, { game, currency, amount, payout, edge })
   else if (payout < amount) s.losses++;
   s.wageredUsd += usd;
   s.profitUsd += profitUsd;
+  if (user.wagering?.remainingUsd > 0) user.wagering.remainingUsd = Math.max(0, user.wagering.remainingUsd - usd);
   const g = (s.byGame[game] ||= { bets: 0, wageredUsd: 0, profitUsd: 0 });
   g.bets++;
   g.wageredUsd += usd;
@@ -242,6 +244,25 @@ export function sumDays(user, from, to, field = 'edgeUsd') {
     if (t >= from && t < to) total += b[field] || 0;
   }
   return total;
+}
+
+// --- Bonus wagering requirements ---------------------------------------------------
+// Promotional bonuses must be wagered `times` × their value before play money
+// can leave the wallet (withdrawals, tips, rain). Every game counts in full.
+export const WAGER_TIMES = { welcome: 3, drop: 1 };
+
+export function addWagerRequirement(user, usd, source) {
+  const times = WAGER_TIMES[source] ?? 0;
+  if (!(times > 0 && usd > 0)) return;
+  const w = (user.wagering ||= { requiredUsd: 0, remainingUsd: 0 });
+  w.requiredUsd = (w.remainingUsd > 0 ? w.requiredUsd : 0) + usd * times;
+  w.remainingUsd += usd * times;
+}
+
+export function assertWagered(user, action = 'withdrawing') {
+  const left = user.wagering?.remainingUsd || 0;
+  if (left > 0.000001)
+    throw new HttpError(400, `Wager $${(Math.ceil(left * 100) / 100).toFixed(2)} more before ${action} — bonus wagering requirement.`, { code: 'wager_requirement', remainingUsd: left });
 }
 
 // --- Responsible gaming ---------------------------------------------------------
