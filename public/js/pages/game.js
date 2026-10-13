@@ -7,6 +7,7 @@ import { bySlug, GAMES, loadGame } from '../games/registry.js';
 import { tile, loadPresence, refreshTiles, playing } from '../ui/tiles.js';
 import { openGameSettings } from '../ui/gamesettings.js';
 import { toast } from '../ui/toast.js';
+import { challengeCard, tickCountdowns } from '../ui/challenges.js';
 import { createGameContext, session } from '../ui/gamekit.js';
 import { createLiveBets } from '../ui/livebets.js';
 import * as fmt from '../format.js';
@@ -61,7 +62,7 @@ export default async function gamePage(page, { slug }) {
     <div class="game-info open">
       <div class="game-info-head">${icon(slug, 20)}<span class="title">${esc(meta.name)}</span><span class="pill">${esc(catName)}</span>
         <span class="pill green hide-mobile">RTP ${meta.rtp}%</span><span class="pill gi-playing" hidden><span class="dot-live"></span><span></span></span></div>
-      <div class="gi-tabs tabs"><button class="tab active" data-gt="big">${icon('trophy', 15)} Big Wins</button><button class="tab" data-gt="lucky">${icon('sparkle', 15)} Lucky Wins</button><button class="tab" data-gt="desc">${icon('info', 15)} Description</button></div>
+      <div class="gi-tabs tabs"><button class="tab active" data-gt="big">${icon('trophy', 15)} Big Wins</button><button class="tab" data-gt="lucky">${icon('sparkle', 15)} Lucky Wins</button><button class="tab" data-gt="challenges">${icon('gift', 15)} Challenges</button><button class="tab" data-gt="desc">${icon('info', 15)} Description</button></div>
       <div class="gi-body"></div>
     </div>
     ${more.length ? `<div class="section-title gi-more-title">${icon('fire', 18)} More from ${esc(catName)}<span class="spacer"></span><a class="btn btn-ghost btn-sm" href="/casino/group/${meta.category}">View all</a></div><div class="game-row gi-more">${more.map(tile).join('')}</div>` : ''}
@@ -114,12 +115,26 @@ export default async function gamePage(page, { slug }) {
           .join('')}</tbody></table></div>`
       : `<div class="empty">${icon('trophy', 26)}<div>No wins yet. Be the first to win!</div></div>`;
   }
+  async function challenges() {
+    giBody.innerHTML = '<div class="spinner"></div>';
+    let list = [];
+    try {
+      const [a, f] = await Promise.all([api.get(`/api/challenges?status=active&game=${slug}`), api.get(`/api/challenges?status=finished&game=${slug}`)]);
+      list = [...a.challenges, ...f.challenges.slice(0, 3)];
+    } catch {
+      /* show empty */
+    }
+    if (giTab !== 'challenges') return;
+    giBody.innerHTML = list.length ? `<div class="ch-grid">${list.map(challengeCard).join('')}</div>` : `<div class="empty">${icon('gift', 26)}<div>No challenges for ${esc(meta.name)} this week.</div></div>`;
+  }
   function showGi(t) {
     giTab = t;
     root.querySelectorAll('[data-gt]').forEach((b) => b.classList.toggle('active', b.dataset.gt === t));
     if (t === 'desc') describe();
+    else if (t === 'challenges') challenges();
     else wins(t);
   }
+  const stopTicks = tickCountdowns(giBody);
   on(info, 'click', '[data-gt]', (e, b) => showGi(b.dataset.gt));
   on(giBody, 'click', '[data-p]', (e, b) => {
     bigPeriod = b.dataset.p;
@@ -128,7 +143,7 @@ export default async function gamePage(page, { slug }) {
   on(giBody, 'click', 'tr[data-bet]', (e, tr) => setQuery({ modal: 'bet', id: tr.dataset.bet }));
   showGi('big');
   const offWins = bus.on('bet:mine', (bet) => {
-    if (bet.game === slug && giTab !== 'desc' && bet.payout > bet.amount) setTimeout(() => giTab !== 'desc' && wins(giTab), 400);
+    if (bet.game === slug && (giTab === 'big' || giTab === 'lucky') && bet.payout > bet.amount) setTimeout(() => (giTab === 'big' || giTab === 'lucky') && wins(giTab), 400);
   });
 
   // ---- presence ----
@@ -205,6 +220,7 @@ export default async function gamePage(page, { slug }) {
     settingsPop?.close();
     offWins();
     offPresence();
+    stopTicks();
     clearInterval(pingTimer);
     document.removeEventListener('fullscreenchange', onFullscreen);
     if (document.fullscreenElement === frame) document.exitFullscreen().catch(() => {});

@@ -67,6 +67,7 @@ function methodLabel(t) {
   if (t.method === 'crypto') return `${coin(t.currency)} ${esc(d.network || t.currency)} ${d.address ? `<span class="dim mono" style="font-size:11px">${esc(d.address.slice(0, 14))}…</span>` : ''}`;
   if (t.method === 'daily_reload') return `${icon('gift', 16)} Daily reload`;
   if (t.method === 'rakeback') return `${icon('coins', 16)} Rakeback`;
+  if (t.method === 'challenge') return `${icon('trophy', 16)} Challenge prize`;
   if (t.method === 'vault_in') return `${icon('vault', 16)} Wallet → Vault`;
   if (t.method === 'vault_out') return `${icon('vault', 16)} Vault → Wallet`;
   return esc(t.method);

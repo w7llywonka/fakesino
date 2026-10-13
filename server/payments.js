@@ -398,6 +398,7 @@ export function createPayments({ store, live, publicUser }) {
   }
 
   return {
+    addTx,
     cardDeposit,
     authenticate,
     depositAddress,

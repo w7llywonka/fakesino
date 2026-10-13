@@ -493,6 +493,32 @@ test('bet limits: max bet per currency and max profit for fixed multipliers', as
   assert.equal(slide.status, 400);
 });
 
+test('challenges: the first qualifying bet wins the prize', async () => {
+  const ch = app.plugins.challenges.data;
+  const now = Date.now();
+  // A test challenge any winning dice bet of $0.20+ can complete.
+  ch.list.push({ id: 9999, game: 'dice', minMultiplier: 1.5, minBetUsd: 0.2, prizeUsd: 7, startsAt: now - 1000, endsAt: now + 60000, status: 'active', winner: null, betId: null });
+  const c = await newPlayer(100);
+  assert.ok((await c.get('/api/challenges?game=dice')).data.challenges.some((x) => x.id === 9999));
+  // Too small a bet never qualifies.
+  for (let i = 0; i < 3; i++) await c.post('/api/games/dice/bet', { amount: 0.1, currency: 'USD', params: { target: 50.5, condition: 'over' } });
+  assert.equal(ch.list.find((x) => x.id === 9999).status, 'active');
+  let won = null;
+  for (let i = 0; i < 40 && !won; i++) {
+    const r = await c.post('/api/games/dice/bet', { amount: 0.5, currency: 'USD', params: { target: 50.5, condition: 'over' } });
+    if (r.data.bet.payout > 0) won = r.data.bet;
+  }
+  assert.ok(won, 'a dice win within 40 bets');
+  const done = ch.list.find((x) => x.id === 9999);
+  assert.equal(done.status, 'finished');
+  assert.equal(done.betId, won.id);
+  const mine = (await c.get('/api/challenges?status=mine')).data.challenges;
+  assert.equal(mine[0].id, 9999);
+  assert.equal(mine[0].winner.me, true);
+  const txs = (await c.get('/api/wallet/transactions?type=bonus')).data;
+  assert.ok(JSON.stringify(txs).includes('challenge'));
+});
+
 test('vault, rakeback and daily reload', async () => {
   const c = await newPlayer(100);
   const v = await c.post('/api/wallet/vault', { currency: 'USD', amount: 40, direction: 'deposit' });

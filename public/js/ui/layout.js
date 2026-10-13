@@ -96,6 +96,7 @@ function sidebarNav() {
     ).join('')}
     <div class="nav-group">
       <a class="nav-item" href="/promotions">${icon('gift', 18)}<span>Promotions</span></a>
+      <a class="nav-item" href="/challenges">${icon('trophy', 18)}<span>Challenges</span></a>
       <a class="nav-item" href="/vip">${icon('crown', 18)}<span>VIP Club</span></a>
       <a class="nav-item" href="/leaderboard">${icon('trophy', 18)}<span>Leaderboard</span></a>
     </div>

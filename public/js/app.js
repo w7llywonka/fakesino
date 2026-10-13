@@ -15,6 +15,7 @@ route('/casino', lazy('./pages/home.js'));
 route('/casino/games/:slug', lazy('./pages/game.js'));
 route('/casino/group/:group', lazy('./pages/home.js', 'groupPage'));
 route('/vip', lazy('./pages/vip.js'));
+route('/challenges', lazy('./pages/challenges.js'));
 route('/transactions', lazy('./pages/transactions.js'));
 route('/transactions/:tab', lazy('./pages/transactions.js'));
 route('/settings', lazy('./pages/settings.js'));
@@ -122,6 +123,13 @@ async function boot() {
   });
   // Keep stats (VIP progress, totals) fresh when navigating.
   bus.on('route', () => state.user && refreshUser().catch(() => {}));
+
+  // Challenge wins can land on any page.
+  bus.on('live:challenges:won', async (c) => {
+    const { toast } = await import('./ui/toast.js');
+    const { bySlug } = await import('./games/registry.js');
+    toast({ type: 'success', title: `${bySlug[c.game]?.name || c.game} challenge completed`, message: `You won the $${c.prizeUsd} play-money prize!` });
+  });
 
   connectLive();
   startRouter();
