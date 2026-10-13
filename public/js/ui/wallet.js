@@ -417,6 +417,13 @@ function cryptoDeposit(container, code, offs) {
         ${networkSelect(code, net.id)}
         <div class="field"><div class="field-label"><span>Your ${code} deposit address</span><button class="link" data-act="regen" style="font-size:12px">New address</button></div>
           <div class="address-box"><span style="flex:1" class="addr">${esc(info.address)}</span><button class="btn btn-secondary btn-sm" data-act="copy">${icon('copy', 14)} Copy</button></div></div>
+        ${
+          info.tag
+            ? `<div class="field"><div class="field-label"><span>Destination tag <span class="pill red" style="margin-left:4px">Required</span></span></div>
+          <div class="address-box"><span style="flex:1" class="addr">${esc(info.tag)}</span><button class="btn btn-secondary btn-sm" data-copy-tag>${icon('copy', 14)} Copy</button></div></div>
+          <div class="demo-notice warn" style="margin:0 0 14px">${icon('alert', 16)}<div>Both the address and the destination tag are required. A ${code} deposit without the tag can't be matched to your wallet.</div></div>`
+            : ''
+        }
         <div class="qr-wrap">${qrSvg(info.address)}<div class="muted" style="font-size:12.5px">Only send <b>${code}</b> via <b>${esc(net.label)}</b> to this address. Other coins or networks will be lost. ${info.confirmations} confirmation${info.confirmations > 1 ? 's' : ''} required.
           <div style="margin-top:8px">Minimum deposit: <b>${fmt.amount(info.minimum, code)} ${code}</b></div>
           <div class="demo-notice warn" style="margin:10px 0 0">${icon('alert', 16)}<div>This is a fake address that exists on no blockchain. Never send real crypto to it — it would be lost.</div></div></div></div>
@@ -445,6 +452,10 @@ function cryptoDeposit(container, code, offs) {
       view.querySelector('[data-act=copy]').addEventListener('click', async () => {
         await copyText(info.address);
         toast({ type: 'success', title: 'Address copied' });
+      });
+      view.querySelector('[data-copy-tag]')?.addEventListener('click', async () => {
+        await copyText(info.tag);
+        toast({ type: 'success', title: 'Destination tag copied' });
       });
       view.querySelector('[data-act=regen]').addEventListener('click', async () => {
         await api.post('/api/payments/crypto/address', { currency: code, network: net.id, regenerate: true });
@@ -667,7 +678,8 @@ function withdrawTab({ body, offs }) {
     const view = el(`<form novalidate>
       ${
         isCrypto
-          ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(net.label)}</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>`
+          ? `${networkSelect(code, net.id)}<div class="field" data-field="address"><label class="field-label">${code} address <span class="muted">${esc(net.label)}</span></label><input class="input mono" name="address" placeholder="${esc(addressExample(code, net.id))}" autocomplete="off"><div class="field-error"></div></div>
+            ${net.tag ? '<div class="field" data-field="tag"><label class="field-label"><span>Destination tag</span><span class="muted">Optional — required by most exchanges</span></label><input class="input mono" name="tag" inputmode="numeric" placeholder="e.g. 104729" autocomplete="off"><div class="field-error"></div></div>' : ''}`
           : cards.length
             ? `<div class="field" data-field="card"><div class="field-label">Withdraw to</div><div class="method-list">${cards
                 .map((c, i) => `<label class="method ${i === 0 ? 'selected' : ''}"><input type="radio" name="cardId" value="${c.id}" ${i === 0 ? 'checked' : ''} hidden>${icon('card', 20)}<div><div class="m-title">•••• ${esc(c.last4)}</div><div class="m-sub">${esc(c.name)}</div></div><div class="m-right">${brandChip(c.brand)}</div></label>`)
@@ -717,7 +729,7 @@ function withdrawTab({ body, offs }) {
       btn.classList.add('loading');
       const fd = Object.fromEntries(new FormData(view));
       try {
-        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, cardId: fd.cardId });
+        const { transaction, user } = await api.post('/api/payments/withdraw', { currency: code, network: net?.id, amount: Number(fd.amount), address: fd.address, tag: fd.tag, cardId: fd.cardId });
         setUser(user);
         picker.refresh();
         content.innerHTML = '';
@@ -992,6 +1004,8 @@ function addressExample(code, network) {
   if (code === 'BTC') return 'bc1q… or 1… / 3…';
   if (code === 'LTC') return 'ltc1… or L… / M…';
   if (code === 'DOGE') return 'D…';
+  if (code === 'XRP') return 'r… (25–35 characters)';
+  if (code === 'BCH') return 'bitcoincash:q… or 1… / 3…';
   if (network === 'trc20') return 'T… (34 characters)';
   if (network === 'sol' || code === 'SOL') return 'Base58, 32–44 characters';
   return '0x… (42 characters)';

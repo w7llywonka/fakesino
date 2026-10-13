@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CURRENCIES, isCurrency, isDisplayFiat, roundDown } from '../public/js/shared/currencies.js';
+import { CURRENCIES, CURRENCY_CODES, isCurrency, isDisplayFiat, roundDown } from '../public/js/shared/currencies.js';
 import { Router, HttpError, badRequest, sendJson, readJson, parseCookies, cookie, rateLimiter } from './http.js';
 import { Store } from './store.js';
 import { LiveHub } from './live.js';
@@ -56,6 +56,9 @@ const SECURITY_HEADERS = {
 
 export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crashTiming, roundTiming = {}, secureCookies = false } = {}) {
   const store = new Store(dataFile);
+  // Coins listed after a wallet was created start at zero in it.
+  for (const u of Object.values(store.data.users || {}))
+    for (const field of ['balances', 'vault', 'rakeback']) if (u[field]) for (const c of CURRENCY_CODES) u[field][c] ??= 0;
   const live = new LiveHub();
   const engine = createEngine({ store, live });
   const crash = new CrashGame({ store, live, engine, timing: crashTiming });

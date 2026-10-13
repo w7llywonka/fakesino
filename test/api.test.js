@@ -52,6 +52,13 @@ function client() {
 }
 
 const key = () => crypto.randomBytes(32).toString('hex');
+async function waitFor(check, ms = 5000) {
+  for (const end = Date.now() + ms; Date.now() < end; ) {
+    if (await check()) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  assert.fail('timed out waiting');
+}
 const card = (number) => ({ number, expMonth: 12, expYear: new Date().getFullYear() + 2, cvc: number.startsWith('3') ? '1234' : '123', name: 'Test Player' });
 async function newPlayer(deposit = 1000) {
   const c = client();
@@ -626,6 +633,33 @@ test('offers: welcome code once per new wallet, drop codes with wager and claim 
   assert.equal((await d.post('/api/offers/redeem', { code, currency: 'USD' })).status, 400);
   const chat = (await c.get('/api/chat?room=en')).data.messages;
   assert.ok(chat.some((m) => m.code === code), 'DropBot posts the code in chat');
+});
+
+test('new coins: XRP deposits use a shared address plus destination tag; USDC, BNB, BCH credit', async () => {
+  const a = await newPlayer(0);
+  const b = await newPlayer(0);
+  const xa = (await a.post('/api/payments/crypto/address', { currency: 'XRP' })).data;
+  const xb = (await b.post('/api/payments/crypto/address', { currency: 'XRP' })).data;
+  assert.equal(xa.address, xb.address);
+  assert.match(xa.tag, /^\d{9}$/);
+  assert.notEqual(xa.tag, xb.tag);
+  const regen = (await a.post('/api/payments/crypto/address', { currency: 'XRP', regenerate: true })).data;
+  assert.equal(regen.address, xa.address);
+  for (const [currency, amount] of [['XRP', 50], ['USDC', 20], ['BNB', 0.05], ['BCH', 0.05]]) {
+    const r = await a.post('/api/payments/crypto/simulate', { currency, amount });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    if (currency === 'XRP') assert.equal(r.data.transaction.details.tag, regen.tag);
+  }
+  await waitFor(async () => (await a.get('/api/me')).data.user.balances.BNB === 0.05, 20000);
+  const me = (await a.get('/api/me')).data.user;
+  assert.deepEqual([me.balances.XRP, me.balances.USDC, me.balances.BCH], [50, 20, 0.05]);
+  const addr = 'r' + 'a'.repeat(30);
+  assert.equal((await a.post('/api/payments/withdraw', { currency: 'XRP', amount: 10, address: addr, tag: 'abc' })).status, 400);
+  assert.equal((await a.post('/api/payments/withdraw', { currency: 'XRP', amount: 10, address: addr, tag: '99999999999' })).status, 400);
+  const w = await a.post('/api/payments/withdraw', { currency: 'XRP', amount: 10, address: addr, tag: '104729' });
+  assert.equal(w.status, 200, JSON.stringify(w.data));
+  assert.equal(w.data.transaction.details.tag, '104729');
+  assert.equal((await a.post('/api/payments/withdraw', { currency: 'BCH', amount: 0.01, address: 'bitcoincash:q' + 'p'.repeat(41) })).status, 200);
 });
 
 test('wallet display settings: hide zero, display fiat currency', async () => {

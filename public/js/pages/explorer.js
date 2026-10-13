@@ -39,6 +39,7 @@ export default async function explorerPage(page, { hash }) {
       ${row('Timestamp', fmt.dateTime(tx.timestamp))}
       ${row('From', `<span class="mono">${esc(tx.from)}</span>`, tx.from)}
       ${row('To', `<span class="mono">${esc(tx.to)}</span>`, tx.to)}
+      ${tx.tag ? row('Destination tag', `<span class="mono">${esc(tx.tag)}</span>`) : ''}
       ${row('Value', `${coin(tx.coin)} ${fmt.amount(tx.amount, tx.coin)} ${tx.coin}`)}
       ${tx.fee != null ? row('Fee', `${fmt.amount(tx.fee, tx.coin)} ${tx.coin}`) : ''}`;
   }

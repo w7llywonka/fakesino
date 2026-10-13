@@ -88,6 +88,7 @@ function body(t) {
       ${t.method === 'buy' ? line('Fees', `${fmt.money(d.fee, d.fiatCurrency)} + ${fmt.amount(d.networkFee, t.currency)} ${t.currency} network`) : ''}
       ${t.type === 'withdrawal' && d.fee != null && t.method === 'crypto' ? line('Network fee', `${fmt.amount(d.fee, t.currency)} ${t.currency}`) : ''}
       ${d.address ? line(t.type === 'withdrawal' ? 'To address' : 'Deposit address', `<span class="mono">${esc(short(d.address, 8))}</span>`, d.address) : ''}
+      ${d.tag ? line('Destination tag', `<span class="mono">${esc(d.tag)}</span>`, d.tag) : ''}
       ${d.txHash ? line('Tx hash', `<span class="mono">${esc(short(d.txHash, 8))}</span>`, d.txHash) : ''}
       ${d.required ? line('Confirmations', `${Math.min(d.confirmations ?? 0, d.required)}/${d.required}`) : ''}
       ${d.brand ? line('Card', `${brandChip(d.brand)} •••• ${esc(d.last4 || '')}${d.threeDS ? ' <span class="pill blue">3DS</span>' : ''}`) : ''}

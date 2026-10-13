@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
 import { amountText } from './notify.js';
-import { NETWORKS, networkFor, validAddress } from '../public/js/shared/networks.js';
+import { NETWORKS, networkFor, validAddress, validTag } from '../public/js/shared/networks.js';
 import { PROVIDERS, quote, quotes, BUY_MIN_USD } from '../public/js/shared/onramps.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
@@ -9,8 +9,8 @@ import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, a
 
 export const DEPOSIT_LIMITS = { min: 10, max: 100000 }; // in fiat units
 export const WITHDRAW_MIN_USD = 5;
-export const CONFIRMATIONS = { BTC: 2, ETH: 6, LTC: 3, SOL: 1, DOGE: 3, USDT: 6, TRX: 3 };
-export const NETWORK_FEES_USD = { BTC: 2, ETH: 1.5, LTC: 0.05, SOL: 0.01, DOGE: 0.2, USDT: 1, TRX: 1 };
+export const CONFIRMATIONS = { BTC: 2, ETH: 6, LTC: 3, SOL: 1, DOGE: 3, USDT: 6, TRX: 3, USDC: 6, XRP: 1, BNB: 15, BCH: 3 };
+export const NETWORK_FEES_USD = { BTC: 2, ETH: 1.5, LTC: 0.05, SOL: 0.01, DOGE: 0.2, USDT: 1, TRX: 1, USDC: 1, XRP: 0.1, BNB: 0.3, BCH: 0.04 };
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 function fakeAddress(currency, network = '') {
@@ -20,6 +20,13 @@ function fakeAddress(currency, network = '') {
   let body = '';
   for (const b of bytes) body += BASE32[b % 32];
   return `fake${currency.toLowerCase()}${network ? `-${network}` : ''}1${body}`;
+}
+
+function houseAddress(currency, network) {
+  const h = crypto.createHash('sha256').update(`house:${currency}:${network}`).digest();
+  let body = '';
+  for (const b of h.subarray(0, 28)) body += BASE32[b % 32];
+  return `fake${currency.toLowerCase()}-${network}1${body}`;
 }
 
 function txId() {
@@ -321,13 +328,19 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     const net = networkFor(currency, body.network);
     const key = `${currency}:${net.id}`;
     user.addresses ||= {};
-    if (!user.addresses[key] || body.regenerate) user.addresses[key] = fakeAddress(currency, net.id);
+    if (net.tag) {
+      // One shared (fake) address per network; the destination tag identifies this wallet.
+      user.addresses[key] = houseAddress(currency, net.id);
+      user.tags ||= {};
+      if (!user.tags[key] || body.regenerate) user.tags[key] = String(100000000 + crypto.randomInt(900000000));
+    } else if (!user.addresses[key] || body.regenerate) user.addresses[key] = fakeAddress(currency, net.id);
     store.save();
     return {
       currency,
       network: { id: net.id, label: net.label },
       networks: NETWORKS[currency].map(({ id, label }) => ({ id, label })),
       address: user.addresses[key],
+      tag: net.tag ? user.tags[key] : undefined,
       confirmations: net.confirmations,
       minimum: net.depositMin,
     };
@@ -344,6 +357,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     assertNotOnBreak(user);
     const net = networkFor(currency, body.network);
     const address = user.addresses?.[`${currency}:${net.id}`] || null;
+    const tag = net.tag ? user.tags?.[`${currency}:${net.id}`] : undefined;
     if (amount < net.depositMin) {
       // Like a real chain: the transfer happens, but it is never credited.
       const tx = addTx(user, { type: 'deposit', method: 'crypto', status: 'failed', currency, amount, details: { address, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), reason: 'Not credited: below minimum', minimum: net.depositMin } });
@@ -358,7 +372,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       status: 'pending',
       currency,
       amount,
-      details: { address, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required },
+      details: { address, tag, network: net.id, networkLabel: net.label, txHash: crypto.randomBytes(32).toString('hex'), confirmations: 0, required },
     });
     store.save();
     notify(user.id, { kind: 'deposit', title: 'Deposit detected', message: `${amountText(amount, currency)} is on its way · 0/${required} confirmations.`, link: '/transactions/deposits' });
@@ -380,7 +394,9 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       if (amount < net.withdrawMin) throw badRequest(`Minimum withdrawal: ${amountText(net.withdrawMin, currency)}`, { field: 'amount' });
       fee = net.withdrawFee;
       if (amount <= fee) throw badRequest('Amount must be larger than the network fee', { field: 'amount' });
-      details = { address, network: net.id, networkLabel: net.label, fee };
+      const tag = String(body.tag ?? '').trim();
+      if (net.tag && !validTag(tag)) throw badRequest('Destination tag must be a number up to 4294967295', { field: 'tag' });
+      details = { address, ...(net.tag && tag ? { tag } : {}), network: net.id, networkLabel: net.label, fee };
     } else {
       const saved = (user.cards || []).find((c) => c.id === body.cardId);
       if (!saved) throw badRequest('Choose a saved card to withdraw to', { field: 'card' });
@@ -508,8 +524,8 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   }
 
   // ---- simulated block explorer ----
-  const BLOCK_SECONDS = { bitcoin: 600, litecoin: 150, dogecoin: 60, erc20: 12, bep20: 3, polygon: 2, trc20: 3, sol: 0.4, solana: 0.4 };
-  const BASE_HEIGHT = { bitcoin: 860000, litecoin: 2700000, dogecoin: 5300000, erc20: 20500000, bep20: 41000000, polygon: 60000000, trc20: 64000000, sol: 280000000, solana: 280000000 };
+  const BLOCK_SECONDS = { ripple: 3.5, bitcoincash: 600, bitcoin: 600, litecoin: 150, dogecoin: 60, erc20: 12, bep20: 3, polygon: 2, trc20: 3, sol: 0.4, solana: 0.4 };
+  const BASE_HEIGHT = { ripple: 90000000, bitcoincash: 860000, bitcoin: 860000, litecoin: 2700000, dogecoin: 5300000, erc20: 20500000, bep20: 41000000, polygon: 60000000, trc20: 64000000, sol: 280000000, solana: 280000000 };
   const fakeExternal = (seed, network) => `fake-${network}-ext1${crypto.createHash('sha256').update(seed).digest('hex').slice(0, 30)}`;
   function explorerTx(hash) {
     const t = store.data.transactions.find((x) => x.details?.txHash === hash);
@@ -533,6 +549,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
         timestamp: t.updatedAt,
         from: outgoing ? fakeExternal(`hot:${t.currency}`, net) : fakeExternal(hash, net),
         to: outgoing ? d.address : d.address || fakeExternal(`swap:${hash}`, net),
+        tag: d.tag,
       },
     };
   }

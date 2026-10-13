@@ -10,6 +10,10 @@ export const LIMITS = {
   DOGE: { maxBet: 2e6, maxProfit: 5e5 },
   USDT: { maxBet: 2.5e7, maxProfit: 2.5e6 },
   TRX: { maxBet: 1e7, maxProfit: 1.5e6 },
+  USDC: { maxBet: 2.5e7, maxProfit: 2.5e6 },
+  XRP: { maxBet: 1e7, maxProfit: 2e6 },
+  BNB: { maxBet: 10000, maxProfit: 2000 },
+  BCH: { maxBet: 20000, maxProfit: 4000 },
 };
 
 export function limitsFor(code) {

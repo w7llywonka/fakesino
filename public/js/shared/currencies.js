@@ -12,6 +12,10 @@ export const CURRENCIES = {
   DOGE: { code: 'DOGE', name: 'Dogecoin', symbol: 'Ð', decimals: 8, usd: 0.12, type: 'crypto', color: '#c2a633', network: 'Dogecoin' },
   USDT: { code: 'USDT', name: 'Tether', symbol: '₮', decimals: 8, usd: 1, type: 'crypto', color: '#26a17b', network: 'Ethereum (ERC20)' },
   TRX: { code: 'TRX', name: 'Tron', symbol: 'T', decimals: 8, usd: 0.16, type: 'crypto', color: '#ef0027', network: 'Tron (TRC20)' },
+  USDC: { code: 'USDC', name: 'USD Coin', symbol: '$', decimals: 8, usd: 1, type: 'crypto', color: '#2775ca', network: 'Ethereum (ERC20)' },
+  XRP: { code: 'XRP', name: 'Ripple', symbol: 'X', decimals: 8, usd: 0.55, type: 'crypto', color: '#4b5c6e', network: 'XRP Ledger' },
+  BNB: { code: 'BNB', name: 'BNB', symbol: '◆', decimals: 8, usd: 580, type: 'crypto', color: '#f3ba2f', network: 'BNB Smart Chain (BEP20)' },
+  BCH: { code: 'BCH', name: 'Bitcoin Cash', symbol: 'Ƀ', decimals: 8, usd: 350, type: 'crypto', color: '#8dc351', network: 'Bitcoin Cash' },
 };
 
 export const CURRENCY_CODES = Object.keys(CURRENCIES);

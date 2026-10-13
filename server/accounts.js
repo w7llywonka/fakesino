@@ -192,12 +192,13 @@ export function parseAmount(currency, value, { min = 0 } = {}) {
 }
 
 export function credit(user, currency, amount) {
-  user.balances[currency] = roundDown(currency, user.balances[currency] + amount);
+  // `|| 0`: wallets created before a coin was listed have no entry for it.
+  user.balances[currency] = roundDown(currency, (user.balances[currency] || 0) + amount);
   return user.balances[currency];
 }
 
 export function debit(user, currency, amount) {
-  if (amount > user.balances[currency] + 1e-12) throw new HttpError(400, 'Insufficient balance', { code: 'insufficient_balance' });
+  if (!(amount <= (user.balances[currency] || 0) + 1e-12)) throw new HttpError(400, 'Insufficient balance', { code: 'insufficient_balance' });
   user.balances[currency] = roundDown(currency, user.balances[currency] - amount);
   if (user.balances[currency] < 0) user.balances[currency] = 0;
   return user.balances[currency];
