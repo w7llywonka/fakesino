@@ -1,13 +1,11 @@
 import { el, esc, on } from '../dom.js';
-import { icon, gameArt } from '../icons.js';
+import { icon } from '../icons.js';
 import { state, bus } from '../state.js';
 import { GAMES, CATEGORIES, bySlug } from '../games/registry.js';
 import { createLiveBets } from '../ui/livebets.js';
 import { recentGames, favouriteGames } from './game.js';
 import * as fmt from '../format.js';
-
-const tile = (g) => `<div class="game-tile-wrap"><a class="game-card" href="/casino/games/${g.slug}" title="${esc(g.name)}">${gameArt(g.slug, g.name)}</a>
-  <div class="game-tile-meta"><span class="dot-live"></span>${esc(g.name)} · RTP ${g.rtp}%</div></div>`;
+import { tile, loadPresence, refreshTiles } from '../ui/tiles.js';
 
 export default function homePage(page) {
   document.title = 'Fakesino — Play-Money Casino';
@@ -73,9 +71,12 @@ export default function homePage(page) {
     const strip = root.querySelector('.stats-strip');
     if (strip && state.user) strip.outerHTML = statsStrip();
   });
+  loadPresence();
+  const offPresence = bus.on('presence', () => refreshTiles(root, bySlug));
   return () => {
     live.destroy();
     off();
+    offPresence();
   };
 }
 
@@ -111,4 +112,7 @@ export function groupPage(page, { group }) {
   document.title = `${title} — Fakesino`;
   page.innerHTML = `<div class="page-title">${icon(ic, 22)} ${esc(title)}</div>
     ${list.length ? `<div class="game-grid">${list.map(tile).join('')}</div>` : `<div class="empty">${icon(ic, 28)}<div>${group === 'favourites' ? 'Tap the star under any game to add it here.' : 'Games you play will show up here.'}</div></div>`}`;
+  loadPresence();
+  const off = bus.on('presence', () => refreshTiles(page, bySlug));
+  return off;
 }

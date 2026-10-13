@@ -7,6 +7,7 @@ import { sound } from '../sound.js';
 import { toast, toastError } from './toast.js';
 import { createBetPanel } from './controls.js';
 import { setQuery } from '../router.js';
+import { isInstant } from './gamesettings.js';
 
 // Session stats shared by the live-stats panel.
 export const session = { wagered: {}, profit: {}, wins: 0, losses: 0, points: [0], currencyProfit: 0 };
@@ -37,7 +38,9 @@ export function createGameContext({ slug, controls, stage, footer }) {
     toastError,
     currency,
     balance: () => balanceOf(),
-    animations: () => state.prefs.animations !== false,
+    // Instant Bet (per game) skips result animations; Animations is global.
+    animations: () => state.prefs.animations !== false && !isInstant(slug),
+    instant: () => isInstant(slug),
     isAuthed,
     requireAuth() {
       if (isAuthed()) return true;
@@ -45,7 +48,7 @@ export function createGameContext({ slug, controls, stage, footer }) {
       return false;
     },
     createBetPanel(opts) {
-      const p = createBetPanel(controls, opts);
+      const p = createBetPanel(controls, { slug, instant: () => isInstant(slug), ...opts });
       cleanups.push(() => p.destroy());
       return p;
     },

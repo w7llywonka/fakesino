@@ -42,6 +42,7 @@ export default function mountLava(ctx) {
     ],
     onBet: () => (round.live ? cashout() : startRound()),
     auto: { run: () => autoRound() },
+    hotkeys: { q: () => randomBtn.click() },
   });
   const randomBtn = el(`<button class="btn btn-secondary btn-block" hidden>${icon('refresh', 16)} Random Pick</button>`);
   panel.extra.append(randomBtn);

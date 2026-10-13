@@ -10,7 +10,7 @@ export const META = {
   rtp: 98,
   desc: 'Guide the chicken across up to 19 lanes of traffic. Every lane crossed raises the multiplier — cash out before a car gets you.',
   howTo: ['Choose a difficulty: more cars mean bigger multipliers.', 'Press Bet, then GO to cross one lane at a time.', 'Cash out after any safe lane. Hit a car and the bet is lost.'],
-  hotkeys: [['Space', 'Bet / cash out'], ['G', 'Go']],
+  hotkeys: [['G', 'Go (cross one lane)']],
   verifyFields: [['difficulty', 'Difficulty', ['easy', 'medium', 'hard', 'expert']]],
   icon: '<path d="M7 20c-2-2-2.5-6 0-9l2-2V6a3 3 0 0 1 6 0v1l3 1-3 1v2c2 2 2 6 0 9"/><path d="M9 20h6M12 6h.01"/>',
   thumb: {

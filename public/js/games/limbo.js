@@ -1,5 +1,5 @@
 import { el } from '../dom.js';
-import { amountField } from '../ui/controls.js';
+import { amountField, stepFor } from '../ui/controls.js';
 import { winChance, MIN_TARGET, MAX_TARGET } from '../shared/games/limbo.js';
 
 const MIN_CHANCE = winChance(MAX_TARGET);
@@ -20,6 +20,7 @@ export default function mountLimbo(ctx) {
     fields: [amountField(), { key: 'profit', type: 'profit', label: 'Profit on Win' }],
     onBet: () => play(false),
     auto: { run: () => play(true) },
+    hotkeys: { w: () => nudge(-1), e: () => nudge(1) },
   });
 
   const stage = el(`<div class="limbo-stage">
@@ -73,6 +74,12 @@ export default function mountLimbo(ctx) {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') input.blur();
     });
+  }
+
+  function nudge(dir) {
+    if (busy || panel.autoRunning) return;
+    target = clampTarget(target + dir * stepFor(target, dir));
+    render();
   }
 
   function setTilesDisabled(d) {

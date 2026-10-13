@@ -283,6 +283,11 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
         .slice(0, 200);
       if (!text) throw badRequest('Message is empty');
       const msg = { id: store.nextId('msg'), username: ctx.user.username, vip: vipInfo(ctx.user.stats.wageredUsd).level, text, at: Date.now() };
+      // A shared bet travels as a card (only public fields).
+      if (ctx.body.betId != null) {
+        const b = store.findBet(Number(ctx.body.betId));
+        if (b) msg.bet = { id: b.id, game: b.game, currency: b.currency, amount: b.amount, payout: b.payout, multiplier: b.multiplier };
+      }
       store.data.chat.push(msg);
       if (store.data.chat.length > 200) store.data.chat.splice(0, store.data.chat.length - 200);
       store.save();

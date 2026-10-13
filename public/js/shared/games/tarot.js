@@ -72,3 +72,9 @@ export function outcome(rng, params) {
   // A 0× left card ends the reading; the right card is never turned.
   return { cards: { left, middle, right: left === 0 ? null : right }, multiplier };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => {
+  const t = TABLES[params.difficulty];
+  return Math.max(...t.minor.map(([m]) => m)) ** 2 * Math.max(...t.major.map(([m]) => m));
+};

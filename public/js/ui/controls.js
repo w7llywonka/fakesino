@@ -4,6 +4,8 @@ import { CURRENCIES, roundDown } from '../shared/currencies.js';
 import { state, bus, currency, balanceOf, savePrefs, ensureSession } from '../state.js';
 import * as fmt from '../format.js';
 import { toast, toastError } from './toast.js';
+import { maxStake } from '../shared/limits.js';
+import { api } from '../api.js';
 
 const AMOUNT_KEY = 'fakesino:amounts';
 function rememberAmount(code, value) {
@@ -46,6 +48,7 @@ export function createBetPanel(container, opts) {
   const values = {};
   const fieldEls = {};
   let profitMultiplier = null;
+  let maxedAt = null; // amount set by the Max button, for the max-bet warning
 
   const root = el(`<div class="bet-panel stack" style="gap:12px">
     ${modes.length > 1 ? `<div class="bp-mode"><div class="tabs">${modes.map((m) => `<button class="tab ${m === mode ? 'active' : ''}" data-mode="${m}">${m === 'manual' ? 'Manual' : 'Auto'}</button>`).join('')}</div></div>` : ''}
@@ -71,7 +74,7 @@ export function createBetPanel(container, opts) {
         node = el(`<div class="bp-field" data-key="${f.key}">${label}
           <div class="input-group">
             <div class="input-icon"><input class="input" inputmode="decimal" autocomplete="off" value="${fmt.inputAmount(values[f.key], code)}"><span class="suffix">${coin(code)}</span></div>
-            ${f.halfDouble !== false ? '<button class="addon" data-act="half">½</button><button class="addon" data-act="double">2×</button>' : ''}
+            ${f.halfDouble !== false ? '<button class="addon" data-act="half">½</button><button class="addon" data-act="double">2×</button><button class="addon bp-max" data-act="max" hidden>Max</button>' : ''}
           </div></div>`);
         const input = node.querySelector('input');
         input.addEventListener('input', () => {
@@ -86,6 +89,12 @@ export function createBetPanel(container, opts) {
         node.querySelector('[data-act=double]')?.addEventListener('click', () => {
           const next = values[f.key] * 2;
           setValue(f.key, Math.min(next, Math.max(balanceOf(), values[f.key])));
+        });
+        // Max: the most the balance and the bet limits allow at the current multiplier.
+        node.querySelector('[data-act=max]')?.addEventListener('click', () => {
+          const m = profitMultiplier > 1 ? profitMultiplier : 1;
+          setValue(f.key, Math.min(balanceOf(), maxStake(currency(), m)));
+          maxedAt = values[f.key];
         });
         break;
       }
@@ -292,6 +301,14 @@ export function createBetPanel(container, opts) {
 
   async function manualBet() {
     if (busy || !opts.onBet) return;
+    if (maxedAt != null && values.amount === maxedAt && values.amount > 0 && state.user?.settings?.maxBetWarning) {
+      const { confirmDialog } = await import('./confirm.js');
+      const code = currency();
+      const r = await confirmDialog({ title: 'Max bet', message: `You are about to bet ${fmt.money(values.amount, code)} (your max bet). Continue?`, checkbox: "Don't show again" });
+      if (r.checked) api.post('/api/account/settings', { maxBetWarning: false }).then(({ user }) => user && Object.assign(state.user.settings, user.settings)).catch(() => {});
+      if (!r.ok) return;
+      maxedAt = null;
+    }
     try {
       await opts.onBet(snapshot());
     } catch (err) {
@@ -330,7 +347,7 @@ export function createBetPanel(container, opts) {
         else if (r.profit < 0) current = auto.onLoss === 'increase' ? current * (1 + auto.onLossPct / 100) : base;
         if (auto.stopProfit > 0 && total >= auto.stopProfit) break;
         if (auto.stopLoss > 0 && -total >= auto.stopLoss) break;
-        await sleep(opts.auto.delay ?? (state.prefs.animations ? 120 : 30));
+        await sleep(opts.instant?.() ? Math.min(opts.auto.delay ?? 10, 10) : opts.auto.delay ?? (state.prefs.animations ? 120 : 30));
       }
     } catch (err) {
       toastError(err, 'Autobet stopped');
@@ -383,6 +400,10 @@ export function createBetPanel(container, opts) {
       refreshProfit();
     }),
   );
+
+  const syncMax = () => root.querySelectorAll('[data-act=max]').forEach((b) => (b.hidden = !(opts.slug && state.prefs.maxBet?.[opts.slug])));
+  cleanups.push(bus.on('prefs', syncMax));
+  syncMax();
 
   updateAmountAux();
   setMode('manual');
@@ -444,6 +465,28 @@ export function createBetPanel(container, opts) {
       f.node.style.display = visible && (!f.spec.mode || f.spec.mode === mode) ? '' : 'none';
     },
     field: (k) => fieldEls[k]?.node,
+    // Hotkey helper: move a select to its previous/next option, or nudge a
+    // number field by a step that scales with its value. Ignored while locked.
+    step(k, dir) {
+      const f = fieldEls[k];
+      const input = f?.node.querySelector('select, input');
+      if (!f || !input || input.disabled || f.node.style.display === 'none') return false;
+      if (f.spec.type === 'select') {
+        const opts = f.spec.options.map((o) => o[0]);
+        const next = opts[opts.findIndex((o) => String(o) === String(values[k])) + dir];
+        if (next === undefined) return false;
+        setValue(k, next);
+      } else if (f.spec.type === 'number') {
+        const v = Number(values[k]) || 0;
+        const step = f.spec.step ? f.spec.step(v, dir) : stepFor(v, dir);
+        let next = Math.round((v + dir * step) * 100) / 100;
+        if (f.spec.min != null) next = Math.max(f.spec.min, next);
+        if (f.spec.max != null) next = Math.min(f.spec.max, next);
+        setValue(k, next);
+      } else return false;
+      emit(k);
+      return true;
+    },
     checkBalance,
     stopAuto() {
       if (autoRunning) autoStop = true;
@@ -456,6 +499,12 @@ export function createBetPanel(container, opts) {
     },
   };
   return panel;
+}
+
+// Step for W/E nudges: 0.1 below 10, 1 below 100, then 10.
+export function stepFor(v, dir = 1) {
+  const x = dir < 0 ? v - 1e-9 : v;
+  return x < 10 ? 0.1 : x < 100 ? 1 : 10;
 }
 
 export function toggleHotkeys(enabled) {

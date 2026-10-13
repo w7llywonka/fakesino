@@ -1,7 +1,12 @@
 import { el, esc, on, loadCss } from '../dom.js';
-import { icon, gameArt } from '../icons.js';
+import { icon, gameArt, coin } from '../icons.js';
+import { api } from '../api.js';
 import { state, bus, savePrefs } from '../state.js';
-import { bySlug, loadGame } from '../games/registry.js';
+import { setQuery } from '../router.js';
+import { bySlug, GAMES, loadGame } from '../games/registry.js';
+import { tile, loadPresence, refreshTiles, playing } from '../ui/tiles.js';
+import { openGameSettings } from '../ui/gamesettings.js';
+import { toast } from '../ui/toast.js';
 import { createGameContext, session } from '../ui/gamekit.js';
 import { createLiveBets } from '../ui/livebets.js';
 import * as fmt from '../format.js';
@@ -27,11 +32,16 @@ function setList(key, list) {
 export const recentGames = () => getList(RECENT_KEY);
 export const favouriteGames = () => getList(FAV_KEY);
 
+const CATEGORY_LABEL = { originals: 'Fakesino Originals', table: 'Table Games', slots: 'Fakesino Slots' };
+const KIND_TAGS = { multiplayer: 'Multiplayer', stateful: 'Multi-step', chips: 'Table', instant: 'Instant' };
+
 export default async function gamePage(page, { slug }) {
   const meta = bySlug[slug];
   if (!meta) return notFound(page);
   document.title = `${meta.name} — Fakesino`;
   setList(RECENT_KEY, [slug, ...recentGames().filter((s) => s !== slug)].slice(0, 12));
+  const more = GAMES.filter((g) => g.category === meta.category && g.slug !== slug);
+  const catName = CATEGORY_LABEL[meta.category] || 'Fakesino Originals';
 
   const root = el(`<div class="game-page">
     <div class="game-frame ${state.prefs.theatre ? 'theatre' : ''}">
@@ -39,23 +49,22 @@ export default async function gamePage(page, { slug }) {
       <div class="game-stage"><div class="spinner" style="margin:auto"></div></div>
     </div>
     <div class="game-footer">
-      <button class="icon-btn" data-act="theatre" data-tip="Theatre mode">${icon('expand', 18)}</button>
+      <button class="icon-btn" data-act="theatre" data-tip="Theatre mode">${icon('theatre', 18)}</button>
+      ${document.fullscreenEnabled ? `<button class="icon-btn" data-act="fullscreen" data-tip="Fullscreen">${icon('expand', 18)}</button>` : ''}
       <button class="icon-btn" data-act="stats" data-tip="Live stats">${icon('stats', 18)}</button>
-      <button class="icon-btn ${state.prefs.hotkeys ? 'active' : ''}" data-act="hotkeys" data-tip="Hotkeys">${icon('keyboard', 18)}</button>
-      <button class="icon-btn" data-act="sound" data-tip="Sound">${icon(state.prefs.sound ? 'volume' : 'volumeOff', 18)}</button>
-      <button class="icon-btn ${state.prefs.animations === false ? '' : 'active'}" data-act="anim" data-tip="Animations">${icon('bolt', 18)}</button>
+      <button class="icon-btn" data-act="hotkeys" data-tip="Hotkeys">${icon('keyboard', 18)}</button>
+      <button class="icon-btn" data-act="settings" data-tip="Settings">${icon('settings', 18)}</button>
       <button class="icon-btn ${favouriteGames().includes(slug) ? 'active' : ''}" data-act="fav" data-tip="Favourite">${icon('star', 18)}</button>
       <div class="brand">FAKE<b>SINO</b></div>
       <a class="fair-link" href="?modal=fairness">${icon('shield', 16)} Fairness</a>
     </div>
-    <div class="game-info">
-      <div class="game-info-head">${icon(slug, 20)}<span class="title">${esc(meta.name)}</span><span class="pill">${meta.category === 'slots' ? 'Fakesino Slots' : 'Fakesino Originals'}</span>
-        <span class="pill green hide-mobile">RTP ${meta.rtp}%</span><span class="chev">${icon('down', 18)}</span></div>
-      <div class="game-info-body"><div class="thumb">${gameArt(slug, meta.name)}</div>
-        <div><p style="margin-top:0">${esc(meta.desc)}</p>
-        <p>Every result is generated from your server seed, client seed and nonce, and can be checked independently in <a class="link" href="?modal=fairness&tab=verify">the verifier</a>. House edge ${(100 - meta.rtp).toFixed(1)}%.</p>
-        <p class="dim">Hotkeys: <span class="kbd">Space</span> bet · <span class="kbd">S</span> double bet · <span class="kbd">A</span> halve bet · <span class="kbd">D</span> zero bet${(meta.hotkeys || []).map(([k, label]) => ` · <span class="kbd">${esc(k)}</span> ${esc(label.toLowerCase())}`).join('')}</p></div></div>
+    <div class="game-info open">
+      <div class="game-info-head">${icon(slug, 20)}<span class="title">${esc(meta.name)}</span><span class="pill">${esc(catName)}</span>
+        <span class="pill green hide-mobile">RTP ${meta.rtp}%</span><span class="pill gi-playing" hidden><span class="dot-live"></span><span></span></span></div>
+      <div class="gi-tabs tabs"><button class="tab active" data-gt="big">${icon('trophy', 15)} Big Wins</button><button class="tab" data-gt="lucky">${icon('sparkle', 15)} Lucky Wins</button><button class="tab" data-gt="desc">${icon('info', 15)} Description</button></div>
+      <div class="gi-body"></div>
     </div>
+    ${more.length ? `<div class="section-title gi-more-title">${icon('fire', 18)} More from ${esc(catName)}<span class="spacer"></span><a class="btn btn-ghost btn-sm" href="/casino/group/${meta.category}">View all</a></div><div class="game-row gi-more">${more.map(tile).join('')}</div>` : ''}
     <div class="lb-slot"></div>
   </div>`);
   page.appendChild(root);
@@ -65,10 +74,80 @@ export default async function gamePage(page, { slug }) {
   const stage = root.querySelector('.game-stage');
   const footer = root.querySelector('.game-footer');
   const live = createLiveBets(root.querySelector('.lb-slot'), { game: slug });
+  const info = root.querySelector('.game-info');
+  const giBody = root.querySelector('.gi-body');
+  const playingPill = root.querySelector('.gi-playing');
 
-  root.querySelector('.game-info-head').addEventListener('click', (e) => e.currentTarget.parentElement.classList.toggle('open'));
+  // ---- Big Wins / Lucky Wins / Description ----
+  let giTab = 'big';
+  let bigPeriod = '30d';
+  function describe() {
+    const how = meta.howTo || [];
+    const keys = [['Space', 'bet'], ['S', 'double bet'], ['A', 'halve bet'], ['D', 'zero bet'], ...(meta.hotkeys || []).map(([k, l]) => [k, l.toLowerCase()])];
+    giBody.innerHTML = `<div class="gi-desc"><div class="thumb">${gameArt(slug, meta.name)}</div><div>
+      <div class="gi-tags"><span class="pill">Provably Fair</span><span class="pill">${esc(catName)}</span><span class="pill">${esc(KIND_TAGS[meta.kind] || 'Instant')}</span><span class="pill green">RTP ${meta.rtp}%</span><span class="pill">House Edge ${(100 - meta.rtp).toFixed(2).replace(/\.?0+$/, '')}%</span></div>
+      <p>${esc(meta.desc)}</p>
+      ${how.length ? `<div class="gi-how"><b>How to play</b><ol>${how.map((h) => `<li>${esc(h)}</li>`).join('')}</ol></div>` : ''}
+      <p>Every result is generated from ${meta.kind === 'multiplayer' ? "the round's pre-committed hash chain" : 'your server seed, client seed and nonce'} and can be checked independently in <a class="link" href="?modal=fairness&tab=${meta.kind === 'multiplayer' ? 'crash' : 'verify'}">the verifier</a>.</p>
+      <p class="dim">Hotkeys: ${keys.map(([k, l]) => `<span class="kbd">${esc(k)}</span> ${esc(l)}`).join(' · ')}</p></div></div>`;
+  }
+  async function wins(type) {
+    giBody.innerHTML = `${type === 'big' ? `<div class="gi-period segmented"><button data-p="30d" class="${bigPeriod === '30d' ? 'active' : ''}">30 days</button><button data-p="all" class="${bigPeriod === 'all' ? 'active' : ''}">All time</button></div>` : '<div class="gi-period dim">Highest multipliers in the last 60 days · bets of $0.10 or more</div>'}<div class="gi-wins"><div class="spinner"></div></div>`;
+    let data;
+    try {
+      data = await api.get(`/api/games/${slug}/top?type=${type}&period=${type === 'big' ? bigPeriod : '60d'}`);
+    } catch {
+      data = { wins: [] };
+    }
+    if (giTab !== type) return;
+    const box = giBody.querySelector('.gi-wins');
+    box.innerHTML = data.wins.length
+      ? `<div class="table-wrap"><table class="table gi-table"><thead><tr><th>#</th><th>User</th><th class="hide-mobile">Date</th><th class="r hide-mobile">Bet</th><th class="r">Multiplier</th><th class="r">Payout</th></tr></thead><tbody>${data.wins
+          .map(
+            (w, i) => `<tr data-bet="${w.id}"><td>${i < 3 ? `<span class="gi-rank r${i + 1}">${icon('trophy', 14)}</span>` : i + 1}</td>
+            <td>${w.username ? esc(w.username) : `<span class="user-hidden">${icon('eyeOff', 13)} Hidden</span>`}</td>
+            <td class="hide-mobile dim">${esc(fmt.dateTime(w.createdAt))}</td>
+            <td class="r hide-mobile"><span class="amt">${esc(fmt.money(w.amount, w.currency))} ${coin(w.currency, 14)}</span></td>
+            <td class="r">${fmt.multiplier(w.multiplier)}</td>
+            <td class="r win-text"><span class="amt">${esc(fmt.money(w.payout, w.currency))} ${coin(w.currency, 14)}</span></td></tr>`,
+          )
+          .join('')}</tbody></table></div>`
+      : `<div class="empty">${icon('trophy', 26)}<div>No wins yet. Be the first to win!</div></div>`;
+  }
+  function showGi(t) {
+    giTab = t;
+    root.querySelectorAll('[data-gt]').forEach((b) => b.classList.toggle('active', b.dataset.gt === t));
+    if (t === 'desc') describe();
+    else wins(t);
+  }
+  on(info, 'click', '[data-gt]', (e, b) => showGi(b.dataset.gt));
+  on(giBody, 'click', '[data-p]', (e, b) => {
+    bigPeriod = b.dataset.p;
+    wins('big');
+  });
+  on(giBody, 'click', 'tr[data-bet]', (e, tr) => setQuery({ modal: 'bet', id: tr.dataset.bet }));
+  showGi('big');
+  const offWins = bus.on('bet:mine', (bet) => {
+    if (bet.game === slug && giTab !== 'desc' && bet.payout > bet.amount) setTimeout(() => giTab !== 'desc' && wins(giTab), 400);
+  });
+
+  // ---- presence ----
+  const ping = () => api.post('/api/presence', { slug }).then(({ counts }) => counts && (state.presence = counts) && bus.emit('presence', counts)).catch(() => {});
+  ping();
+  const pingTimer = setInterval(ping, 30000);
+  loadPresence();
+  const renderPlaying = () => {
+    const n = playing(slug);
+    playingPill.hidden = !n;
+    playingPill.querySelector('span:last-child').textContent = `${fmt.compact(n)} Playing`;
+    refreshTiles(root, bySlug);
+  };
+  const offPresence = bus.on('presence', renderPlaying);
 
   let statsPanel = null;
+  let settingsPop = null;
+  const onFullscreen = () => footer.querySelector('[data-act=fullscreen]')?.classList.toggle('active', document.fullscreenElement === frame);
+  document.addEventListener('fullscreenchange', onFullscreen);
   on(footer, 'click', '[data-act]', (e, b) => {
     const act = b.dataset.act;
     if (act === 'theatre') {
@@ -76,26 +155,33 @@ export default async function gamePage(page, { slug }) {
       frame.classList.toggle('theatre', state.prefs.theatre);
       document.querySelector('.shell')?.classList.toggle('sidebar-collapsed', state.prefs.theatre || state.prefs.sidebarCollapsed);
       bus.emit('resize');
+    } else if (act === 'fullscreen') {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else frame.requestFullscreen?.().catch(() => {});
+      setTimeout(() => bus.emit('resize'), 200);
     } else if (act === 'stats') {
       if (statsPanel) {
         statsPanel.destroy();
         statsPanel = null;
       } else statsPanel = liveStatsPanel(() => (statsPanel = null));
     } else if (act === 'hotkeys') {
-      savePrefs({ hotkeys: !state.prefs.hotkeys });
-      b.classList.toggle('active', state.prefs.hotkeys);
-      import('../ui/toast.js').then(({ toast }) => toast({ title: state.prefs.hotkeys ? 'Hotkeys enabled' : 'Hotkeys disabled', message: state.prefs.hotkeys ? 'Space to bet, S/A to double/halve, D to reset.' : '' }));
-    } else if (act === 'sound') {
-      savePrefs({ sound: !state.prefs.sound });
-      b.innerHTML = icon(state.prefs.sound ? 'volume' : 'volumeOff', 18);
-    } else if (act === 'anim') {
-      savePrefs({ animations: state.prefs.animations === false });
-      b.classList.toggle('active', state.prefs.animations !== false);
+      setQuery({ modal: 'hotkeys' });
+    } else if (act === 'settings') {
+      if (document.querySelector('.gs-pop')) settingsPop?.close();
+      else
+        settingsPop = openGameSettings(b, slug, {
+          onInfo: () => {
+            showGi('desc');
+            info.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          },
+        });
     } else if (act === 'fav') {
       const favs = favouriteGames();
-      const next = favs.includes(slug) ? favs.filter((s) => s !== slug) : [slug, ...favs];
+      const added = !favs.includes(slug);
+      const next = added ? [slug, ...favs] : favs.filter((s) => s !== slug);
       setList(FAV_KEY, next);
-      b.classList.toggle('active', next.includes(slug));
+      b.classList.toggle('active', added);
+      toast({ type: 'success', title: added ? 'Added to favourites' : 'Removed from favourites' });
     }
   });
 
@@ -116,6 +202,12 @@ export default async function gamePage(page, { slug }) {
     ctx.destroy();
     live.destroy();
     statsPanel?.destroy();
+    settingsPop?.close();
+    offWins();
+    offPresence();
+    clearInterval(pingTimer);
+    document.removeEventListener('fullscreenchange', onFullscreen);
+    if (document.fullscreenElement === frame) document.exitFullscreen().catch(() => {});
     if (state.prefs.theatre) document.querySelector('.shell')?.classList.toggle('sidebar-collapsed', !!state.prefs.sidebarCollapsed);
   };
 }

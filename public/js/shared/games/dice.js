@@ -124,3 +124,6 @@ export function outcome(rng, params) {
   const win = wins(params, roll);
   return { roll, win, multiplier: win ? multiplierFor(params) : 0 };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => multiplierFor(params);

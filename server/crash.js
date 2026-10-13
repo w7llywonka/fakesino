@@ -4,6 +4,7 @@ import { roundDown } from '../public/js/shared/currencies.js';
 import { sha256, randomHex } from './fair.js';
 import { HttpError, badRequest } from './http.js';
 import { parseCurrency, parseAmount, credit, debit, assertNotOnBreak } from './accounts.js';
+import { assertStake, capPayout } from './limits.js';
 
 export const BETTING_MS = 6000;
 export const CRASHED_MS = 3000;
@@ -164,7 +165,7 @@ export class CrashGame {
   cashoutPlayer(p, at) {
     const user = this.store.data.users[p.userId];
     p.cashedAt = at;
-    p.payout = roundDown(p.currency, p.amount * at);
+    p.payout = capPayout(p.currency, p.amount, roundDown(p.currency, p.amount * at));
     if (user) {
       credit(user, p.currency, p.payout);
       this.live.toUser(user.id, 'balance', { currency: p.currency, amount: user.balances[p.currency] });
@@ -222,6 +223,7 @@ export class CrashGame {
     assertNotOnBreak(user);
     const currency = parseCurrency(user, body.currency);
     const amount = parseAmount(currency, body.amount ?? 0);
+    assertStake(currency, amount);
     let autoCashout = body.autoCashout == null || body.autoCashout === '' ? null : Number(body.autoCashout);
     if (autoCashout != null) {
       if (!Number.isFinite(autoCashout) || autoCashout < 1.01 || autoCashout > MAX_AUTO) throw badRequest('Auto cashout must be at least 1.01x');

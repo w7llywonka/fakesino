@@ -24,6 +24,7 @@ export default function mountBlitz(ctx) {
     fields: [amountField(), { key: 'profit', type: 'profit', label: 'Profit on Win' }],
     onBet: () => play(false),
     auto: { run: () => play(true) },
+    hotkeys: { w: () => !busy && !panel.autoRunning && setTarget(target - 1), e: () => !busy && !panel.autoRunning && setTarget(target + 1) },
   });
 
   const stage = el(`<div class="bz-stage">

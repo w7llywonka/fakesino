@@ -188,8 +188,12 @@ function renderHeader(shell) {
     navigate('/casino');
     setTimeout(() => $('.search-bar input')?.focus(), 50);
   });
+  // Close dropdowns on outside clicks; clicks on a dropdown's own anchor
+  // (its parent) are left to the anchor's toggle.
   docClick = (e) => {
-    if (!e.target.closest('.dropdown')) closeDropdowns();
+    document.querySelectorAll('.dropdown').forEach((d) => {
+      if (!d.contains(e.target) && !d.parentElement?.contains(e.target)) d.remove();
+    });
   };
   document.addEventListener('click', docClick);
 }

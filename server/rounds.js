@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { sha256, randomHex } from './fair.js';
 import { badRequest } from './http.js';
 import { parseCurrency, credit, debit, assertNotOnBreak } from './accounts.js';
+import { assertStake, capPayout } from './limits.js';
 
 const CHAIN_LENGTH = 20000;
 
@@ -139,7 +140,7 @@ export class RoundGame {
     for (const b of this.bets) {
       const user = this.store.data.users[b.userId];
       if (!user) continue;
-      const payout = this.roundDown(b.currency, this.payoutFor(b, r.result));
+      const payout = capPayout(b.currency, b.amount, this.roundDown(b.currency, this.payoutFor(b, r.result)));
       if (payout > 0) {
         credit(user, b.currency, payout);
         if (!pushes.has(user.id)) pushes.set(user.id, new Set());
@@ -171,6 +172,7 @@ export class RoundGame {
     assertNotOnBreak(user);
     const currency = parseCurrency(user, body.currency);
     const { amount, params } = this.parseBet(user, body, currency);
+    assertStake(currency, amount, this.maxMultiplier?.(params) ?? null);
     const joinNow = this.round?.phase === 'betting';
     const list = joinNow ? this.bets : this.queue;
     if (list.filter((b) => b.userId === user.id).length >= this.maxBetsPerUser) throw badRequest(`Up to ${this.maxBetsPerUser} bets per round`);

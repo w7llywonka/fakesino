@@ -92,3 +92,6 @@ export function outcome(rng, params) {
   const multiplier = TABLES[params.risk][params.picks.length][hits.length];
   return { drawn, hits, multiplier };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => Math.max(...TABLES[params.risk][params.picks.length]);

@@ -55,6 +55,7 @@ export default function mountMines(ctx) {
       { key: 'profit', type: 'readonly', label: 'Total profit (1.00×)', suffix: coin(ctx.currency()), hidden: true, mode: 'manual' },
     ],
     onBet: () => (game ? cashout() : start()),
+    hotkeys: { q: () => randomBtn.click(), w: () => panel.step('mines', -1), e: () => panel.step('mines', 1) },
     auto: {
       run: () => autoRound(),
       canRun: () => {

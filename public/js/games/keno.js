@@ -53,6 +53,7 @@ export default function mountKeno(ctx) {
     ],
     onBet: () => play(false),
     auto: { run: () => play(true) },
+    hotkeys: { q: () => !busy && !panel.autoRunning && autoPick(), w: () => !busy && !panel.autoRunning && clearTable() },
   });
 
   const tiles = Array.from({ length: NUMBERS }, (_, i) => i + 1)

@@ -10,6 +10,7 @@ export const META = {
   rtp: 98,
   desc: 'Pick how many cards to deal, from 5 to 36. If every card is different, you win — the longer the run, the bigger the multiplier.',
   howTo: ['Choose a target from 5 to 36 cards.', 'Press Bet — cards are dealt from an infinite deck.', 'Any repeated card loses; reach the target with all cards unique to win.'],
+  hotkeys: [['W', 'Fewer cards'], ['E', 'More cards']],
   verifyFields: [['target', 'Target cards', 'number', 10]],
   icon: '<rect x="4" y="4" width="10" height="14" rx="2"/><rect x="10" y="6" width="10" height="14" rx="2"/><path d="M15 9l-2 4h3l-2 4"/>',
   thumb: {
@@ -56,3 +57,6 @@ export function outcome(rng, params) {
   const win = repeat == null;
   return { cards, repeat, win, multiplier: win ? multiplierFor(params.target) : 0 };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => multiplierFor(params.target);

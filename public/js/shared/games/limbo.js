@@ -41,3 +41,6 @@ export function outcome(rng, params) {
   const win = result >= params.target;
   return { result, win, multiplier: win ? params.target : 0 };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => params.target;

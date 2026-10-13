@@ -68,6 +68,7 @@ export default function mountPlinko(ctx) {
     ],
     onBet: () => play(false),
     auto: { run: () => play(true) },
+    hotkeys: { w: () => panel.step('rows', -1), e: () => panel.step('rows', 1) },
   });
 
   const stage = el(`<div class="plinko-stage">

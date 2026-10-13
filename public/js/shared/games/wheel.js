@@ -47,3 +47,6 @@ export function outcome(rng, params) {
   const multiplier = table(params.risk, params.segments)[segment];
   return { segment, multiplier };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => Math.max(...table(params.risk, params.segments));

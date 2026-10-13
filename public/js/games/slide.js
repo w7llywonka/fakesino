@@ -46,6 +46,7 @@ export default function mountSlide(ctx) {
     ],
     onBet: (v) => manualBet(v),
     auto: { run: (v) => autoRound(v), delay: 0 },
+    hotkeys: { w: () => panel.step('target', -1), e: () => panel.step('target', 1) },
   });
 
   const players = roundPlayers(ctx, { columns: ['Player', 'Target', 'Amount'], cells: (b) => [`${b.params.target.toFixed(2)}×`] });

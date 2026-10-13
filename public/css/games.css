@@ -863,3 +863,222 @@
   color: var(--text-3);
   font-size: 13px;
 }
+
+/* ---------- Game settings popover & hotkeys ---------- */
+
+.game-footer {
+  position: relative;
+}
+
+.gs-pop {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  z-index: 40;
+  display: grid;
+  gap: 2px;
+  animation: pop 0.14s ease-out;
+}
+
+.gs-vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.gs-vol input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.gs-vol-n {
+  width: 28px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  width: 100%;
+}
+
+.gs-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gs-row:hover {
+  background: var(--surface-2);
+}
+
+.gs-row svg {
+  color: var(--text-2);
+}
+
+.hk-table td:first-child {
+  width: 90px;
+}
+
+.hk-sep td {
+  padding-top: 16px !important;
+  font-weight: 800;
+  color: var(--text-2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (hover: none), (max-width: 900px) {
+  .game-footer [data-act='hotkeys'] {
+    display: none;
+  }
+}
+
+/* ---------- Game info card: Big Wins / Lucky Wins / Description ---------- */
+
+.game-info-head {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.gi-playing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gi-playing .dot-live {
+  width: 6px;
+  height: 6px;
+}
+
+.gi-tabs {
+  margin: 0 20px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gi-body {
+  padding: 0 20px 20px;
+  min-height: 120px;
+}
+
+.gi-period {
+  margin-bottom: 10px;
+  max-width: 260px;
+  font-size: 12px;
+}
+
+.gi-period.dim {
+  max-width: none;
+}
+
+.gi-table td,
+.gi-table th {
+  white-space: nowrap;
+}
+
+.gi-table tbody tr {
+  cursor: pointer;
+}
+
+.gi-table .amt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gi-rank {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.gi-rank.r1 {
+  color: #f5b83d;
+  background: rgba(245, 184, 61, 0.15);
+}
+
+.gi-rank.r2 {
+  color: #c0c8d2;
+  background: rgba(192, 200, 210, 0.15);
+}
+
+.gi-rank.r3 {
+  color: #d08b4c;
+  background: rgba(208, 139, 76, 0.15);
+}
+
+.gi-desc {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  color: var(--text-2);
+  line-height: 1.65;
+}
+
+.gi-desc .thumb {
+  border-radius: var(--radius);
+  overflow: hidden;
+  aspect-ratio: 3/4;
+}
+
+.gi-desc .thumb svg {
+  width: 100%;
+  height: 100%;
+}
+
+.gi-desc p {
+  margin: 10px 0;
+}
+
+.gi-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gi-how ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.gi-how b {
+  color: var(--text);
+}
+
+.gi-more-title {
+  margin-top: 24px;
+}
+
+@media (max-width: 900px) {
+  .gi-desc {
+    grid-template-columns: 1fr;
+  }
+  .gi-desc .thumb {
+    display: none;
+  }
+}

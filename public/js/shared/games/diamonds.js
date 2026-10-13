@@ -59,3 +59,6 @@ export function outcome(rng) {
     .map(([g]) => g);
   return { gems, hand: row.key, matched, multiplier: row.pays };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = () => PAYTABLE[0].pays;

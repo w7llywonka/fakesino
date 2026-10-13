@@ -2502,3 +2502,86 @@ textarea.input {
     min-width: 0;
   }
 }
+
+.game-tile-meta .dot-idle {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+/* ---------- Bet modal extras & chat bet cards ---------- */
+
+.bm-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.bm-id .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+
+.bm-share {
+  position: relative;
+  display: inline-flex;
+}
+
+.bm-share .dropdown {
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 170px;
+  text-align: left;
+}
+
+.bm-note {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(47, 124, 246, 0.12);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bm-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--blue);
+}
+
+.bm-note .btn {
+  margin-top: 8px;
+}
+
+.chat-bet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-bet .amt {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-bet.win b,
+.chat-bet.win .amt {
+  color: var(--accent);
+}

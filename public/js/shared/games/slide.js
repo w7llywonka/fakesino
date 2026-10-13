@@ -12,6 +12,7 @@ export const META = {
   rtp: 98,
   desc: 'Pick a target multiplier, then watch a strip of multipliers slide to a stop. If the card under the pointer is at or above your target, you win. Every round is shared and comes from a pre-committed hash chain.',
   howTo: ['Choose a target multiplier (1.01× – 1,000,000×) and an amount.', 'Bet during the countdown — bets placed while the strip slides join the next round.', 'You win amount × target when the round lands on your target or higher.'],
+  hotkeys: [['W', 'Target −'], ['E', 'Target +']],
   icon: '<rect x="3" y="7" width="4" height="10" rx="1"/><rect x="10" y="5" width="4" height="14" rx="1"/><rect x="17" y="7" width="4" height="10" rx="1"/><path d="M12 2v2M12 20v2"/>',
   thumb: {
     bg: ['#3b5bdb', '#7048e8'],

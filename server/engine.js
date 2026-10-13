@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { assertStake, capPayout } from './limits.js';
 import { CURRENCIES, roundDown, toUsd } from '../public/js/shared/currencies.js';
 import { GameRuleError } from '../public/js/shared/games/util.js';
 import { GAMES, CATALOG } from './catalog.js';
@@ -31,6 +32,10 @@ export function createEngine({ store, live }) {
     return { ...rest, username: hidden ? null : bet.username, hidden: !!hidden };
   }
 
+  // Plugins (top wins, challenges, presence) observe every settled bet.
+  const betListeners = [];
+  const onBet = (fn) => betListeners.push(fn);
+
   function recordBet(user, { game, currency, amount, payout, params, result, seed, meta = {} }) {
     // The game's own multiplier, not payout ÷ stake: payouts are rounded down
     // to the currency's precision, which would understate small bets.
@@ -57,6 +62,13 @@ export function createEngine({ store, live }) {
     recordWagerStats(user, { game, currency, amount, payout, edge: CATALOG[game]?.edge ?? 0.01 });
     store.addBet(bet);
     live.broadcastOwned('bet', publicBet(bet), user.id);
+    for (const fn of betListeners) {
+      try {
+        fn(bet, user);
+      } catch (err) {
+        console.error('[bet listener]', err);
+      }
+    }
     return bet;
   }
 
@@ -79,9 +91,13 @@ export function createEngine({ store, live }) {
         }
       }
       params.chips = chips;
-      return { currency, amount: roundDown(currency, total) };
+      const amount = roundDown(currency, total);
+      assertStake(currency, amount);
+      return { currency, amount };
     }
-    return { currency, amount: parseAmount(currency, body.amount ?? 0) };
+    const amount = parseAmount(currency, body.amount ?? 0);
+    assertStake(currency, amount, g.module.maxMultiplier ? g.module.maxMultiplier(params) : null);
+    return { currency, amount };
   }
 
   function playInstant(user, slug, body) {
@@ -94,7 +110,7 @@ export function createEngine({ store, live }) {
     const seed = takeNonce(user);
     const rng = createRng(seed);
     const result = rules(() => g.module.outcome(rng, params));
-    const payout = roundDown(currency, result.payout != null ? result.payout : amount * result.multiplier);
+    const payout = capPayout(currency, amount, roundDown(currency, result.payout != null ? result.payout : amount * result.multiplier));
     credit(user, currency, payout);
     const bet = recordBet(user, {
       game: slug,
@@ -127,7 +143,7 @@ export function createEngine({ store, live }) {
     const g = GAMES[slug];
     const { state, base, currency } = game;
     const amount = roundDown(currency, base * state.wager);
-    const payout = roundDown(currency, base * state.payout);
+    const payout = capPayout(currency, amount, roundDown(currency, base * state.payout));
     credit(user, currency, payout);
     delete user.active[slug];
     const bet = recordBet(user, {
@@ -254,5 +270,5 @@ export function createEngine({ store, live }) {
     return out;
   }
 
-  return { playInstant, startStateful, actStateful, getActive, betDetails, myBets, recentBets, recordBet, publicBet, myBet };
+  return { playInstant, startStateful, actStateful, getActive, betDetails, myBets, recentBets, recordBet, publicBet, myBet, onBet };
 }

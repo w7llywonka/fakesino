@@ -16,6 +16,7 @@ export const META = {
     'Survive every round to clear the level; the floor resets for up to 3 levels.',
     'Cash out after any safe landing.',
   ],
+  hotkeys: [['Q', 'Jump to a random tile']],
   verifyFields: [['difficulty', 'Difficulty', ['easy', 'medium', 'hard', 'toxic']]],
   icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/><path d="M4 20c2-2 4 0 6-2s4 0 6-2 3 0 4-1" stroke-width="1.5"/>',
   thumb: {

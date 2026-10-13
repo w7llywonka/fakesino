@@ -55,3 +55,6 @@ export function outcome(rng, params) {
   const multiplier = TABLES[params.difficulty].mult[ring.tier - 1];
   return { tier: ring.tier, angle: f1 * 360, radius: Math.sqrt(f2), multiplier };
 }
+
+// Best case for the bet limits.
+export const maxMultiplier = (params) => Math.max(...TABLES[params.difficulty].mult);

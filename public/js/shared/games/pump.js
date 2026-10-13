@@ -10,7 +10,7 @@ export const META = {
   rtp: 98,
   desc: 'Pump the balloon as far as you dare. Every pump raises the multiplier — cash out before it pops.',
   howTo: ['Choose a difficulty: more pop points mean bigger multipliers.', 'Press Bet, then Pump one breath at a time.', 'Cash out after any pump. If the balloon pops, the bet is lost.'],
-  hotkeys: [['Space', 'Bet / cash out'], ['P', 'Pump']],
+  hotkeys: [['P', 'Pump']],
   verifyFields: [['difficulty', 'Difficulty', ['easy', 'medium', 'hard', 'expert']]],
   icon: '<path d="M12 3a6 7 0 0 1 6 7c0 4-3 7-6 7s-6-3-6-7a6 7 0 0 1 6-7z"/><path d="M12 17l-1 2h2l-1-2M12 19c0 2-2 2-2 3"/>',
   thumb: {

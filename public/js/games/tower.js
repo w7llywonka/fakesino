@@ -95,6 +95,10 @@ export default function mountTower(ctx) {
       { key: 'profit', type: 'readonly', label: 'Total profit (1.00×)', suffix: coin(ctx.currency()), hidden: true, mode: 'manual' },
     ],
     onBet: () => (game ? cashout() : start()),
+    hotkeys: {
+      q: () => randomBtn.click(),
+      ...Object.fromEntries([1, 2, 3, 4].map((n) => [String(n), () => game && !game.state.done && n <= DIFFICULTIES[difficulty].cols && pick(n - 1)])),
+    },
     auto: {
       run: () => autoRound(),
       canRun: () => {

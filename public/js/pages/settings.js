@@ -89,12 +89,13 @@ export default function settingsPage(page, { tab = 'general' }) {
     if (location.hash === '#backup') setTimeout(() => body.querySelector('#backup')?.scrollIntoView({ behavior: 'smooth' }), 50);
   } else if (tab === 'preferences') {
     const rows = [
-      ['privateMode', 'Ghost mode', 'Hide your username in public bet feeds, the leaderboard and crash rounds.', 'server'],
+      ['privateMode', 'Ghost mode', 'Hide your username in public bet feeds, leaderboards, big wins and live rounds.', 'server'],
       ['hideZero', 'Hide zero balances', 'Only show currencies with a balance in the wallet dropdown.', 'server'],
       ['displayFiat', 'Display crypto in fiat', 'Show crypto balances and bets as their USD value.', 'server'],
       ['sound', 'Game sounds', 'Play sound effects in games.', 'local'],
       ['animations', 'Animations', 'Animate game results. Turn off for instant results.', 'local'],
       ['hotkeys', 'Hotkeys', 'Space to bet, S/A to double/halve, D to zero your bet.', 'local'],
+      ['maxBetWarning', 'Max bet warning', 'Ask before placing a bet set with the Max button.', 'server'],
     ];
     body.innerHTML = `<h3 style="margin-top:0">Preferences</h3>${rows
       .map(([k, t, d, where]) => {

@@ -478,6 +478,21 @@ test('round games refund unsettled stakes on stop and after a crash', async () =
   app.store.data.slide.pending = pending;
 });
 
+test('bet limits: max bet per currency and max profit for fixed multipliers', async () => {
+  const c = await newPlayer(1000);
+  const big = await c.post('/api/games/dice/bet', { amount: 1000000.01, currency: 'USD', params: { target: 50.5, condition: 'over' } });
+  assert.equal(big.status, 400);
+  // 9,900x (chance 0.01%) → max stake = 100,000 / 9,899 ≈ 10.10
+  const r = await c.post('/api/games/dice/bet', { amount: 20, currency: 'USD', params: { target: 99.99, condition: 'over' } });
+  assert.equal(r.status, 400);
+  assert.equal(r.data.code, 'max_profit');
+  assert.match(r.data.error, /maximum bet amount is 10\.1 USD/);
+  const ok = await c.post('/api/games/dice/bet', { amount: 10, currency: 'USD', params: { target: 99.99, condition: 'over' } });
+  assert.equal(ok.status, 200);
+  const slide = await c.post('/api/slide/bet', { amount: 5, currency: 'USD', target: 1000000 });
+  assert.equal(slide.status, 400);
+});
+
 test('vault, rakeback and daily reload', async () => {
   const c = await newPlayer(100);
   const v = await c.post('/api/wallet/vault', { currency: 'USD', amount: 40, direction: 'deposit' });

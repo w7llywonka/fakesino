@@ -21,6 +21,10 @@ class SlideGame extends RoundGame {
     return { amount, params: { target } };
   }
 
+  maxMultiplier(params) {
+    return params.target;
+  }
+
   payoutFor(bet, result) {
     return result >= bet.params.target ? bet.amount * bet.params.target : 0;
   }

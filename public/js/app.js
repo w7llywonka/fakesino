@@ -87,6 +87,11 @@ async function syncModal(q) {
     case 'stats':
       done(await (await import('./ui/stats.js')).openStatsModal());
       break;
+    case 'hotkeys': {
+      const m = location.pathname.match(/^\/casino\/games\/([a-z0-9-]+)/);
+      done((await import('./ui/hotkeys.js')).openHotkeysModal(m ? m[1] : null));
+      break;
+    }
     default:
       setQuery({ modal: null }, { replace: true });
   }

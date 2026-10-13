@@ -87,6 +87,7 @@ export default function mountCrash(ctx) {
     ],
     onBet: (v) => manualAction(v),
     auto: { run: (v) => autoRound(v), delay: 0 },
+    hotkeys: { w: () => panel.step('cashout', -1), e: () => panel.step('cashout', 1) },
   });
   panel.set('cashout', recallCashout());
 
