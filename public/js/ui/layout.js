@@ -5,7 +5,6 @@ import { CURRENCIES, CURRENCY_CODES } from '../shared/currencies.js';
 import { GAMES, CATEGORIES } from '../games/registry.js';
 import * as fmt from '../format.js';
 import { setQuery, navigate } from '../router.js';
-import { api } from '../api.js';
 import { createChat } from './chat.js';
 
 export function renderShell(app) {
@@ -137,11 +136,9 @@ function renderHeader(shell) {
   const right = shell.querySelector('.header-right');
   if (docClick) document.removeEventListener('click', docClick);
   if (!state.user) {
+    // Only while the wallet session is (re)connecting.
     center.innerHTML = '';
-    right.innerHTML = `
-      <button class="btn btn-ghost" data-modal="auth" data-tab="login">Sign In</button>
-      <button class="btn btn-blue" data-modal="auth" data-tab="register">Register</button>
-      <button class="icon-btn hide-mobile" data-act="chat" aria-label="Chat">${icon('chat', 20)}</button>`;
+    right.innerHTML = `<button class="icon-btn hide-mobile" data-act="chat" aria-label="Chat">${icon('chat', 20)}</button>`;
     return;
   }
   center.innerHTML = `<div class="wallet-pill">
@@ -254,19 +251,14 @@ function userDropdown() {
     ['list', 'Transactions', '/transactions/deposits'],
     ['history', 'My Bets', '/transactions/bets'],
     ['settings', 'Settings', '/settings/general'],
+    ['lock', 'Wallet backup', '/settings/general#backup'],
     ['shield', 'Provably Fair', '?modal=fairness'],
   ];
   const dd = el(`<div class="dropdown"><div style="padding:8px 16px 10px;border-bottom:1px solid #e3e8ee;margin-bottom:4px">
       <div style="font-weight:800">${esc(state.user.username)}</div><div style="font-size:12px;color:#5a6b7e">${esc(state.user.vip.level)} VIP</div></div>
-    ${items.map(([ic, label, href]) => `<a class="dropdown-item" href="${href}">${icon(ic, 16)} ${label}</a>`).join('')}
-    <button class="dropdown-item" data-act="logout">${icon('logout', 16)} Logout</button></div>`);
+    ${items.map(([ic, label, href]) => `<a class="dropdown-item" href="${href}">${icon(ic, 16)} ${label}</a>`).join('')}</div>`);
   dd.addEventListener('click', (e) => {
     if (e.target.closest('a')) setTimeout(closeDropdowns, 0);
-  });
-  dd.querySelector('[data-act=logout]').addEventListener('click', async () => {
-    closeDropdowns();
-    await api.post('/api/auth/logout');
-    bus.emit('logout');
   });
   return dd;
 }

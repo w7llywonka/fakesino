@@ -34,7 +34,7 @@ export default async function vipPage(page) {
           <div class="vip-progress"><div class="row between muted" style="font-size:13px"><span>${(vip.progress * 100).toFixed(2)}%</span><span>${vip.next ? `Next: ${esc(vip.next)} at ${fmt.fiat(vip.nextWager)} wagered` : 'Top level reached'}</span></div>
           <div class="progress"><div style="width:${vip.progress * 100}%;background:${vip.color}"></div></div>
           <div class="muted" style="font-size:13px">Total wagered ${fmt.fiat(vip.wageredUsd)}</div></div>`
-              : `<div style="font-size:24px;font-weight:900">Climb the ranks as you play</div><p class="muted">Every bet counts toward your VIP level. Higher levels unlock bigger reloads.</p><a class="btn btn-blue" href="?modal=auth&tab=register">Join now</a>`
+              : `<div style="font-size:24px;font-weight:900">Climb the ranks as you play</div><p class="muted">Every bet counts toward your VIP level. Higher levels unlock bigger reloads.</p><a class="btn btn-blue" href="/casino">Find a game</a>`
           }
         </div>
         <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="${vip?.color || '#f5b83d'}" stroke-width="1.4" class="hide-mobile">${'<path d="M3 7l4.5 4L12 4l4.5 7L21 7l-2 12H5z"/>'}</svg>

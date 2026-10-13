@@ -2,7 +2,6 @@ import { el, esc } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
 import { state, bus } from '../state.js';
-import { setQuery } from '../router.js';
 import * as fmt from '../format.js';
 import { toastError } from './toast.js';
 
@@ -11,8 +10,8 @@ export function createChat(slot, onClose) {
     <div class="chat-head">${icon('chat', 18)} Chat <span class="online"><span class="dot-live"></span> Live</span>
       <button class="icon-btn" data-act="close" aria-label="Close chat">${icon('close', 18)}</button></div>
     <div class="chat-messages"><div class="spinner"></div></div>
-    <form class="chat-form"><input class="input" maxlength="200" placeholder="${state.user ? 'Type your message' : 'Sign in to chat'}" ${state.user ? '' : 'disabled'}>
-      <button class="btn btn-primary" type="submit" ${state.user ? '' : 'disabled'}>Send</button></form>
+    <form class="chat-form"><input class="input" maxlength="200" placeholder="Type your message">
+      <button class="btn btn-primary" type="submit">Send</button></form>
   </aside>`);
   slot.appendChild(panel);
   const list = panel.querySelector('.chat-messages');
@@ -45,7 +44,6 @@ export function createChat(slot, onClose) {
   });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!state.user) return setQuery({ modal: 'auth', tab: 'login' });
     const text = input.value.trim();
     if (!text) return;
     input.value = '';

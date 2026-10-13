@@ -11,10 +11,11 @@ import { CrashGame } from './crash.js';
 import { createPayments } from './payments.js';
 import { rotateSeeds, publicSeeds, randomClientSeed } from './fair.js';
 import {
-  createUser,
-  findByLogin,
-  verifyPassword,
-  hashPassword,
+  DEVICE_RE,
+  createGuest,
+  userForDevice,
+  linkDevice,
+  renameUser,
   createSession,
   sessionUser,
   publicUser,
@@ -57,42 +58,46 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   const payments = createPayments({ store, live, publicUser });
   payments.recover();
 
-  const authLimit = rateLimiter({ windowMs: 60_000, max: 20 });
+  const guestLimit = rateLimiter({ windowMs: 60_000, max: 30 });
   const betLimit = rateLimiter({ windowMs: 1000, max: 40 });
   const chatLimit = rateLimiter({ windowMs: 2000, max: 1 });
 
   const router = new Router();
   const authed = (fn) => (ctx) => {
-    if (!ctx.user) throw new HttpError(401, 'Sign in to continue', { code: 'auth_required' });
+    if (!ctx.user) throw new HttpError(401, 'Your wallet session expired', { code: 'auth_required' });
     return fn(ctx);
   };
 
-  // --- Auth -------------------------------------------------------------------------
+  // --- Wallet identity ----------------------------------------------------------------
+  // There are no sign-ups. Each browser keeps a random device key in local
+  // storage; the server stores only its hash and maps it to a wallet. If the
+  // server no longer knows the key (fresh database, new server), the browser's
+  // saved snapshot rebuilds the wallet.
   const startSession = (ctx, user) => {
     const token = createSession(store, user);
     ctx.setCookie(cookie('sid', token, { maxAge: SESSION_TTL / 1000, secure: secureCookies }));
-    return { user: publicUser(user) };
   };
 
-  router.post('/api/auth/register', (ctx) => {
-    authLimit(`reg:${ctx.ip}`);
-    if (!ctx.body.terms) throw badRequest('Please accept the terms to continue', { field: 'terms' });
-    const user = createUser(store, ctx.body);
-    return startSession(ctx, user);
-  });
-
-  router.post('/api/auth/login', (ctx) => {
-    authLimit(`login:${ctx.ip}`);
-    const user = findByLogin(store, ctx.body.login);
-    if (!user || !verifyPassword(String(ctx.body.password || ''), user)) throw new HttpError(401, 'Invalid username or password', { field: 'password' });
-    return startSession(ctx, user);
-  });
-
-  router.post('/api/auth/logout', (ctx) => {
-    if (ctx.token) delete store.data.sessions[ctx.token];
-    store.save();
-    ctx.setCookie(cookie('sid', '', { maxAge: 0, secure: secureCookies }));
-    return { ok: true };
+  router.post('/api/auth/guest', (ctx) => {
+    const deviceId = String(ctx.body.deviceId || '').toLowerCase();
+    if (!DEVICE_RE.test(deviceId)) throw badRequest('Invalid wallet key', { field: 'deviceId' });
+    const known = userForDevice(store, deviceId);
+    if (ctx.body.mustExist && !known) throw new HttpError(404, 'No wallet found for that key', { field: 'deviceId' });
+    // Keep the current session when it already belongs to this device (or the
+    // device is new to the server, e.g. local storage was cleared).
+    if (ctx.user && (!known || known.id === ctx.user.id)) {
+      if (!known) linkDevice(store, deviceId, ctx.user);
+      return { user: publicUser(ctx.user), created: false, restored: false };
+    }
+    if (known) {
+      startSession(ctx, known);
+      return { user: publicUser(known), created: false, restored: false };
+    }
+    guestLimit(`guest:${ctx.ip}`);
+    const { user, restored } = createGuest(store, ctx.body.restore);
+    linkDevice(store, deviceId, user);
+    startSession(ctx, user);
+    return { user: publicUser(user), created: true, restored };
   });
 
   router.get('/api/me', (ctx) => ({ user: ctx.user ? publicUser(ctx.user) : null }));
@@ -116,19 +121,8 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   );
 
   router.post(
-    '/api/account/password',
-    authed((ctx) => {
-      if (!verifyPassword(String(ctx.body.current || ''), ctx.user)) throw badRequest('Current password is incorrect', { field: 'current' });
-      const next = String(ctx.body.next || '');
-      if (next.length < 8) throw badRequest('New password must be at least 8 characters', { field: 'next' });
-      const { salt, hash } = hashPassword(next);
-      ctx.user.salt = salt;
-      ctx.user.passHash = hash;
-      // Sign out other sessions.
-      for (const [t, s] of Object.entries(store.data.sessions)) if (s.userId === ctx.user.id && t !== ctx.token) delete store.data.sessions[t];
-      store.save();
-      return { ok: true };
-    }),
+    '/api/account/username',
+    authed((ctx) => ({ user: publicUser(renameUser(store, ctx.user, ctx.body.username)) })),
   );
 
   router.post(

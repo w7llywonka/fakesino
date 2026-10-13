@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { createApp } from '../server/app.js';
 import { createArrayRng } from '../public/js/shared/fair.js';
 import * as dice from '../public/js/shared/games/dice.js';
@@ -40,15 +41,14 @@ function client() {
     const data = await res.json().catch(() => null);
     return { status: res.status, data };
   };
-  return { get: (u) => call('GET', u), post: (u, b = {}) => call('POST', u, b) };
+  return { get: (u) => call('GET', u), post: (u, b = {}) => call('POST', u, b), forgetCookie: () => (cookie = '') };
 }
 
+const key = () => crypto.randomBytes(32).toString('hex');
 const card = (number) => ({ number, expMonth: 12, expYear: new Date().getFullYear() + 2, cvc: number.startsWith('3') ? '1234' : '123', name: 'Test Player' });
-let n = 0;
 async function newPlayer(deposit = 1000) {
   const c = client();
-  const name = `player${++n}`;
-  const r = await c.post('/api/auth/register', { username: name, email: `${name}@example.com`, password: 'password123', terms: true });
+  const r = await c.post('/api/auth/guest', { deviceId: key() });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   if (deposit) {
     const d = await c.post('/api/payments/card', { amount: deposit, currency: 'USD', card: card('4242424242424242') });
@@ -57,23 +57,87 @@ async function newPlayer(deposit = 1000) {
   return c;
 }
 
-test('registration validates input and starts a session', async () => {
+test('wallets are created automatically, no sign-up', async () => {
   const c = client();
-  assert.equal((await c.post('/api/auth/register', { username: 'x', email: 'bad', password: '1', terms: true })).status, 400);
-  assert.equal((await c.post('/api/auth/register', { username: 'okname', email: 'ok@example.com', password: 'password123' })).data.field, 'terms');
-  const r = await c.post('/api/auth/register', { username: 'okname', email: 'ok@example.com', password: 'password123', terms: true });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.user.balances.USD, 0);
-  assert.equal(r.data.user.passHash, undefined, 'never leaks the password hash');
-  const me = await c.get('/api/me');
-  assert.equal(me.data.user.username, 'okname');
-  const dup = await client().post('/api/auth/register', { username: 'OKNAME', email: 'other@example.com', password: 'password123', terms: true });
-  assert.equal(dup.data.field, 'username');
-  await c.post('/api/auth/logout');
   assert.equal((await c.get('/api/me')).data.user, null);
-  const login = await c.post('/api/auth/login', { login: 'ok@example.com', password: 'password123' });
-  assert.equal(login.status, 200);
-  assert.equal((await c.post('/api/auth/login', { login: 'okname', password: 'nope' })).status, 401);
+  assert.equal((await c.post('/api/auth/guest', { deviceId: 'not-a-key' })).status, 400);
+  const k = key();
+  const r = await c.post('/api/auth/guest', { deviceId: k });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.created, true);
+  assert.match(r.data.user.username, /^Player\d+$/);
+  assert.equal(r.data.user.balances.USD, 0);
+  assert.equal((await c.get('/api/me')).data.user.id, r.data.user.id);
+  const again = await c.post('/api/auth/guest', { deviceId: k });
+  assert.equal(again.data.created, false);
+  assert.equal(again.data.user.id, r.data.user.id);
+  // Cookie lost (new browser session) but the key is still in local storage → same wallet.
+  c.forgetCookie();
+  const back = await c.post('/api/auth/guest', { deviceId: k });
+  assert.equal(back.data.user.id, r.data.user.id);
+  assert.equal((await c.get('/api/me')).data.user.id, r.data.user.id);
+  // Another key is another wallet.
+  const other = await client().post('/api/auth/guest', { deviceId: key() });
+  assert.notEqual(other.data.user.id, r.data.user.id);
+  // Opening a wallet by key requires the wallet to exist.
+  assert.equal((await client().post('/api/auth/guest', { deviceId: key(), mustExist: true })).status, 404);
+  const opened = await client().post('/api/auth/guest', { deviceId: k, mustExist: true });
+  assert.equal(opened.data.user.id, r.data.user.id);
+  // The server stores only a hash of the key.
+  assert.ok(!JSON.stringify(app.store.data.devices).includes(k));
+});
+
+test('a browser snapshot rebuilds a wallet the server has forgotten', async () => {
+  const k = key();
+  const restore = {
+    username: 'Restored_1',
+    balances: { USD: 123.456, BTC: 1e99, ETH: -5, FOO: 3, LTC: 'abc' },
+    vault: { USD: 10 },
+    currency: 'BTC',
+    settings: { privateMode: true, bogus: true },
+    wageredUsd: 2500,
+  };
+  const r = await client().post('/api/auth/guest', { deviceId: k, restore });
+  assert.equal(r.data.restored, true);
+  const u = r.data.user;
+  assert.equal(u.username, 'Restored_1');
+  assert.equal(u.balances.USD, 123.45);
+  assert.equal(u.balances.BTC, Math.floor((10_000_000 / 62000) * 1e8) / 1e8, 'capped');
+  assert.equal(u.balances.ETH, 0);
+  assert.equal(u.balances.LTC, 0);
+  assert.equal(u.balances.FOO, undefined);
+  assert.equal(u.vault.USD, 10);
+  assert.equal(u.currency, 'BTC');
+  assert.equal(u.settings.privateMode, true);
+  assert.equal(u.settings.bogus, undefined);
+  assert.equal(u.vip.wageredUsd, 2500);
+  // A wallet the server still knows ignores snapshots.
+  const again = await client().post('/api/auth/guest', { deviceId: k, restore: { balances: { USD: 999999 } } });
+  assert.equal(again.data.user.balances.USD, 123.45);
+  // A taken username in a snapshot falls back to a generated one.
+  const clash = await client().post('/api/auth/guest', { deviceId: key(), restore: { username: 'restored_1' } });
+  assert.match(clash.data.user.username, /^Player\d+$/);
+});
+
+test('a cleared key is re-linked to the current session', async () => {
+  const c = client();
+  const first = await c.post('/api/auth/guest', { deviceId: key() });
+  const k2 = key();
+  const linked = await c.post('/api/auth/guest', { deviceId: k2 });
+  assert.equal(linked.data.user.id, first.data.user.id);
+  const fresh = await client().post('/api/auth/guest', { deviceId: k2 });
+  assert.equal(fresh.data.user.id, first.data.user.id);
+});
+
+test('usernames can be changed and stay unique', async () => {
+  const a = await newPlayer(0);
+  const b = await newPlayer(0);
+  assert.equal((await a.post('/api/account/username', { username: 'x' })).status, 400);
+  const ok = await a.post('/api/account/username', { username: 'okname' });
+  assert.equal(ok.data.user.username, 'okname');
+  assert.equal((await b.post('/api/account/username', { username: 'OKNAME' })).data.field, 'username');
+  assert.equal((await a.post('/api/account/username', { username: 'OkName' })).status, 200, 'renaming your own name in a different case is fine');
+  assert.equal((await client().post('/api/account/username', { username: 'nobody' })).status, 401);
 });
 
 test('card checkout: demo cards succeed, real cards are refused', async () => {
@@ -292,11 +356,11 @@ test('deposit limits and breaks are enforced server-side', async () => {
 });
 
 test('cross-origin POSTs and non-JSON bodies are rejected', async () => {
-  const res = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}' });
+  const res = await fetch(`${base}/api/auth/guest`, { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'application/json' }, body: '{}' });
   assert.equal(res.status, 403);
-  const nullOrigin = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { origin: 'null', 'content-type': 'application/json' }, body: '{}' });
+  const nullOrigin = await fetch(`${base}/api/auth/guest`, { method: 'POST', headers: { origin: 'null', 'content-type': 'application/json' }, body: '{}' });
   assert.equal(nullOrigin.status, 403);
-  const form = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'login=a&password=b' });
+  const form = await fetch(`${base}/api/auth/guest`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'deviceId=abc' });
   assert.equal(form.status, 415);
 });
 

@@ -1,15 +1,14 @@
-import { el, esc, on } from '../dom.js';
+import { el, esc, on, copyText } from '../dom.js';
 import { icon } from '../icons.js';
 import { api } from '../api.js';
-import { state, setUser, bus, savePrefs } from '../state.js';
-import { toastSuccess, toastError } from '../ui/toast.js';
-import { showFieldErrors } from '../ui/auth.js';
+import { state, setUser, bus, savePrefs, deviceId, useWalletKey, newWallet } from '../state.js';
+import { toastSuccess, toastError, toast } from '../ui/toast.js';
+import { showFieldErrors } from '../ui/forms.js';
 import { brandChip } from '../ui/wallet.js';
 import * as fmt from '../format.js';
 
 const TABS = [
   ['general', 'General'],
-  ['security', 'Security'],
   ['preferences', 'Preferences'],
   ['payments', 'Saved cards'],
   ['limits', 'Responsible Gaming'],
@@ -18,7 +17,7 @@ const TABS = [
 export default function settingsPage(page, { tab = 'general' }) {
   document.title = 'Settings — Fakesino';
   if (!state.user) {
-    page.innerHTML = `<div class="empty" style="padding:80px 0">${icon('lock', 32)}<div style="margin:10px 0 16px">Sign in to change your settings.</div><a class="btn btn-blue" href="?modal=auth&tab=login">Sign In</a></div>`;
+    page.innerHTML = '<div class="spinner"></div>';
     return;
   }
   if (!TABS.some(([k]) => k === tab)) tab = 'general';
@@ -29,29 +28,65 @@ export default function settingsPage(page, { tab = 'general' }) {
   const u = state.user;
 
   if (tab === 'general') {
-    body.innerHTML = `<h3 style="margin-top:0">Account</h3>
-      <div class="field"><div class="field-label">Username</div><input class="input" readonly value="${esc(u.username)}"></div>
-      <div class="field"><div class="field-label">Email</div><input class="input" readonly value="${esc(u.email)}"></div>
-      <div class="field"><div class="field-label">Member since</div><input class="input" readonly value="${esc(fmt.dateTime(u.createdAt))}"></div>
-      <div class="demo-notice">${icon('info', 16)}<div>No identity verification is needed — there's no real money to protect.</div></div>`;
-  } else if (tab === 'security') {
-    body.innerHTML = `<h3 style="margin-top:0">Change password</h3><form novalidate style="max-width:420px">
-      <div class="field" data-field="current"><label class="field-label">Current password</label><input class="input" type="password" name="current" autocomplete="current-password"><div class="field-error"></div></div>
-      <div class="field" data-field="next"><label class="field-label">New password</label><input class="input" type="password" name="next" autocomplete="new-password"><div class="field-error"></div></div>
-      <div class="field-error form-error" style="margin-bottom:10px"></div>
-      <button class="btn btn-blue" type="submit">Save password</button></form>
-      <div class="divider"></div><div class="muted" style="font-size:13px">Changing your password signs you out everywhere else.</div>`;
-    body.querySelector('form').addEventListener('submit', async (e) => {
+    const key = deviceId();
+    body.innerHTML = `<h3 style="margin-top:0">Profile</h3>
+      <form class="name-form" novalidate style="max-width:460px">
+        <div class="field" data-field="username"><label class="field-label">Username</label>
+          <div class="input-group"><input class="input" name="username" maxlength="14" value="${esc(u.username)}" autocomplete="off"><button class="addon" type="submit" style="padding:0 16px">Save</button></div>
+          <div class="dim" style="font-size:12px">Shown in chat, live bets and the leaderboard. 3–14 letters, numbers or _.</div><div class="field-error"></div></div>
+      </form>
+      <div class="field" style="max-width:460px"><div class="field-label">Playing since</div><input class="input" readonly value="${esc(fmt.dateTime(u.createdAt))}"></div>
+      <div class="divider"></div>
+      <h3 id="backup">Wallet backup</h3>
+      <div class="demo-notice">${icon('info', 16)}<div>There are no accounts — your play money is saved in this browser. Keep this key to open the same wallet in another browser or after clearing site data.</div></div>
+      <div class="field" style="max-width:640px"><div class="field-label">Your wallet key</div>
+        <div class="input-group"><input class="input mono" data-role="key" type="password" readonly value="${esc(key)}" style="font-size:12.5px">
+          <button class="addon" type="button" data-act="reveal" data-tip="Show / hide">${icon('eye', 16)}</button><button class="addon" type="button" data-act="copy" data-tip="Copy">${icon('copy', 16)}</button></div></div>
+      <form class="restore-form" novalidate style="max-width:640px">
+        <div class="field" data-field="deviceId"><label class="field-label">Open another wallet</label>
+          <div class="input-group"><input class="input mono" name="key" placeholder="Paste a wallet key" autocomplete="off" style="font-size:12.5px"><button class="addon" type="submit" style="padding:0 16px">Open</button></div>
+          <div class="field-error"></div></div>
+      </form>
+      <button class="btn btn-ghost btn-sm" data-act="fresh">${icon('refresh', 14)} Start a new empty wallet</button>`;
+    const nameForm = body.querySelector('.name-form');
+    nameForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const f = e.target;
       try {
-        await api.post('/api/account/password', { current: f.current.value, next: f.next.value });
-        f.reset();
-        toastSuccess('Password updated');
+        const { user } = await api.post('/api/account/username', { username: nameForm.username.value.trim() });
+        setUser(user);
+        toastSuccess('Username updated', user.username);
       } catch (err) {
-        showFieldErrors(f, err);
+        showFieldErrors(nameForm, err);
       }
     });
+    const keyInput = body.querySelector('[data-role=key]');
+    body.querySelector('[data-act=reveal]').addEventListener('click', () => (keyInput.type = keyInput.type === 'password' ? 'text' : 'password'));
+    body.querySelector('[data-act=copy]').addEventListener('click', async () => {
+      await copyText(key);
+      toast({ type: 'success', title: 'Wallet key copied', message: 'Store it somewhere safe.' });
+    });
+    const restoreForm = body.querySelector('.restore-form');
+    restoreForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const value = restoreForm.key.value.trim();
+      if (!value || value.toLowerCase() === key) return;
+      try {
+        const { user } = await useWalletKey(value);
+        toastSuccess('Wallet opened', `Welcome back, ${user.username}.`);
+      } catch (err) {
+        showFieldErrors(restoreForm, err);
+      }
+    });
+    body.querySelector('[data-act=fresh]').addEventListener('click', async () => {
+      if (!confirm('Start a new empty wallet? Copy your current wallet key first if you want to come back to it.')) return;
+      try {
+        await newWallet();
+        toastSuccess('New wallet ready', 'Deposit some play money to get started.');
+      } catch (err) {
+        toastError(err);
+      }
+    });
+    if (location.hash === '#backup') setTimeout(() => body.querySelector('#backup')?.scrollIntoView({ behavior: 'smooth' }), 50);
   } else if (tab === 'preferences') {
     const rows = [
       ['privateMode', 'Ghost mode', 'Hide your username in public bet feeds, the leaderboard and crash rounds.', 'server'],

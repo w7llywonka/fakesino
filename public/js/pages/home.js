@@ -15,10 +15,10 @@ export default function homePage(page) {
   const root = el(`<div>
     <div class="hero">
       <div class="promo p1">
-        <span class="tag">${authed ? `Welcome back` : 'Play money'}</span>
-        <div><h2>${authed ? `Hi ${esc(state.user.username)}, ready to play?` : 'The whole casino. None of the risk.'}</h2>
-        <p>${authed ? 'Top up with a demo card or a simulated crypto transfer and jump into any game.' : 'Real games, real odds, provably fair results — all on balances that are 100% fake.'}</p></div>
-        ${authed ? '<a class="btn btn-secondary" href="?modal=wallet&tab=deposit">Deposit play money</a>' : '<a class="btn btn-secondary" href="?modal=auth&tab=register">Register now</a>'}
+        <span class="tag">Play money</span>
+        <div><h2>The whole casino. None of the risk.</h2>
+        <p>No sign-up. Top up with a demo card or a simulated crypto transfer — your play money is saved in this browser.</p></div>
+        <a class="btn btn-secondary" href="?modal=wallet&tab=deposit">Deposit play money</a>
         <svg class="promo-art" viewBox="0 0 200 200">${[0, 1, 2, 3, 4].map((i) => `<circle cx="${130 + Math.cos(i * 1.3) * 50}" cy="${100 + Math.sin(i * 1.3) * 60}" r="${18 + i * 4}" fill="#fff" opacity="${0.08 + i * 0.03}"/>`).join('')}<text x="120" y="130" font-size="90" font-weight="900" fill="#fff" opacity=".9" text-anchor="middle">$</text></svg>
       </div>
       <div class="promo p2"><span class="tag">VIP Club</span><div><h2>Daily Reload</h2><p>Claim free play money every 24 hours. Higher VIP levels get bigger reloads.</p></div>

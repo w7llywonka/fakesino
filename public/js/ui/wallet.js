@@ -8,7 +8,7 @@ import * as fmt from '../format.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toastSuccess, toastError, toast } from './toast.js';
-import { showFieldErrors } from './auth.js';
+import { showFieldErrors } from './forms.js';
 
 const TABS = [
   ['deposit', 'Deposit'],

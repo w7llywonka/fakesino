@@ -47,7 +47,7 @@ export function openFairnessModal({ tab = 'seeds', prefill = null } = {}) {
 
 async function seedsTab(body, show) {
   if (!state.user) {
-    body.innerHTML = `<div class="empty">${icon('lock', 28)}<div>Sign in to manage your seeds.</div></div>`;
+    body.innerHTML = `<div class="empty">${icon('lock', 28)}<div>Your wallet is still loading.</div></div>`;
     return;
   }
   body.innerHTML = '<div class="spinner"></div>';

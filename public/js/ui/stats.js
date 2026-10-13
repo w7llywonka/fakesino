@@ -10,7 +10,7 @@ import * as fmt from '../format.js';
 export async function openStatsModal() {
   const modal = openModal({ title: 'Statistics', iconName: 'stats', onClose: () => setQuery({ modal: null }, { replace: true }) });
   if (!state.user) {
-    modal.setBody(`<div class="empty">Sign in to see your statistics.</div>`);
+    modal.setBody(`<div class="empty">Your wallet is still loading.</div>`);
     return modal;
   }
   modal.setBody('<div class="spinner"></div>');

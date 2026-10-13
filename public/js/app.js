@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { state, bus, setUser, refreshUser } from './state.js';
+import { state, bus, ensureSession, refreshUser } from './state.js';
 import { route, startRouter, setQuery } from './router.js';
 import { connectLive } from './live.js';
 import { renderShell } from './ui/layout.js';
@@ -75,12 +75,7 @@ async function syncModal(q) {
     };
   };
   switch (q.modal) {
-    case 'auth':
-      if (state.user) return setQuery({ modal: null, tab: null }, { replace: true });
-      done((await import('./ui/auth.js')).openAuthModal(q.tab || 'register'));
-      break;
     case 'wallet':
-      if (!state.user) return setQuery({ modal: 'auth', tab: 'register' }, { replace: true });
       done((await import('./ui/wallet.js')).openWalletModal(q.tab || 'deposit'));
       break;
     case 'fairness':
@@ -98,9 +93,9 @@ async function syncModal(q) {
 }
 
 async function boot() {
-  const [config, me] = await Promise.all([api.get('/api/config'), api.get('/api/me')]);
+  // No sign-in: every browser gets its own play-money wallet automatically.
+  const [config] = await Promise.all([api.get('/api/config'), ensureSession()]);
   state.config = config;
-  state.user = me.user;
   const { page } = renderShell(document.getElementById('app'));
   pageEl = page;
   initTooltips();
@@ -117,11 +112,14 @@ async function boot() {
     // Re-render pages whose content depends on the account (game pages keep their state).
     if (currentMatch && !currentMatch.pattern.startsWith('/casino/games')) renderPage(currentMatch);
   });
-  bus.on('logout', () => {
-    setUser(null);
-    toast({ title: 'Signed out', message: 'See you soon.' });
+  // If the session cookie is lost mid-visit, quietly reconnect the same wallet.
+  let reconnecting = null;
+  window.addEventListener('auth-required', () => {
+    reconnecting ||= ensureSession()
+      .then(() => toast({ title: 'Wallet reconnected', message: 'Try that again.' }))
+      .catch(() => {})
+      .finally(() => (reconnecting = null));
   });
-  window.addEventListener('auth-required', () => setQuery({ modal: 'auth', tab: 'login' }));
 
   // Keep stats (VIP progress, totals) fresh when navigating.
   bus.on('route', () => state.user && refreshUser().catch(() => {}));
@@ -136,4 +134,3 @@ boot().catch((err) => {
   setTimeout(() => location.reload(), 3000);
 });
 
-export { setUser };

@@ -68,5 +68,6 @@ export function termsPage(page) {
     <h2>2. No real payments</h2><p>The checkout only accepts published demo card numbers. Real card numbers are rejected in your browser and by the server, and no card data is stored beyond the last four digits of demo cards you choose to save. Crypto deposit addresses are fake and exist on no blockchain — never send real funds to them.</p>
     <h2>3. Eligibility</h2><p>You must be 18 or older to use Fakesino.</p>
     <h2>4. Fairness</h2><p>Game outcomes are generated with a provably fair scheme. You can verify any bet in the Fairness panel.</p>
-    <h2>5. Conduct</h2><p>Be kind in chat. Messages may be removed and accounts closed at our discretion.</p></div>`;
+    <h2>5. Your wallet</h2><p>There are no accounts. Your wallet is tied to a random key stored in your browser — back it up from Settings if you want to keep it. Losing the key means losing the play money, which was never worth anything anyway.</p>
+    <h2>6. Conduct</h2><p>Be kind in chat. Messages may be removed at our discretion.</p></div>`;
 }

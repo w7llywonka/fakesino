@@ -51,8 +51,91 @@ export const currency = () => state.user?.currency || 'USD';
 export const balanceOf = (code = currency()) => state.user?.balances?.[code] ?? 0;
 export const isAuthed = () => !!state.user;
 
+// ---- Local wallet ----------------------------------------------------------------
+// No accounts: the browser keeps a random wallet key and a snapshot of the
+// wallet. The server only knows a hash of the key. If the server ever loses the
+// wallet (fresh database, new host), the snapshot rebuilds it.
+const DEVICE_KEY = 'fakesino:device';
+const WALLET_KEY = 'fakesino:wallet';
+let memoryDevice = null;
+
+function randomKey() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function deviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!/^[a-f0-9]{32,128}$/.test(id || '')) {
+      id = randomKey();
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    memoryDevice ||= randomKey();
+    return memoryDevice;
+  }
+}
+
+function setDeviceId(id) {
+  try {
+    localStorage.setItem(DEVICE_KEY, id);
+  } catch {
+    memoryDevice = id;
+  }
+}
+
+function loadSnapshot() {
+  try {
+    return JSON.parse(localStorage.getItem(WALLET_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSnapshot() {
+  const u = state.user;
+  if (!u) return;
+  try {
+    localStorage.setItem(
+      WALLET_KEY,
+      JSON.stringify({ username: u.username, balances: u.balances, vault: u.vault, currency: u.currency, settings: u.settings, wageredUsd: u.stats?.wageredUsd || 0, savedAt: Date.now() }),
+    );
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// Get (or create) this browser's wallet session.
+export async function ensureSession() {
+  const res = await api.post('/api/auth/guest', { deviceId: deviceId(), restore: loadSnapshot() });
+  setUser(res.user);
+  return res;
+}
+
+// Switch this browser to another wallet using its backup key.
+export async function useWalletKey(key) {
+  const id = String(key || '').trim().toLowerCase();
+  const res = await api.post('/api/auth/guest', { deviceId: id, mustExist: true });
+  setDeviceId(id);
+  setUser(res.user);
+  return res;
+}
+
+// Start over with a brand-new, empty wallet.
+export async function newWallet() {
+  const id = randomKey();
+  const res = await api.post('/api/auth/guest', { deviceId: id });
+  setDeviceId(id);
+  setUser(res.user);
+  return res;
+}
+
 export function setUser(user) {
   state.user = user;
+  saveSnapshot();
   bus.emit('user', user);
   bus.emit('balance', { currency: user?.currency, amount: user ? user.balances[user.currency] : 0 });
 }
@@ -61,11 +144,15 @@ export function setBalance(code, amount, { reason } = {}) {
   if (!state.user) return;
   const prev = state.user.balances[code];
   state.user.balances[code] = amount;
+  // A 'debit' is the transient balance shown while a result animates; the
+  // settled balance arrives right after, so only persist real balances.
+  if (reason !== 'debit') saveSnapshot();
   bus.emit('balance', { currency: code, amount, prev, reason });
 }
 
 export async function refreshUser() {
   const { user } = await api.get('/api/me');
+  if (!user) return (await ensureSession()).user;
   setUser(user);
   return user;
 }
@@ -74,6 +161,7 @@ export async function setCurrency(code) {
   if (!CURRENCIES[code]) return;
   if (!state.user) return;
   state.user.currency = code;
+  saveSnapshot();
   bus.emit('currency', code);
   bus.emit('balance', { currency: code, amount: balanceOf(code) });
   try {

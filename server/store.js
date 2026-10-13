@@ -10,7 +10,7 @@ const empty = () => ({
   seq: { user: 0, bet: 0, tx: 0, msg: 0 },
   users: {},
   usernames: {}, // lowercase username → id
-  emails: {}, // lowercase email → id
+  devices: {}, // sha256(device key) → user id; the device key lives only in the browser
   sessions: {}, // token → { userId, createdAt }
   bets: [],
   transactions: [],

@@ -20,7 +20,7 @@ const STATUS = { completed: 'green', pending: 'yellow', failed: 'red' };
 export default async function transactionsPage(page, { tab = 'deposits' }) {
   document.title = 'Transactions — Fakesino';
   if (!state.user) {
-    page.innerHTML = `<div class="empty" style="padding:80px 0">${icon('lock', 32)}<div style="margin:10px 0 16px">Sign in to see your transactions.</div><a class="btn btn-blue" href="?modal=auth&tab=login">Sign In</a></div>`;
+    page.innerHTML = '<div class="spinner"></div>';
     return;
   }
   if (!TABS.some(([k]) => k === tab)) tab = 'deposits';

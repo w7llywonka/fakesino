@@ -3,7 +3,7 @@ import { CURRENCIES, isCurrency, roundDown, toUsd, emptyBalances } from '../publ
 import { initialSeeds, publicSeeds } from './fair.js';
 import { HttpError, badRequest } from './http.js';
 
-export const SESSION_TTL = 30 * 24 * 3600 * 1000;
+export const SESSION_TTL = 365 * 24 * 3600 * 1000;
 
 export const VIP_LEVELS = [
   { name: 'None', wager: 0, color: '#9fb0c4' },
@@ -31,39 +31,61 @@ export function vipInfo(wageredUsd) {
   return { index: i, level: level.name, color: level.color, next: next?.name || null, nextWager: next?.wager || null, progress: Math.max(0, Math.min(1, progress)), wageredUsd };
 }
 
-export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return { salt, hash };
-}
-
-export function verifyPassword(password, user) {
-  const { hash } = hashPassword(password, user.salt);
-  const a = Buffer.from(hash, 'hex');
-  const b = Buffer.from(user.passHash, 'hex');
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
 const USERNAME_RE = /^[A-Za-z0-9_]{3,14}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const DEVICE_RE = /^[a-f0-9]{32,128}$/;
+const RESTORE_CAP_USD = 10_000_000; // per currency, when rebuilding a wallet from a browser snapshot
+const SETTING_KEYS = ['hideZero', 'displayFiat', 'privateMode', 'sound', 'animations', 'maxBetWarning'];
 
-export function createUser(store, { username, email, password }) {
+export const deviceKey = (deviceId) => crypto.createHash('sha256').update(`device:${deviceId}`).digest('hex');
+
+export function validateUsername(store, username, self = null) {
   username = String(username || '').trim();
-  email = String(email || '').trim();
-  password = String(password || '');
   if (!USERNAME_RE.test(username)) throw badRequest('Username must be 3–14 characters: letters, numbers or _', { field: 'username' });
-  if (!EMAIL_RE.test(email) || email.length > 120) throw badRequest('Enter a valid email address', { field: 'email' });
-  if (password.length < 8 || password.length > 200) throw badRequest('Password must be at least 8 characters', { field: 'password' });
+  const owner = store.data.usernames[username.toLowerCase()];
+  if (owner != null && owner !== self?.id) throw badRequest('That username is taken', { field: 'username' });
+  return username;
+}
+
+function guestName(store) {
+  for (let i = 0; i < 50; i++) {
+    const name = `Player${crypto.randomInt(10000, 1000000)}`;
+    if (store.data.usernames[name.toLowerCase()] == null) return name;
+  }
+  return `Player${store.data.seq.user + 1}${crypto.randomInt(10, 100)}`;
+}
+
+// Rebuild what a browser remembers about its wallet. Everything is play money,
+// so a snapshot is trusted as long as it is well-formed and within sane bounds.
+function applySnapshot(store, user, snap) {
+  if (!snap || typeof snap !== 'object') return false;
+  const num = (v, max) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+  };
+  for (const field of ['balances', 'vault']) {
+    const src = snap[field];
+    if (!src || typeof src !== 'object') continue;
+    for (const code of Object.keys(CURRENCIES)) user[field][code] = roundDown(code, num(src[code], RESTORE_CAP_USD / CURRENCIES[code].usd));
+  }
+  if (isCurrency(snap.currency)) user.currency = snap.currency;
+  if (snap.settings && typeof snap.settings === 'object') for (const k of SETTING_KEYS) if (k in snap.settings) user.settings[k] = !!snap.settings[k];
+  user.stats.wageredUsd = num(snap.wageredUsd, 1e10);
+  if (snap.username) {
+    try {
+      user.username = validateUsername(store, snap.username);
+    } catch {
+      /* keep the generated name if the old one is taken or invalid */
+    }
+  }
+  return true;
+}
+
+export function createGuest(store, snapshot = null) {
   const d = store.data;
-  if (d.usernames[username.toLowerCase()]) throw badRequest('That username is taken', { field: 'username' });
-  if (d.emails[email.toLowerCase()]) throw badRequest('That email is already registered', { field: 'email' });
   const id = store.nextId('user');
-  const { salt, hash } = hashPassword(password);
   const user = {
     id,
-    username,
-    email,
-    salt,
-    passHash: hash,
+    username: guestName(store),
     createdAt: Date.now(),
     balances: emptyBalances(),
     vault: emptyBalances(),
@@ -79,17 +101,30 @@ export function createUser(store, { username, email, password }) {
     addresses: {},
     limits: { depositDailyUsd: null, breakUntil: 0 },
   };
+  const restored = applySnapshot(store, user, snapshot);
   d.users[id] = user;
-  d.usernames[username.toLowerCase()] = id;
-  d.emails[email.toLowerCase()] = id;
+  d.usernames[user.username.toLowerCase()] = id;
   store.save();
-  return user;
+  return { user, restored };
 }
 
-export function findByLogin(store, login) {
-  const l = String(login || '').trim().toLowerCase();
-  const id = store.data.usernames[l] ?? store.data.emails[l];
-  return id != null ? store.data.users[id] : null;
+export function userForDevice(store, deviceId) {
+  const id = store.data.devices[deviceKey(deviceId)];
+  return id != null ? store.data.users[id] || null : null;
+}
+
+export function linkDevice(store, deviceId, user) {
+  store.data.devices[deviceKey(deviceId)] = user.id;
+  store.save();
+}
+
+export function renameUser(store, user, username) {
+  const name = validateUsername(store, username, user);
+  delete store.data.usernames[user.username.toLowerCase()];
+  user.username = name;
+  store.data.usernames[name.toLowerCase()] = user.id;
+  store.save();
+  return user;
 }
 
 export function createSession(store, user) {
@@ -114,7 +149,6 @@ export function publicUser(user) {
   return {
     id: user.id,
     username: user.username,
-    email: user.email,
     createdAt: user.createdAt,
     balances: user.balances,
     vault: user.vault,

@@ -41,7 +41,8 @@ export function createGameContext({ slug, controls, stage, footer }) {
     isAuthed,
     requireAuth() {
       if (isAuthed()) return true;
-      setQuery({ modal: 'auth', tab: 'register' });
+      // The wallet session is (re)connecting; app.js listens for this.
+      window.dispatchEvent(new CustomEvent('auth-required'));
       return false;
     },
     createBetPanel(opts) {

@@ -1,10 +1,11 @@
 # Fakesino
 
-A complete online casino that runs entirely on **play money**. It has everything you'd expect from a modern crypto/online casino — accounts, a multi-currency wallet, card checkout, crypto deposits, withdrawals, a vault, VIP levels, rakeback, live bets, chat and fifteen games with real rules, real payout tables and provably fair results — except that none of the money is real.
+A complete online casino that runs entirely on **play money**. It has everything you'd expect from a modern crypto/online casino — a multi-currency wallet, card checkout, crypto deposits, withdrawals, a vault, VIP levels, rakeback, live bets, chat and fifteen games with real rules, real payout tables and provably fair results — except that none of the money is real.
 
 - **Deposits** go through a full checkout (amount → card details → 3-D Secure → receipt) that only accepts published demo card numbers. Real card numbers are refused in the browser before they are sent, and refused again by the server.
 - **Crypto deposits** show a fake address (prefixed `fake…`, valid on no blockchain) and let you simulate an incoming transfer that confirms block by block.
 - **Withdrawals** debit your balance and "complete" after a few seconds — the money goes nowhere.
+- **No sign-up.** Open the site and you already have a wallet. It's tied to a random key saved in your browser, and the balance is mirrored to local storage, so it survives restarts — even if the server's database is wiped, your browser rebuilds the wallet. Copy the key from **Settings → Wallet backup** to open the same wallet in another browser.
 
 > Fakesino is a simulation for fun, demos and learning. Balances have no cash value and nothing can ever be paid out.
 
@@ -17,7 +18,7 @@ npm test             # 40 tests: fairness, RTP of every table, game rules, API f
 
 Requires Node.js 18.17+. There are **no dependencies** — no `npm install` needed. Data is stored in `data/db.json` (override with `FAKESINO_DATA=/path/db.json`, port with `PORT`).
 
-Register an account, open **Wallet → Deposit**, and pay with a demo card:
+Open the site, click **Wallet → Deposit**, and pay with a demo card:
 
 | Card number | Result |
 | --- | --- |
@@ -62,7 +63,7 @@ Each user has a server seed (shown hashed in advance), a client seed they can ch
 ```
 server/            Node http server (no framework)
   app.js           routes, static files, security headers
-  accounts.js      users, scrypt passwords, sessions, wallet, VIP
+  accounts.js      browser-key wallets (no sign-up), sessions, balances, VIP
   payments.js      demo card checkout + 3DS, fake crypto deposits, withdrawals, vault, bonuses
   engine.js        bet engine for instant, multi-step and chip games
   crash.js         multiplayer crash rounds + hash chain
