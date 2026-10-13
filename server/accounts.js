@@ -16,11 +16,19 @@ export const VIP_LEVELS = [
   { name: 'Platinum IV', wager: 2500000, color: '#7fd6d9' },
   { name: 'Platinum V', wager: 5000000, color: '#7fd6d9' },
   { name: 'Platinum VI', wager: 10000000, color: '#7fd6d9' },
-  { name: 'Diamond', wager: 25000000, color: '#a78bfa' },
+  { name: 'Diamond I', wager: 25000000, color: '#a78bfa' },
+  { name: 'Diamond II', wager: 50000000, color: '#9b7bf7' },
+  { name: 'Diamond III', wager: 100000000, color: '#8d68f2' },
+  { name: 'Diamond IV', wager: 250000000, color: '#7e55ec' },
+  { name: 'Diamond V', wager: 500000000, color: '#6f42e3' },
+  { name: 'Obsidian', wager: 1000000000, color: '#c9d1e0' },
 ];
 
+// Per-UTC-day wager buckets drive the weekly, monthly, daily and reload bonuses.
+export const dayKey = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+const KEEP_DAYS = 45;
+
 export const RAKEBACK_SHARE = 0.05; // of expected house edge
-export const DAILY_BONUS_COOLDOWN = 24 * 3600 * 1000;
 
 export function vipInfo(wageredUsd) {
   let i = 0;
@@ -93,7 +101,6 @@ export function createGuest(store, snapshot = null) {
     settings: { hideZero: false, displayFiat: false, privateMode: false, sound: true, animations: true, maxBetWarning: true },
     stats: { bets: 0, wins: 0, losses: 0, wageredUsd: 0, profitUsd: 0, byGame: {}, byCurrency: {} },
     rakeback: emptyBalances(),
-    dailyBonusAt: 0,
     seeds: initialSeeds(),
     seedHistory: [],
     active: {},
@@ -157,7 +164,7 @@ export function publicUser(user) {
     vip: vipInfo(user.stats.wageredUsd),
     stats: { bets: user.stats.bets, wins: user.stats.wins, losses: user.stats.losses, wageredUsd: user.stats.wageredUsd, profitUsd: user.stats.profitUsd },
     rakeback: user.rakeback,
-    dailyBonusAt: user.dailyBonusAt,
+    welcomeCode: user.welcomeCode || null,
     seeds: publicSeeds(user),
     activeGames: Object.keys(user.active || {}),
     limits: user.limits || { depositDailyUsd: null, breakUntil: 0 },
@@ -210,7 +217,26 @@ export function recordWagerStats(user, { game, currency, amount, payout, edge })
   c.bets++;
   c.wagered = roundDown(currency, c.wagered + amount);
   c.profit = Math.round((c.profit + payout - amount) * 10 ** CURRENCIES[currency].decimals) / 10 ** CURRENCIES[currency].decimals;
-  user.rakeback[currency] = (user.rakeback[currency] || 0) + amount * (edge ?? 0.01) * RAKEBACK_SHARE;
+  const edgeUsd = usd * (edge ?? 0.01);
+  const days = (user.edgeDays ||= {});
+  const today = dayKey();
+  const b = (days[today] ||= { wagerUsd: 0, edgeUsd: 0, profitUsd: 0 });
+  b.wagerUsd += usd;
+  b.edgeUsd += edgeUsd;
+  b.profitUsd += profitUsd;
+  if (Object.keys(days).length > KEEP_DAYS) for (const k of Object.keys(days).sort().slice(0, -KEEP_DAYS)) delete days[k];
+  // Rakeback starts at Bronze, or earlier with a welcome code.
+  if (vipInfo(s.wageredUsd).index >= 1 || user.welcomeCode) user.rakeback[currency] = (user.rakeback[currency] || 0) + amount * (edge ?? 0.01) * RAKEBACK_SHARE;
+}
+
+// Σ over the UTC days [from, to) of a bucket field.
+export function sumDays(user, from, to, field = 'edgeUsd') {
+  let total = 0;
+  for (const [k, b] of Object.entries(user.edgeDays || {})) {
+    const t = Date.parse(`${k}T00:00:00Z`);
+    if (t >= from && t < to) total += b[field] || 0;
+  }
+  return total;
 }
 
 // --- Responsible gaming ---------------------------------------------------------

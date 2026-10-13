@@ -3,7 +3,7 @@ import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/curre
 import { amountText } from './notify.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
-import { parseCurrency, parseAmount, credit, debit, vipInfo, DAILY_BONUS_COOLDOWN, assertNotOnBreak, assertDepositLimit } from './accounts.js';
+import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit } from './accounts.js';
 
 export const DEPOSIT_LIMITS = { min: 10, max: 100000 }; // in fiat units
 export const WITHDRAW_MIN_USD = 5;
@@ -337,19 +337,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     return { claimed, user: publicUser(user) };
   }
 
-  function claimDaily(user) {
-    const wait = user.dailyBonusAt + DAILY_BONUS_COOLDOWN - Date.now();
-    if (wait > 0) throw badRequest('Your daily reload is not ready yet', { retryIn: wait });
-    const vip = vipInfo(user.stats.wageredUsd);
-    const usd = 25 * (vip.index + 1);
-    const currency = user.currency;
-    const amount = roundDown(currency, fromUsd(currency, usd));
-    credit(user, currency, amount);
-    user.dailyBonusAt = Date.now();
-    const tx = addTx(user, { type: 'bonus', method: 'daily_reload', status: 'completed', currency, amount, details: { usd } });
-    store.save();
-    return { transaction: publicTx(tx), user: publicUser(user) };
-  }
+
 
   // Vault: park funds away from the betting balance.
   function vault(user, body) {
@@ -414,7 +402,6 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     withdraw,
     removeCard,
     claimRakeback,
-    claimDaily,
     vault,
     transactions,
     recover,

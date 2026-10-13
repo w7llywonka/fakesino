@@ -3252,3 +3252,50 @@ textarea.input {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ---------- VIP tabs ---------- */
+
+.vip-tabs {
+  margin-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vip-matrix th.c,
+.vip-matrix td.c {
+  text-align: center;
+  width: 90px;
+}
+
+.vip-matrix .cur {
+  background: rgba(47, 124, 246, 0.1);
+}
+
+.bonus-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bonus-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.bonus-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.bonus-amt {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.reward-cards .bonus-row + .bonus-row {
+  margin-top: 6px;
+}

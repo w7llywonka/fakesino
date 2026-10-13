@@ -12,7 +12,7 @@ export function notFound(page) {
 export function promotionsPage(page) {
   document.title = 'Promotions — Fakesino';
   const promos = [
-    ['p1', 'Daily Reload', 'Claim free play money once every 24 hours from the VIP Club. The amount grows with your VIP level.', '/vip', 'Claim now'],
+    ['p1', 'VIP bonuses', 'From Bronze up: weekly, monthly, daily and level-up bonuses based on what you play, plus reloads from Platinum.', '/vip?tab=bonuses', 'View bonuses'],
     ['p2', 'Rakeback', '5% of the house edge on every bet you place comes back to you. Claim it whenever you like.', '/vip', 'View rakeback'],
     ['p3', 'Daily Race', 'Wager the most in 24 hours to climb the leaderboard. Prizes are bragging rights — it is all play money after all.', '/leaderboard', 'See the race'],
     ['p1', 'Welcome offer', 'New wallet? Redeem the code WELCOME within 24 hours for $20 of play money.', '/settings/offers', 'Redeem'],

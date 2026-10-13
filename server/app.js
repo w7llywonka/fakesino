@@ -194,7 +194,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.post('/api/payments/withdraw', authed((ctx) => payments.withdraw(ctx.user, ctx.body)));
   router.post('/api/payments/cards/:id/remove', authed((ctx) => payments.removeCard(ctx.user, ctx.params.id)));
   router.post('/api/bonus/rakeback', authed((ctx) => payments.claimRakeback(ctx.user)));
-  router.post('/api/bonus/daily', authed((ctx) => payments.claimDaily(ctx.user)));
+  // Daily bonus, weekly/monthly/level-up/reload offers: server/plugins/vip.js.
 
   // --- Fairness ---------------------------------------------------------------------
   router.get(

@@ -19,8 +19,8 @@ export default function homePage(page) {
         <a class="btn btn-secondary" href="?modal=wallet&tab=deposit">Deposit play money</a>
         <svg class="promo-art" viewBox="0 0 200 200">${[0, 1, 2, 3, 4].map((i) => `<circle cx="${130 + Math.cos(i * 1.3) * 50}" cy="${100 + Math.sin(i * 1.3) * 60}" r="${18 + i * 4}" fill="#fff" opacity="${0.08 + i * 0.03}"/>`).join('')}<text x="120" y="130" font-size="90" font-weight="900" fill="#fff" opacity=".9" text-anchor="middle">$</text></svg>
       </div>
-      <div class="promo p2"><span class="tag">VIP Club</span><div><h2>Daily Reload</h2><p>Claim free play money every 24 hours. Higher VIP levels get bigger reloads.</p></div>
-        <a class="btn btn-secondary" href="/vip">Claim reload</a>
+      <div class="promo p2"><span class="tag">VIP Club</span><div><h2>VIP bonuses</h2><p>Weekly, monthly, daily and level-up bonuses from Bronze. New wallet? Redeem WELCOME for $20.</p></div>
+        <a class="btn btn-secondary" href="/vip?tab=bonuses">View bonuses</a>
         <svg class="promo-art" viewBox="0 0 200 200"><path d="M40 140l30-60 30 40 30-70 30 90z" fill="#fff" opacity=".25"/><path d="M60 150h100l-10-40-40 20-40-20z" fill="#ffd166" opacity=".9"/></svg></div>
       <div class="promo p3"><span class="tag">Originals</span><div><h2>Crash is live</h2><p>Shared multiplayer rounds every few seconds. Cash out before it busts.</p></div>
         <a class="btn btn-secondary" href="/casino/games/crash">Play Crash</a>

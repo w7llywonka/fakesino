@@ -579,12 +579,44 @@ test('vault, rakeback and daily reload', async () => {
   assert.equal(v.data.user.vault.USD, 40);
   assert.equal((await c.post('/api/wallet/vault', { currency: 'USD', amount: 41, direction: 'withdraw' })).status, 400);
   await c.post('/api/wallet/vault', { currency: 'USD', amount: 40, direction: 'withdraw' });
+  // Below Bronze, rakeback needs the welcome code.
+  for (let i = 0; i < 4; i++) await c.post('/api/games/limbo/bet', { amount: 5, currency: 'USD', params: { target: 1.5 } });
+  assert.equal((await c.post('/api/bonus/rakeback')).status, 400);
+  await c.post('/api/offers/redeem', { code: 'WELCOME', currency: 'USD' });
   for (let i = 0; i < 20; i++) await c.post('/api/games/limbo/bet', { amount: 5, currency: 'USD', params: { target: 1.5 } });
   const rb = await c.post('/api/bonus/rakeback');
   assert.equal(rb.status, 200);
-  const daily = await c.post('/api/bonus/daily');
-  assert.equal(daily.data.transaction.amount, 25);
-  assert.equal((await c.post('/api/bonus/daily')).status, 400, 'once per day');
+  assert.match((await c.post('/api/bonus/daily')).data.error, /unlocks at Bronze/);
+});
+
+test('VIP: level-up, weekly and daily bonuses from the edge you played', async () => {
+  const c = await newPlayer(100);
+  const me = (await c.get('/api/me')).data.user;
+  const user = app.store.data.users[me.id];
+  // Cross into Bronze with one more bet.
+  user.stats.wageredUsd = 9999;
+  await c.post('/api/games/dice/bet', { amount: 5, currency: 'USD', params: { target: 50.5, condition: 'over' } });
+  let offers = (await c.get('/api/bonus/offers')).data;
+  const lvl = offers.offers.find((o) => o.kind === 'levelup');
+  assert.equal(lvl.amountUsd, 1, 'Bronze level-up pays $1');
+  const claim = await c.post('/api/bonus/claim', { id: lvl.id, currency: 'USD' });
+  assert.equal(claim.status, 200, JSON.stringify(claim.data));
+  assert.equal((await c.post('/api/bonus/claim', { id: lvl.id, currency: 'USD' })).status, 404, 'claim once');
+  // A week of play: $1,000 of edge last week, net loss → 10% × 1.2.
+  const vip = app.plugins.vip;
+  const sat = Date.UTC(2026, 9, 3); // Saturday 3 Oct 2026
+  user.edgeDays = { '2026-10-05': { wagerUsd: 100000, edgeUsd: 1000, profitUsd: -500 } };
+  vip.runWeekly(sat + 7 * 86400000 + 12.5 * 3600000);
+  offers = (await c.get('/api/bonus/offers')).data;
+  const weekly = offers.offers.find((o) => o.kind === 'weekly');
+  assert.equal(weekly.amountUsd, 120);
+  // Daily bonus: 10% of yesterday's edge.
+  const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  user.edgeDays[y] = { wagerUsd: 1000, edgeUsd: 10, profitUsd: 0 };
+  const daily = await c.post('/api/bonus/daily', { currency: 'USD' });
+  assert.equal(daily.status, 200, JSON.stringify(daily.data));
+  assert.equal(daily.data.amount, 1);
+  assert.equal((await c.post('/api/bonus/daily', { currency: 'USD' })).status, 400, 'once per UTC day');
 });
 
 test('deposit limits and breaks are enforced server-side', async () => {

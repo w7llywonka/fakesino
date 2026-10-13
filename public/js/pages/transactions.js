@@ -66,6 +66,8 @@ function methodLabel(t) {
   if (t.method === 'card') return `${brandChip(d.brand || 'unknown')} •••• ${esc(d.last4 || '')}${d.threeDS ? ' <span class="pill blue">3DS</span>' : ''}`;
   if (t.method === 'crypto') return `${coin(t.currency)} ${esc(d.network || t.currency)} ${d.address ? `<span class="dim mono" style="font-size:11px">${esc(d.address.slice(0, 14))}…</span>` : ''}`;
   if (t.method === 'daily_reload') return `${icon('gift', 16)} Daily reload`;
+  const BONUS = { daily: 'Daily bonus', weekly: 'Weekly bonus', monthly: 'Monthly bonus', levelup: 'Level-up bonus', reload: 'Reload', welcome: 'Welcome offer', drop: 'Bonus drop', rain: 'Rain' };
+  if (BONUS[t.method]) return `${icon('gift', 16)} ${BONUS[t.method]}`;
   if (t.method === 'rakeback') return `${icon('coins', 16)} Rakeback`;
   if (t.method === 'challenge') return `${icon('trophy', 16)} Challenge prize`;
   if (t.method === 'vault_in') return `${icon('vault', 16)} Wallet → Vault`;
