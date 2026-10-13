@@ -1,0 +1,299 @@
+.keno-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.keno-board {
+  position: relative;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.keno-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.keno-tools .btn {
+  height: 42px;
+}
+
+/* ---------- Grid ---------- */
+
+.keno-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.keno-tile {
+  position: relative;
+  aspect-ratio: 1 / 0.94;
+  border-radius: 8px;
+  background: #2f4556;
+  box-shadow: 0 4px 0 #1d2c39;
+  color: var(--text);
+  font-weight: 800;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  place-items: center;
+  transition: background 0.12s, transform 0.12s, box-shadow 0.12s, color 0.12s;
+  user-select: none;
+}
+
+.keno-tile:hover {
+  background: #3c576c;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #1d2c39;
+}
+
+.keno-tile .kt-num {
+  position: relative;
+  z-index: 1;
+}
+
+.keno-tile .kt-gem {
+  position: absolute;
+  width: 74%;
+  left: 13%;
+  top: 14%;
+  color: #22d36b;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.15s, transform 0.2s cubic-bezier(0.2, 1.4, 0.4, 1);
+  pointer-events: none;
+}
+
+.keno-tile.picked {
+  background: var(--purple);
+  box-shadow: 0 4px 0 #5b33c2;
+}
+
+.keno-tile.picked:hover {
+  background: #9c74ff;
+  box-shadow: 0 6px 0 #5b33c2;
+}
+
+.keno-grid.full .keno-tile:not(.picked):hover,
+.keno-grid.drawing .keno-tile:hover {
+  transform: none;
+  box-shadow: 0 4px 0 #1d2c39;
+  background: #2f4556;
+  cursor: default;
+}
+
+.keno-grid.drawing .keno-tile.picked:hover {
+  background: var(--purple);
+  box-shadow: 0 4px 0 #5b33c2;
+}
+
+/* Drawn and picked: green gem. */
+.keno-tile.hit,
+.keno-tile.hit:hover,
+.keno-grid .keno-tile.hit:hover {
+  background: #123524;
+  box-shadow: 0 4px 0 #0a2117, inset 0 0 0 2px #22d36b, 0 0 22px rgba(34, 211, 107, 0.35);
+  color: #04250f;
+  transform: none;
+}
+
+.keno-tile.hit .kt-gem {
+  opacity: 1;
+  transform: none;
+}
+
+.keno-tile.hit .kt-num {
+  margin-top: -8%;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Drawn but not picked. */
+.keno-tile.miss,
+.keno-tile.miss:hover,
+.keno-grid .keno-tile.miss:hover {
+  background: var(--bg-deep);
+  box-shadow: 0 4px 0 #070c11, inset 0 0 0 2px #1a2733;
+  color: var(--red);
+  transform: none;
+}
+
+.keno-tile.pop {
+  animation: kenopop 0.26s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+@keyframes kenopop {
+  0% {
+    transform: scale(0.82);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.keno-grid.shake {
+  animation: kenoshake 0.3s ease;
+}
+
+@keyframes kenoshake {
+  25% {
+    transform: translateX(-5px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+
+/* ---------- Payout table ---------- */
+
+.keno-pay {
+  display: grid;
+  gap: 8px;
+  min-height: 84px;
+}
+
+.keno-pay-msg {
+  display: grid;
+  place-items: center;
+  min-height: 84px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.keno-pay-row {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: 6px;
+}
+
+.kp-m {
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background 0.15s, color 0.15s;
+}
+
+.kp-hits {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 4px;
+  gap: 4px;
+}
+
+.kp-h {
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+  transition: background 0.15s, color 0.15s;
+}
+
+.kp-h b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.kp-h .kt-gem {
+  width: 13px;
+  height: 12px;
+  color: var(--text-3);
+}
+
+.kp-m.active {
+  background: var(--surface-4);
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--text-3);
+}
+
+.kp-m.active.won {
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 0 16px rgba(34, 211, 107, 0.35);
+}
+
+.kp-h.active {
+  background: var(--surface-4);
+  color: var(--text);
+}
+
+.kp-h.active.won .kt-gem {
+  color: var(--accent);
+}
+
+@media (max-width: 1100px) {
+  .kp-word {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .keno-board {
+    padding: 16px 10px 14px;
+    gap: 12px;
+  }
+  .keno-grid {
+    gap: 6px;
+  }
+  .keno-tile {
+    font-size: 14px;
+    border-radius: 6px;
+    box-shadow: 0 3px 0 #1d2c39;
+  }
+  .keno-tile.picked {
+    box-shadow: 0 3px 0 #5b33c2;
+  }
+  .keno-pay-row {
+    gap: 3px;
+  }
+  .kp-m {
+    height: 30px;
+    font-size: 9.5px;
+    letter-spacing: -0.02em;
+    border-radius: 4px;
+  }
+  .kp-hits {
+    padding: 3px;
+    gap: 2px;
+  }
+  .kp-h {
+    height: 28px;
+    font-size: 11px;
+    gap: 2px;
+  }
+  .kp-h .kt-gem {
+    width: 10px;
+    height: 9px;
+  }
+  .keno-pay,
+  .keno-pay-msg {
+    min-height: 66px;
+  }
+}

@@ -1,0 +1,83 @@
+.limbo-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.limbo-center {
+  container-type: inline-size;
+  overflow: hidden;
+  min-height: 300px;
+}
+
+.limbo-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(560px, 90%);
+  aspect-ratio: 2 / 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(167, 182, 200, 0.08), transparent);
+  pointer-events: none;
+  transition: background 0.3s;
+}
+
+.limbo-center.win .limbo-glow {
+  background: radial-gradient(closest-side, rgba(34, 211, 107, 0.16), transparent);
+}
+
+.limbo-center.lose .limbo-glow {
+  background: radial-gradient(closest-side, rgba(255, 77, 94, 0.13), transparent);
+}
+
+.limbo-mult {
+  --chars: 6;
+  position: relative;
+  font-size: min(128px, calc(150cqw / var(--chars)));
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.limbo-center.win .limbo-mult {
+  color: var(--win);
+  text-shadow: 0 0 40px rgba(34, 211, 107, 0.35);
+}
+
+.limbo-center.lose .limbo-mult {
+  color: var(--loss);
+  text-shadow: 0 0 40px rgba(255, 77, 94, 0.3);
+}
+
+.limbo-center.done .limbo-mult {
+  animation: limboland 0.32s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes limboland {
+  from {
+    transform: scale(1.12);
+  }
+}
+
+.limbo-tiles {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 600px) {
+  .limbo-center {
+    min-height: 220px;
+  }
+  .limbo-mult {
+    font-size: min(76px, calc(150cqw / var(--chars)));
+  }
+  .stat-tiles.limbo-tiles {
+    gap: 8px;
+    padding: 10px;
+  }
+}

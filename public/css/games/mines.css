@@ -1,0 +1,334 @@
+/* ---------- Mines ---------- */
+
+.mines-stage {
+  --mn-tile: #2f4556;
+  --mn-tile-hover: #4b6a83;
+  --mn-edge: #1d2d3a;
+  --mn-open: #0b141c;
+  --mn-sel: #8b5cf6;
+  --mn-sel-edge: #5b37b8;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 24px 34px;
+  position: relative;
+  min-height: 0;
+}
+
+.mines-board {
+  width: min(100%, 540px);
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: 13px;
+  user-select: none;
+}
+
+.mn-tile {
+  position: relative;
+  border-radius: 10px;
+  background: var(--mn-tile);
+  box-shadow: 0 6px 0 var(--mn-edge), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translateY(-3px);
+  transition: background 0.14s, transform 0.12s, box-shadow 0.12s, opacity 0.2s;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  cursor: default;
+}
+
+.mines-board.playing .mn-tile:not(.revealed),
+.mines-board.auto .mn-tile:not(.revealed) {
+  cursor: pointer;
+}
+
+.mines-board.playing .mn-tile:not(.revealed):hover,
+.mines-board.auto .mn-tile:not(.revealed):hover {
+  background: var(--mn-tile-hover);
+  transform: translateY(-6px);
+  box-shadow: 0 9px 0 var(--mn-edge), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mines-board.playing .mn-tile:not(.revealed):active,
+.mines-board.auto .mn-tile:not(.revealed):active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 0 var(--mn-edge);
+}
+
+.mn-tile:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.mn-tile.pending {
+  animation: mnpending 0.5s ease-in-out infinite alternate;
+  background: var(--mn-tile-hover);
+}
+
+@keyframes mnpending {
+  from {
+    transform: translateY(-3px) scale(1);
+  }
+  to {
+    transform: translateY(-1px) scale(0.92);
+  }
+}
+
+/* Auto-mode selection */
+.mn-tile.selected {
+  background: var(--mn-sel);
+  box-shadow: 0 6px 0 var(--mn-sel-edge), 0 0 18px -4px rgba(139, 92, 246, 0.7);
+}
+
+.mines-board.auto .mn-tile.selected:hover {
+  background: #a07bff;
+  box-shadow: 0 9px 0 var(--mn-sel-edge), 0 0 22px -4px rgba(139, 92, 246, 0.8);
+}
+
+/* Revealed tiles */
+.mn-tile.revealed {
+  background: var(--mn-open);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  transform: translateY(3px);
+}
+
+.mn-tile .mn-icon {
+  width: 70%;
+  height: 70%;
+  pointer-events: none;
+}
+
+.mn-tile.gem.picked {
+  background: radial-gradient(circle at 50% 55%, rgba(34, 211, 107, 0.2), transparent 70%), var(--mn-open);
+}
+
+.mn-tile.gem.picked .mn-gem {
+  filter: drop-shadow(0 0 10px rgba(34, 211, 107, 0.55));
+}
+
+.mn-tile.mine.picked {
+  background: radial-gradient(circle at 50% 55%, rgba(255, 77, 94, 0.35), transparent 72%), #1a0d12;
+  box-shadow: inset 0 0 0 2px rgba(255, 77, 94, 0.55);
+}
+
+.mn-tile.mine.picked .mn-bomb {
+  filter: drop-shadow(0 0 12px rgba(255, 77, 94, 0.6));
+}
+
+.mn-tile.dim {
+  background: rgba(11, 20, 28, 0.55);
+}
+
+.mn-tile.dim .mn-icon {
+  width: 50%;
+  height: 50%;
+  opacity: 0.42;
+}
+
+.mn-tile.selected.revealed.dim {
+  box-shadow: inset 0 0 0 2px rgba(139, 92, 246, 0.45);
+}
+
+.mn-tile.pop .mn-icon {
+  animation: mnpop 0.42s cubic-bezier(0.2, 1.5, 0.45, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+
+.mn-tile.dim.pop .mn-icon {
+  animation-name: mndim;
+  animation-duration: 0.35s;
+  animation-timing-function: ease-out;
+}
+
+@keyframes mnpop {
+  0% {
+    transform: scale(0.2) rotate(-25deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18) rotate(6deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes mndim {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+}
+
+.mn-gem .mn-spark {
+  transform-origin: 52px 8px;
+  animation: mnspark 1.8s ease-in-out infinite;
+}
+
+.mn-tile.dim .mn-spark {
+  display: none;
+}
+
+@keyframes mnspark {
+  0%,
+  100% {
+    transform: scale(0.4);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+.mn-bomb .mn-fuse {
+  transform-origin: 56px 12px;
+  animation: mnfuse 0.35s ease-in-out infinite alternate;
+}
+
+.mn-tile.dim .mn-fuse {
+  animation: none;
+}
+
+@keyframes mnfuse {
+  from {
+    transform: scale(0.75) rotate(0);
+  }
+  to {
+    transform: scale(1.15) rotate(30deg);
+  }
+}
+
+/* Explosion */
+.mn-tile.boom {
+  z-index: 3;
+}
+
+.mn-tile.boom::before,
+.mn-tile.boom::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mn-tile.boom::before {
+  background: radial-gradient(circle, rgba(255, 250, 220, 1) 0%, rgba(255, 196, 80, 0.95) 22%, rgba(255, 96, 70, 0.75) 44%, rgba(255, 77, 94, 0.25) 60%, transparent 72%);
+  animation: mnflash 0.7s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+.mn-tile.boom::after {
+  border: 3px solid rgba(255, 140, 90, 0.8);
+  inset: 10%;
+  animation: mnring 0.6s ease-out forwards;
+}
+
+@keyframes mnflash {
+  0% {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  35% {
+    transform: scale(1.25);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes mnring {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.mines-board.shake {
+  animation: mnshake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes mnshake {
+  10%,
+  90% {
+    transform: translate(-1px, 1px);
+  }
+  20%,
+  80% {
+    transform: translate(3px, -2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translate(-5px, 2px);
+  }
+  40%,
+  60% {
+    transform: translate(5px, -1px);
+  }
+}
+
+/* Sidebar */
+.mn-pair {
+  align-items: start;
+}
+
+.mn-auto-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.mn-auto-tools[hidden],
+.mn-random[hidden] {
+  display: none;
+}
+
+.mn-hint {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .mines-stage {
+    padding: 22px 16px 26px;
+  }
+  .mines-board {
+    width: min(100%, 460px);
+  }
+}
+
+@media (max-width: 600px) {
+  .mines-board {
+    gap: 8px;
+  }
+  .mn-tile {
+    border-radius: 8px;
+    box-shadow: 0 4px 0 var(--mn-edge);
+  }
+  .mines-board.playing .mn-tile:not(.revealed):hover,
+  .mines-board.auto .mn-tile:not(.revealed):hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 0 var(--mn-edge);
+  }
+  .mn-tile.selected {
+    box-shadow: 0 4px 0 var(--mn-sel-edge);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mn-tile.pop .mn-icon,
+  .mn-gem .mn-spark,
+  .mn-bomb .mn-fuse,
+  .mines-board.shake {
+    animation: none;
+  }
+}
