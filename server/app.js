@@ -191,6 +191,7 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   router.post('/api/payments/:id/authenticate', authed((ctx) => payments.authenticate(ctx.user, ctx.params.id, ctx.body)));
   router.post('/api/payments/crypto/address', authed((ctx) => payments.depositAddress(ctx.user, ctx.body)));
   router.post('/api/payments/crypto/simulate', authed((ctx) => payments.simulateCryptoDeposit(ctx.user, ctx.body)));
+  router.get('/api/payments/buy/quotes', (ctx) => payments.buyQuotes(Object.fromEntries(ctx.query)));
   router.post('/api/payments/withdraw', authed((ctx) => payments.withdraw(ctx.user, ctx.body)));
   router.post('/api/payments/cards/:id/remove', authed((ctx) => payments.removeCard(ctx.user, ctx.params.id)));
   router.post('/api/bonus/rakeback', authed((ctx) => payments.claimRakeback(ctx.user)));

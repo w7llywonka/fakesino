@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { CURRENCIES, roundDown, fromUsd, toUsd } from '../public/js/shared/currencies.js';
 import { amountText } from './notify.js';
 import { NETWORKS, networkFor, validAddress } from '../public/js/shared/networks.js';
+import { PROVIDERS, quote, quotes, BUY_MIN_USD } from '../public/js/shared/onramps.js';
 import { DEMO_CARDS, cardBrand, luhn, demoCard, DEMO_3DS_CODE } from '../public/js/shared/cards.js';
 import { HttpError, badRequest } from './http.js';
 import { parseCurrency, parseAmount, credit, debit, vipInfo, assertNotOnBreak, assertDepositLimit } from './accounts.js';
@@ -105,6 +106,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
   }
 
   function settleCardDeposit(user, payment) {
+    if (payment.buy) return startPurchase(user, payment);
     const creditCurrency = payment.creditCurrency;
     const creditAmount = roundDown(creditCurrency, fromUsd(creditCurrency, toUsd(payment.currency, payment.amount)));
     credit(user, creditCurrency, creditAmount);
@@ -124,12 +126,94 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     return tx;
   }
 
+  // Credit a pending on-chain deposit block by block.
+  function confirmLater(user, tx, required) {
+    // Long confirmation counts (Polygon, BSC) are compressed to ~20 s overall.
+    const step = Math.min(Number(process.env.FAKESINO_CONFIRM_MS ?? 1500), 20000 / required);
+    const confirm = () => {
+      tx.details.confirmations++;
+      tx.updatedAt = Date.now();
+      if (tx.details.confirmations >= required) {
+        tx.status = 'completed';
+        credit(user, tx.currency, tx.amount);
+        store.save();
+        pushTx(user, tx);
+        return;
+      }
+      store.save();
+      live.toUser(user.id, 'tx', publicTx(tx));
+      later(step, confirm);
+    };
+    later(step, confirm);
+  }
+
+  // On-ramp purchase: the card is charged, then the provider sends the coins
+  // to this wallet's address on the chosen network.
+  function startPurchase(user, payment) {
+    const coin = payment.creditCurrency;
+    const net = networkFor(coin, payment.buy.network);
+    const q = quote(payment.buy.provider, { fiat: payment.currency, fiatAmount: payment.amount, coin, network: net.id });
+    const amount = roundDown(coin, q.youGet);
+    const key = `${coin}:${net.id}`;
+    user.addresses ||= {};
+    user.addresses[key] ||= fakeAddress(coin, net.id);
+    const tx = addTx(user, {
+      type: 'deposit',
+      method: 'buy',
+      status: 'pending',
+      currency: coin,
+      amount,
+      fiat: { currency: payment.currency, amount: payment.amount },
+      details: {
+        provider: q.name,
+        providerId: q.provider,
+        fiatAmount: payment.amount,
+        fiatCurrency: payment.currency,
+        fee: Math.round(q.feeFiat * 100) / 100,
+        networkFee: q.networkFee,
+        rate: q.rate,
+        network: net.id,
+        networkLabel: net.label,
+        address: user.addresses[key],
+        brand: payment.brand,
+        last4: payment.last4,
+        threeDS: !!payment.threeDS,
+        txHash: crypto.randomBytes(32).toString('hex'),
+        confirmations: 0,
+        required: net.confirmations,
+      },
+    });
+    payment.status = 'succeeded';
+    payment.txId = tx.id;
+    store.save();
+    live.toUser(user.id, 'tx', publicTx(tx));
+    notify(user.id, { kind: 'deposit', title: `Purchase complete · ${q.name}`, message: `${amountText(amount, coin)} is on its way to your wallet.`, link: '/transactions/purchases' });
+    confirmLater(user, tx, net.confirmations);
+    return tx;
+  }
+
+  function buyQuotes(params) {
+    const fiat = params.fiat === 'EUR' ? 'EUR' : 'USD';
+    const coin = CURRENCIES[params.coin]?.type === 'crypto' ? params.coin : 'BTC';
+    const fiatAmount = Math.max(0, Number(params.amount) || 0);
+    const network = networkFor(coin, params.network).id;
+    return { fiat, coin, network, fiatAmount, minimum: BUY_MIN_USD / CURRENCIES[fiat].usd, quotes: quotes({ fiat, fiatAmount, coin, network }), refreshIn: 15000 - (Date.now() % 15000) };
+  }
+
   function cardDeposit(user, body) {
     const fiat = body.currency === 'EUR' ? 'EUR' : 'USD';
     const amount = parseAmount(fiat, body.amount);
     if (amount < DEPOSIT_LIMITS.min) throw badRequest(`Minimum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.min}`, { field: 'amount' });
     if (amount > DEPOSIT_LIMITS.max) throw badRequest(`Maximum deposit is ${CURRENCIES[fiat].symbol}${DEPOSIT_LIMITS.max.toLocaleString('en-US')}`, { field: 'amount' });
     const creditCurrency = parseCurrency(user, body.creditCurrency || fiat);
+    // Buying crypto through an on-ramp: the coins arrive as an on-chain deposit.
+    let buy = null;
+    if (body.provider) {
+      if (!PROVIDERS.some((p) => p.id === body.provider)) throw badRequest('Unknown provider');
+      if (CURRENCIES[creditCurrency].type !== 'crypto') throw badRequest('Choose a crypto to buy');
+      if (toUsd(fiat, amount) < BUY_MIN_USD) throw badRequest(`Minimum purchase is ${CURRENCIES[fiat].symbol}${BUY_MIN_USD}`, { field: 'amount' });
+      buy = { provider: body.provider, network: networkFor(creditCurrency, body.network).id };
+    }
     assertNotOnBreak(user);
     assertDepositLimit(store, user, toUsd(fiat, amount));
     const card = resolveCard(user, body);
@@ -143,6 +227,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
       last4: card.last4,
       status: 'processing',
       createdAt: Date.now(),
+      buy,
     };
     if (body.saveCard && !card.saved) {
       user.cards ||= [];
@@ -275,23 +360,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
     });
     store.save();
     notify(user.id, { kind: 'deposit', title: 'Deposit detected', message: `${amountText(amount, currency)} is on its way · 0/${required} confirmations.`, link: '/transactions/deposits' });
-    // Long confirmation counts (Polygon, BSC) are compressed to ~20 s overall.
-    const step = Math.min(Number(process.env.FAKESINO_CONFIRM_MS ?? 1500), 20000 / required);
-    const confirm = () => {
-      tx.details.confirmations++;
-      tx.updatedAt = Date.now();
-      if (tx.details.confirmations >= required) {
-        tx.status = 'completed';
-        credit(user, currency, amount);
-        store.save();
-        pushTx(user, tx);
-        return;
-      }
-      store.save();
-      live.toUser(user.id, 'tx', publicTx(tx));
-      later(step, confirm);
-    };
-    later(step, confirm);
+    confirmLater(user, tx, required);
     return { transaction: publicTx(tx) };
   }
 
@@ -410,6 +479,7 @@ export function createPayments({ store, live, publicUser, notify = () => {} }) {
 
   return {
     addTx,
+    buyQuotes,
     cardDeposit,
     authenticate,
     depositAddress,

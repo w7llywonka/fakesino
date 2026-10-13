@@ -193,7 +193,7 @@ function fiatDeposit(container, { fiat, credit, offs, modal, title = null }) {
   });
 }
 
-function cardStep(container, { amount, fiat, credit, savedCard, modal }) {
+function cardStep(container, { amount, fiat, credit, savedCard, modal, extra = null }) {
   const sym = CURRENCIES[fiat].symbol;
   const total = `${sym}${fmt.amount(amount, fiat)}`;
   const demoList = Object.entries(DEMO_CARDS)
@@ -267,7 +267,7 @@ function cardStep(container, { amount, fiat, credit, savedCard, modal }) {
   view.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = Object.fromEntries(new FormData(view));
-    const payload = { amount, currency: fiat, creditCurrency: credit };
+    const payload = { amount, currency: fiat, creditCurrency: credit, ...(extra || {}) };
     if (savedCard) {
       payload.savedCardId = savedCard.id;
       payload.cvc = fd.cvc;
@@ -293,10 +293,10 @@ function cardStep(container, { amount, fiat, credit, savedCard, modal }) {
     container.appendChild(processing);
     try {
       const [res] = await Promise.all([api.post('/api/payments/card', payload), sleep(1100)]);
-      handlePaymentResult(container, res, { amount, fiat, credit, modal, retry: () => cardStep(container, { amount, fiat, credit, savedCard, modal }) });
+      handlePaymentResult(container, res, { amount, fiat, credit, modal, retry: () => cardStep(container, { amount, fiat, credit, savedCard, modal, extra }) });
     } catch (err) {
       container.innerHTML = '';
-      cardStep(container, { amount, fiat, credit, savedCard, modal });
+      cardStep(container, { amount, fiat, credit, savedCard, modal, extra });
       const form = container.querySelector('form');
       showFieldErrors(form, err);
     }
@@ -357,6 +357,7 @@ function threeDS(container, payment, opts) {
 function paymentSuccess(container, res, { modal }) {
   const tx = res.transaction;
   container.innerHTML = '';
+  if (tx.method === 'buy') return purchaseComplete(container, tx, modal);
   const view = el(`<div class="success-state">
     <div class="check">${icon('check', 34)}</div>
     <h3>Deposit successful</h3>
@@ -482,24 +483,158 @@ function txRow(tx) {
 // Buy crypto (card → crypto)
 
 function buyTab({ body, offs, modal }) {
-  let credit = CURRENCIES[currency()].type === 'crypto' ? currency() : 'BTC';
+  let coin = CURRENCIES[currency()].type === 'crypto' ? currency() : 'BTC';
+  let fiat = 'USD';
+  let amount = 100;
+  let network = networkFor(coin, lastNetwork[coin]).id;
   const top = el('<div></div>');
   const content = el('<div></div>');
   body.append(top, content);
   currencyPicker(top, {
-    label: 'Receive',
-    value: credit,
+    label: 'Buy',
+    value: coin,
     filter: (c) => CURRENCIES[c].type === 'crypto',
     onChange: (c) => {
-      credit = c;
-      render();
+      coin = c;
+      network = networkFor(coin, lastNetwork[coin]).id;
+      form();
     },
   });
-  const render = () => {
+
+  // Step 1: what to buy, how much, which fiat.
+  function form() {
+    top.hidden = false;
     content.innerHTML = '';
-    fiatDeposit(content, { fiat: 'USD', credit, offs, modal, title: `Pay by card and receive ${credit} instantly at the reference rate.` });
+    const sym = CURRENCIES[fiat].symbol;
+    const view = el(`<form novalidate>
+      ${networkSelect(coin, network)}
+      <div class="field" data-field="amount"><div class="field-label"><span>Amount</span><span class="muted">Min ${sym}10</span></div>
+        <div class="input-group"><div class="input-icon"><input class="input" name="amount" inputmode="decimal" value="${amount}"><span class="suffix">${coinFiat(fiat)}</span></div></div><div class="field-error"></div></div>
+      <div class="field"><div class="field-label">Pay with</div><div class="segmented">${['USD', 'EUR'].map((f) => `<button type="button" data-f="${f}" class="${f === fiat ? 'active' : ''}">${f}</button>`).join('')}</div></div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Next</button>
+      <div class="muted" style="font-size:12px;text-align:center;margin-top:10px">Compare play-money quotes from on-ramp providers. Demo cards only.</div></form>`);
+    content.appendChild(view);
+    view.querySelector('select[name=network]')?.addEventListener('change', (e) => {
+      network = lastNetwork[coin] = e.target.value;
+    });
+    on(view, 'click', '[data-f]', (e, b) => {
+      fiat = b.dataset.f;
+      amount = Number(view.amount.value) || amount;
+      form();
+    });
+    view.addEventListener('submit', (e) => {
+      e.preventDefault();
+      amount = Number(view.amount.value) || 0;
+      if (amount * CURRENCIES[fiat].usd < 10) return showFieldErrors(view, { field: 'amount', message: `Enter at least ${sym}10` });
+      providers();
+    });
+  }
+
+  // Step 2: provider quotes, refreshed every 15 seconds.
+  let timer = null;
+  offs.push(() => clearInterval(timer));
+  async function providers(selected = null) {
+    clearInterval(timer);
+    top.hidden = true;
+    content.innerHTML = '<div class="spinner"></div>';
+    let q;
+    try {
+      q = await api.get(`/api/payments/buy/quotes?coin=${coin}&network=${network}&fiat=${fiat}&amount=${amount}`);
+    } catch (err) {
+      content.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+      return;
+    }
+    let pick = selected || q.quotes.find((x) => x.best).provider;
+    const sym = CURRENCIES[fiat].symbol;
+    const net = networkFor(coin, network);
+    content.innerHTML = '';
+    const view = el(`<div>
+      <button class="link" data-act="back" style="margin-bottom:10px">${icon('left', 14)} Back</button>
+      <div class="row between" style="margin-bottom:10px"><b>Buy ${coin} with ${sym}${fmt.amount(amount, fiat)}</b><span class="dim" style="font-size:12px" data-refresh></span></div>
+      <div class="method-list">${q.quotes
+        .map(
+          (x) => `<button type="button" class="method ramp ${x.provider === pick ? 'selected' : ''}" data-p="${x.provider}"><span class="ramp-logo" style="background:${x.color}">${esc(x.name[0])}</span>
+          <div><div class="m-title">${esc(x.name)} ${x.best ? '<span class="pill green">Best rate</span>' : ''}</div><div class="m-sub">${esc(x.methods.join(' · '))} · ${esc(x.eta)}</div>
+          <div class="m-sub">Fee ${sym}${fmt.amount(x.feeFiat, fiat)} + network ${fmt.amount(x.networkFee, coin)} ${coin}</div></div>
+          <div class="m-right"><div class="dim" style="font-size:11px">You get ≈</div><b>${fmt.amount(x.youGet, coin)}</b> ${coin}</div></button>`,
+        )
+        .join('')}</div>
+      <div class="muted" style="font-size:12px;margin:8px 0 12px">Sent to your ${coin} address on ${esc(net.label)}.</div>
+      <button class="btn btn-primary btn-block btn-lg" data-act="go">Continue</button></div>`);
+    content.appendChild(view);
+    on(view, 'click', '[data-p]', (e, b) => {
+      pick = b.dataset.p;
+      view.querySelectorAll('[data-p]').forEach((x) => x.classList.toggle('selected', x === b));
+    });
+    view.querySelector('[data-act=back]').addEventListener('click', () => {
+      clearInterval(timer);
+      form();
+    });
+    view.querySelector('[data-act=go]').addEventListener('click', () => {
+      clearInterval(timer);
+      checkout(q.quotes.find((x) => x.provider === pick));
+    });
+    let left = Math.ceil(q.refreshIn / 1000);
+    const refreshEl = view.querySelector('[data-refresh]');
+    refreshEl.textContent = `Quotes refresh in ${left}s`;
+    timer = setInterval(() => {
+      left--;
+      if (left <= 0) return providers(pick);
+      refreshEl.textContent = `Quotes refresh in ${left}s`;
+    }, 1000);
+  }
+
+  // Step 3: redirect to the provider's own (light) checkout.
+  async function checkout(p) {
+    content.innerHTML = `<div class="processing"><div class="spinner"></div><b>Redirecting you to ${esc(p.name)}…</b><div class="muted" style="margin-top:4px">A play-money demo checkout</div></div>`;
+    await sleep(1100);
+    const sym = CURRENCIES[fiat].symbol;
+    content.innerHTML = '';
+    const shell = el(`<div class="ramp-checkout" style="--ramp:${p.color}">
+      <div class="ramp-head"><span class="ramp-logo" style="background:${p.color}">${esc(p.name[0])}</span><b>${esc(p.name)}</b><span class="ramp-secure">${icon('lock', 13)} Demo checkout</span></div>
+      <div class="ramp-order"><span>You pay</span><b>${sym}${fmt.amount(amount, fiat)}</b><span>You get ≈</span><b>${fmt.amount(p.youGet, coin)} ${coin}</b></div>
+      <div class="ramp-body"></div></div>`);
+    content.appendChild(shell);
+    cardStep(shell.querySelector('.ramp-body'), { amount, fiat, credit: coin, savedCard: null, modal, extra: { provider: p.provider, network } });
+  }
+
+  form();
+}
+
+const coinFiat = (f) => `<span style="font-weight:800;font-size:12px">${f}</span>`;
+
+// Step 4: the order is paid; the coins arrive as an on-chain deposit.
+function purchaseComplete(container, tx, modal) {
+  const d = tx.details;
+  const view = el(`<div class="success-state">
+    <div class="check">${icon('check', 34)}</div>
+    <h3>Order complete</h3>
+    <div class="muted">${esc(d.provider)} is sending ${fmt.amount(tx.amount, tx.currency)} ${tx.currency} to your wallet on ${esc(d.networkLabel)}.</div>
+    <div class="summary" style="text-align:left;margin-top:16px">
+      <div class="line"><span>Paid</span><b>${CURRENCIES[d.fiatCurrency].symbol}${fmt.amount(d.fiatAmount, d.fiatCurrency)} · ${brandChip(d.brand)} •••• ${esc(d.last4)}</b></div>
+      <div class="line"><span>Provider fee</span><b>${CURRENCIES[d.fiatCurrency].symbol}${fmt.amount(d.fee, d.fiatCurrency)}</b></div>
+      <div class="line"><span>Arriving</span><b>${fmt.amount(tx.amount, tx.currency)} ${tx.currency}</b></div>
+    </div>
+    <div class="tx-list" style="text-align:left"></div>
+    <button class="btn btn-primary btn-block btn-lg" data-act="done" style="margin-top:12px">Done</button></div>`);
+  container.appendChild(view);
+  const list = view.querySelector('.tx-list');
+  list.appendChild(txRow(tx));
+  const off = bus.on('live:tx', (t) => {
+    if (t.id !== tx.id) return;
+    list.innerHTML = '';
+    list.appendChild(txRow(t));
+    if (t.status === 'completed') {
+      toastSuccess('Purchase arrived', `${fmt.amount(t.amount, t.currency)} ${t.currency} credited`);
+      off();
+    }
+  });
+  const prev = modal.onClose;
+  modal.onClose = () => {
+    off();
+    prev?.();
   };
-  render();
+  view.querySelector('[data-act=done]').addEventListener('click', () => modal.close());
 }
 
 // ---------------------------------------------------------------------------

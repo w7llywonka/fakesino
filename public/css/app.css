@@ -3299,3 +3299,114 @@ textarea.input {
 .reward-cards .bonus-row + .bonus-row {
   margin-top: 6px;
 }
+
+/* ---------- Buy Crypto providers ---------- */
+
+.method.ramp {
+  align-items: center;
+}
+
+.ramp-logo {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.ramp-checkout {
+  background: #f6f7fb;
+  color: #12151c;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border-top: 4px solid var(--ramp);
+}
+
+.ramp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  border-bottom: 1px solid #e3e6ee;
+}
+
+.ramp-secure {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #5b6475;
+}
+
+.ramp-order {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #5b6475;
+}
+
+.ramp-order b {
+  color: #12151c;
+  text-align: right;
+}
+
+.ramp-body {
+  padding: 0 14px 14px;
+}
+
+.ramp-checkout .field-label,
+.ramp-checkout .muted,
+.ramp-checkout .dim {
+  color: #5b6475;
+}
+
+.ramp-checkout .input,
+.ramp-checkout .select {
+  background: #fff;
+  color: #12151c;
+  border: 1px solid #d6dbe6;
+}
+
+.ramp-checkout .demo-card-btn {
+  background: #fff;
+  color: #12151c;
+  border: 1px solid #d6dbe6;
+}
+
+.ramp-checkout .btn-primary {
+  background: var(--ramp);
+  color: #fff;
+}
+
+.ramp-body [data-act='back'] {
+  display: none;
+}
+
+.ramp-checkout .summary,
+.ramp-checkout .tx-progress,
+.ramp-checkout .demo-notice {
+  background: #fff;
+  color: #12151c;
+  border: 1px solid #e3e6ee;
+}
+
+.ramp-checkout .summary .line span {
+  color: #5b6475;
+}
+
+.ramp-checkout .success-state h3 {
+  color: #12151c;
+}
+
+.method.ramp .m-right {
+  text-align: right;
+  white-space: nowrap;
+}

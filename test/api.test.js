@@ -248,6 +248,24 @@ test('card checkout: 3-D Secure challenge and buying crypto', async () => {
   assert.equal((await c.post(`/api/payments/${r.data.payment.id}/authenticate`, { code: '123456' })).status, 404, 'cannot be replayed');
 });
 
+test('buy crypto: provider quotes, card checkout, coins arrive on-chain', async () => {
+  const c = await newPlayer(0);
+  const q = (await c.get('/api/payments/buy/quotes?coin=LTC&network=litecoin&fiat=USD&amount=100')).data;
+  assert.equal(q.quotes.length, 3);
+  assert.equal(q.quotes.filter((x) => x.best).length, 1);
+  const best = q.quotes.find((x) => x.best);
+  assert.ok(best.youGet > 1.3 && best.youGet < 1.4, `≈ $96-97 of LTC at $70: ${best.youGet}`);
+  assert.equal((await c.post('/api/payments/card', { amount: 5, currency: 'USD', creditCurrency: 'LTC', provider: best.provider, card: card('4242424242424242') })).status, 400, '$10 minimum');
+  const r = await c.post('/api/payments/card', { amount: 100, currency: 'USD', creditCurrency: 'LTC', provider: best.provider, network: 'litecoin', card: card('4242424242424242') });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.transaction.method, 'buy');
+  assert.equal(r.data.transaction.status, 'pending');
+  assert.equal(r.data.transaction.details.provider, best.name);
+  await new Promise((res) => setTimeout(res, 250));
+  const me = (await c.get('/api/me')).data.user;
+  assert.equal(me.balances.LTC, r.data.transaction.amount, 'credited after confirmations');
+});
+
 test('crypto deposits confirm block by block; withdrawals debit immediately', async () => {
   const c = await newPlayer(0);
   const addr = await c.post('/api/payments/crypto/address', { currency: 'LTC' });
