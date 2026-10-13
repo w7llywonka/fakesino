@@ -1,0 +1,194 @@
+.dice-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dice-board {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px 20px;
+}
+
+.dice-track-wrap {
+  width: 100%;
+  max-width: 720px;
+}
+
+.dice-labels {
+  position: relative;
+  height: 28px;
+  margin: 0 18px 10px;
+}
+
+.dice-labels span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-weight: 800;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.dice-labels span::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  border: 6px solid transparent;
+  border-top-color: var(--surface-3);
+  transform: translateX(-50%);
+}
+
+.dice-track {
+  position: relative;
+  background: var(--surface-3);
+  border-radius: 999px;
+  padding: 16px 18px;
+}
+
+.dice-range {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.dice-lose,
+.dice-win {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.dice-lose {
+  background: var(--red);
+}
+
+.dice-win {
+  background: var(--accent);
+}
+
+.dice-slider {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: calc(100% - 36px);
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  height: 40px;
+  cursor: pointer;
+}
+
+.dice-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background: #5c95ff;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25), 0 3px 8px rgba(0, 0, 0, 0.4);
+  background-image: linear-gradient(90deg, transparent 10px, rgba(255, 255, 255, 0.55) 10px 12px, transparent 12px 16px, rgba(255, 255, 255, 0.55) 16px 18px, transparent 18px 22px, rgba(255, 255, 255, 0.55) 22px 24px, transparent 24px);
+  background-size: 100% 50%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.dice-slider::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 0;
+  background: #5c95ff;
+}
+
+.dice-slider:disabled {
+  cursor: not-allowed;
+}
+
+.dice-result {
+  position: absolute;
+  bottom: calc(100% + 18px);
+  margin-left: 0;
+  transform: translateX(-50%);
+  left: 50%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dice-result[hidden] {
+  display: none;
+}
+
+.dice-rail {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.dice-cube {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f1822;
+  font-weight: 900;
+  font-size: 16px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
+  transform: rotate(45deg) scale(0.82);
+  animation: dicepop 0.25s ease-out;
+}
+
+.dice-cube span {
+  transform: rotate(-45deg);
+}
+
+.dice-result.win .dice-cube {
+  color: var(--accent);
+  color: #13a057;
+}
+
+.dice-result.lose .dice-cube {
+  color: var(--red);
+}
+
+@keyframes dicepop {
+  from {
+    transform: rotate(45deg) scale(0.5);
+  }
+}
+
+.dice-flip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.dice-flip:hover {
+  border-color: #4c6a82;
+}
+
+@media (max-width: 600px) {
+  .dice-board {
+    padding: 50px 12px 10px;
+  }
+  .stat-tiles {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    padding: 8px;
+  }
+  .dice-cube {
+    width: 48px;
+    height: 48px;
+    font-size: 13px;
+  }
+}

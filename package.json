@@ -1,0 +1,17 @@
+{
+  "name": "fakesino",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A full online casino that runs entirely on play money: real games, real odds, provably fair, demo checkout.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "MIT"
+}

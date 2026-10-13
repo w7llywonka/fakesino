@@ -1,0 +1,462 @@
+import { el, esc, on, sleep } from '../dom.js';
+import { icon, coin } from '../icons.js';
+import { CURRENCIES, roundDown } from '../shared/currencies.js';
+import { state, bus, currency, balanceOf, savePrefs } from '../state.js';
+import * as fmt from '../format.js';
+import { toast, toastError } from './toast.js';
+
+const AMOUNT_KEY = 'fakesino:amounts';
+function rememberAmount(code, value) {
+  try {
+    const all = JSON.parse(localStorage.getItem(AMOUNT_KEY) || '{}');
+    all[code] = value;
+    localStorage.setItem(AMOUNT_KEY, JSON.stringify(all));
+  } catch {
+    /* ignore */
+  }
+}
+function recallAmount(code) {
+  try {
+    return Number(JSON.parse(localStorage.getItem(AMOUNT_KEY) || '{}')[code]) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function amountField({ key = 'amount', label = 'Bet Amount', halfDouble = true } = {}) {
+  return { key, type: 'amount', label, halfDouble };
+}
+
+/**
+ * Sidebar bet panel shared by every game.
+ *
+ * opts.fields: [{ key, type: 'amount'|'select'|'number'|'segmented'|'profit'|'readonly'|'custom', label, ... , mode }]
+ * opts.onBet(values): manual bet handler (async)
+ * opts.auto: { run(values) → { profit, win } } enables the Auto tab
+ */
+export function createBetPanel(container, opts) {
+  const modes = opts.auto ? ['manual', 'auto'] : ['manual'];
+  let mode = 'manual';
+  let busy = false;
+  let locked = false;
+  let autoRunning = false;
+  let autoStop = false;
+  const listeners = [];
+  const cleanups = [];
+  const values = {};
+  const fieldEls = {};
+  let profitMultiplier = null;
+
+  const root = el(`<div class="bet-panel stack" style="gap:12px">
+    ${modes.length > 1 ? `<div class="bp-mode"><div class="tabs">${modes.map((m) => `<button class="tab ${m === mode ? 'active' : ''}" data-mode="${m}">${m === 'manual' ? 'Manual' : 'Auto'}</button>`).join('')}</div></div>` : ''}
+    <div class="bp-fields stack" style="gap:12px"></div>
+    <div class="bp-auto-fields stack" style="gap:12px;display:none"></div>
+    <div class="bp-actions"><button class="btn btn-primary btn-block bp-bet">${esc(opts.betLabel || 'Bet')}</button></div>
+    <div class="bp-extra stack" style="gap:8px"></div>
+  </div>`);
+  container.appendChild(root);
+  const fieldsEl = root.querySelector('.bp-fields');
+  const autoEl = root.querySelector('.bp-auto-fields');
+  const betBtn = root.querySelector('.bp-bet');
+  const extraEl = root.querySelector('.bp-extra');
+
+  // ---- field rendering ----
+  function renderField(f) {
+    let node;
+    const label = f.label ? `<div class="bp-label"><span>${esc(f.label)}</span><span class="aux"></span></div>` : '';
+    switch (f.type) {
+      case 'amount': {
+        const code = currency();
+        values[f.key] = recallAmount(code);
+        node = el(`<div class="bp-field" data-key="${f.key}">${label}
+          <div class="input-group">
+            <div class="input-icon"><input class="input" inputmode="decimal" autocomplete="off" value="${fmt.inputAmount(values[f.key], code)}"><span class="suffix">${coin(code)}</span></div>
+            ${f.halfDouble !== false ? '<button class="addon" data-act="half">½</button><button class="addon" data-act="double">2×</button>' : ''}
+          </div></div>`);
+        const input = node.querySelector('input');
+        input.addEventListener('input', () => {
+          const v = Number(input.value.replace(/,/g, ''));
+          values[f.key] = Number.isFinite(v) && v >= 0 ? v : 0;
+          rememberAmount(currency(), values[f.key]);
+          updateAmountAux();
+          emit(f.key);
+        });
+        input.addEventListener('blur', () => setValue(f.key, values[f.key]));
+        node.querySelector('[data-act=half]')?.addEventListener('click', () => setValue(f.key, values[f.key] / 2));
+        node.querySelector('[data-act=double]')?.addEventListener('click', () => {
+          const next = values[f.key] * 2;
+          setValue(f.key, Math.min(next, Math.max(balanceOf(), values[f.key])));
+        });
+        break;
+      }
+      case 'select': {
+        values[f.key] = f.value ?? f.options[0][0];
+        node = el(`<div class="bp-field" data-key="${f.key}">${label}<select class="select">${f.options
+          .map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(values[f.key]) ? 'selected' : ''}>${esc(l)}</option>`)
+          .join('')}</select></div>`);
+        node.querySelector('select').addEventListener('change', (e) => {
+          const raw = e.target.value;
+          values[f.key] = typeof f.options[0][0] === 'number' ? Number(raw) : raw;
+          emit(f.key);
+        });
+        break;
+      }
+      case 'segmented': {
+        values[f.key] = f.value ?? f.options[0][0];
+        node = el(`<div class="bp-field" data-key="${f.key}">${label}<div class="segmented">${f.options
+          .map(([v, l]) => `<button data-v="${esc(v)}" class="${String(v) === String(values[f.key]) ? 'active' : ''}">${esc(l)}</button>`)
+          .join('')}</div></div>`);
+        on(node, 'click', 'button[data-v]', (e, b) => {
+          if (b.disabled) return;
+          setValue(f.key, typeof f.options[0][0] === 'number' ? Number(b.dataset.v) : b.dataset.v);
+          emit(f.key);
+        });
+        break;
+      }
+      case 'number':
+      case 'text': {
+        values[f.key] = f.value ?? '';
+        node = el(`<div class="bp-field" data-key="${f.key}">${label}<div class="input-suffix"><input class="input" ${f.type === 'number' ? 'inputmode="decimal"' : ''} autocomplete="off" value="${esc(values[f.key])}">${f.suffix ? `<span class="suffix">${f.suffix}</span>` : ''}</div></div>`);
+        const input = node.querySelector('input');
+        input.addEventListener('input', () => {
+          values[f.key] = f.type === 'number' ? (input.value === '' ? '' : Number(input.value)) : input.value;
+          emit(f.key);
+        });
+        if (f.type === 'number')
+          input.addEventListener('blur', () => {
+            let v = Number(input.value);
+            if (!Number.isFinite(v)) v = f.value ?? 0;
+            if (f.min != null) v = Math.max(f.min, v);
+            if (f.max != null) v = Math.min(f.max, v);
+            setValue(f.key, v);
+            emit(f.key);
+          });
+        break;
+      }
+      case 'profit':
+      case 'readonly': {
+        node = el(`<div class="bp-field bp-readonly" data-key="${f.key}">${label}<div class="input-suffix"><input class="input" readonly tabindex="-1" value="${esc(f.value ?? '')}">${f.suffix || f.type === 'profit' ? `<span class="suffix">${f.type === 'profit' ? coin(currency()) : f.suffix}</span>` : ''}</div></div>`);
+        break;
+      }
+      case 'custom': {
+        node = el(`<div class="bp-field" data-key="${f.key || ''}">${label}<div class="bp-custom"></div></div>`);
+        f.render(node.querySelector('.bp-custom'), node);
+        break;
+      }
+      default:
+        node = el('<div></div>');
+    }
+    if (f.mode) node.dataset.mode = f.mode;
+    if (f.hidden) node.style.display = 'none';
+    fieldEls[f.key] = { node, spec: f };
+    return node;
+  }
+
+  for (const f of opts.fields) fieldsEl.appendChild(renderField(f));
+
+  // ---- auto fields ----
+  const auto = { bets: 0, onWin: 'reset', onWinPct: 0, onLoss: 'reset', onLossPct: 0, stopProfit: 0, stopLoss: 0 };
+  if (opts.auto) {
+    autoEl.innerHTML = `
+      <div class="bp-field"><div class="bp-label"><span>Number of Bets</span></div>
+        <div class="input-suffix"><input class="input" data-auto="bets" inputmode="numeric" value="0"><span class="suffix">${icon('refresh', 14)}</span></div></div>
+      ${['Win', 'Loss']
+        .map(
+          (k) => `<div class="bp-field"><div class="bp-label"><span>On ${k}</span></div>
+        <div class="bp-onwinloss"><div class="toggle-pair"><button class="active" data-on="${k}" data-v="reset">Reset</button><button data-on="${k}" data-v="increase">Increase by:</button></div>
+        <div class="input-suffix" style="flex:1"><input class="input" data-auto="on${k}Pct" inputmode="decimal" value="0" disabled><span class="suffix">%</span></div></div></div>`,
+        )
+        .join('')}
+      <div class="bp-field"><div class="bp-label"><span>Stop on Profit</span><span class="aux" data-aux="stopProfit"></span></div>
+        <div class="input-suffix"><input class="input" data-auto="stopProfit" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Loss</span><span class="aux" data-aux="stopLoss"></span></div>
+        <div class="input-suffix"><input class="input" data-auto="stopLoss" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>`;
+    on(autoEl, 'input', 'input[data-auto]', (e, input) => {
+      auto[input.dataset.auto] = Number(input.value) || 0;
+    });
+    on(autoEl, 'click', 'button[data-on]', (e, b) => {
+      if (autoRunning) return;
+      const k = b.dataset.on;
+      auto[`on${k}`] = b.dataset.v;
+      b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+      const pct = autoEl.querySelector(`[data-auto=on${k}Pct]`);
+      pct.disabled = b.dataset.v !== 'increase';
+    });
+  }
+
+  // ---- helpers ----
+  function emit(key) {
+    for (const fn of listeners) fn(key, values[key], values);
+    if (key === 'amount') refreshProfit();
+  }
+
+  function setValue(key, v) {
+    const f = fieldEls[key];
+    if (!f) {
+      values[key] = v;
+      return;
+    }
+    const spec = f.spec;
+    if (spec.type === 'amount') {
+      const code = currency();
+      v = Math.max(0, roundDown(code, Number(v) || 0));
+      values[key] = v;
+      f.node.querySelector('input').value = fmt.inputAmount(v, code);
+      rememberAmount(code, v);
+      updateAmountAux();
+      refreshProfit();
+    } else if (spec.type === 'select') {
+      values[key] = v;
+      f.node.querySelector('select').value = String(v);
+    } else if (spec.type === 'segmented') {
+      values[key] = v;
+      f.node.querySelectorAll('button[data-v]').forEach((b) => b.classList.toggle('active', b.dataset.v === String(v)));
+    } else if (spec.type === 'number' || spec.type === 'text') {
+      values[key] = v;
+      const input = f.node.querySelector('input');
+      if (document.activeElement !== input) input.value = spec.decimals != null && v !== '' ? Number(v).toFixed(spec.decimals) : v;
+    } else if (spec.type === 'readonly' || spec.type === 'profit') {
+      f.node.querySelector('input').value = v;
+    }
+  }
+
+  function updateAmountAux() {
+    for (const { node, spec } of Object.values(fieldEls)) {
+      if (spec.type !== 'amount') continue;
+      const code = currency();
+      const aux = node.querySelector('.aux');
+      if (aux) aux.textContent = CURRENCIES[code].type === 'crypto' ? fmt.fiat(fmt.usdOf(values[spec.key], code)) : '';
+    }
+  }
+
+  function refreshProfit() {
+    const pf = Object.values(fieldEls).find((f) => f.spec.type === 'profit');
+    if (!pf) return;
+    const code = currency();
+    const m = profitMultiplier;
+    const amount = values.amount || 0;
+    const profit = m == null ? 0 : Math.max(0, amount * m - amount);
+    pf.node.querySelector('input').value = fmt.amount(roundDown(code, profit), code);
+    const aux = pf.node.querySelector('.aux');
+    if (aux) aux.textContent = CURRENCIES[code].type === 'crypto' ? fmt.fiat(fmt.usdOf(profit, code)) : '';
+  }
+
+  function applyDisabled() {
+    const disable = busy || locked || autoRunning;
+    for (const { node, spec } of Object.values(fieldEls)) {
+      if (spec.type === 'profit' || spec.type === 'readonly') continue;
+      if (spec.keepEnabled) continue;
+      node.querySelectorAll('input, select, button').forEach((x) => (x.disabled = disable));
+    }
+    autoEl.querySelectorAll('input, button').forEach((x) => {
+      if (x.dataset.auto?.endsWith('Pct')) {
+        const k = x.dataset.auto.includes('Win') ? 'onWin' : 'onLoss';
+        x.disabled = autoRunning || auto[k] !== 'increase';
+      } else x.disabled = autoRunning;
+    });
+    root.querySelectorAll('.bp-mode .tab').forEach((t) => (t.disabled = busy || locked || autoRunning));
+    if (mode === 'auto') {
+      betBtn.textContent = autoRunning ? (autoStop ? 'Finishing Bet' : 'Stop Autobet') : 'Start Autobet';
+      betBtn.disabled = autoStop || (!autoRunning && busy);
+    }
+  }
+
+  function setMode(m) {
+    mode = m;
+    root.querySelectorAll('.bp-mode .tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
+    autoEl.style.display = m === 'auto' ? '' : 'none';
+    for (const { node, spec } of Object.values(fieldEls)) {
+      if (spec.mode) node.style.display = spec.mode === m && !spec.hidden ? '' : 'none';
+    }
+    betBtn.textContent = m === 'auto' ? 'Start Autobet' : opts.betLabel || 'Bet';
+    for (const fn of listeners) fn('mode', m, values);
+    applyDisabled();
+  }
+
+  on(root, 'click', '.bp-mode .tab', (e, t) => !t.disabled && setMode(t.dataset.mode));
+
+  // ---- betting ----
+  function snapshot() {
+    return { ...values, amount: roundDown(currency(), values.amount || 0) };
+  }
+
+  function checkBalance(amount) {
+    if (!state.user) return true;
+    if (amount > balanceOf() + 1e-12) {
+      toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to keep playing.' });
+      return false;
+    }
+    return true;
+  }
+
+  async function manualBet() {
+    if (busy || !opts.onBet) return;
+    try {
+      await opts.onBet(snapshot());
+    } catch (err) {
+      toastError(err);
+    }
+  }
+
+  async function runAuto() {
+    if (!state.user) {
+      window.dispatchEvent(new CustomEvent('auth-required'));
+      return;
+    }
+    autoRunning = true;
+    autoStop = false;
+    applyDisabled();
+    const base = values.amount || 0;
+    let current = base;
+    let total = 0;
+    let remaining = auto.bets;
+    const infinite = !auto.bets;
+    const betsInput = autoEl.querySelector('[data-auto=bets]');
+    try {
+      while (!autoStop && (infinite || remaining > 0)) {
+        if (opts.auto.canRun && !opts.auto.canRun()) break;
+        setValue('amount', current);
+        const v = snapshot();
+        if (!checkBalance(v.amount)) break;
+        const r = await opts.auto.run(v);
+        if (!r) break;
+        total += r.profit;
+        if (!infinite) {
+          remaining--;
+          betsInput.value = remaining;
+        }
+        if (r.win) current = auto.onWin === 'increase' ? current * (1 + auto.onWinPct / 100) : base;
+        else if (r.profit < 0) current = auto.onLoss === 'increase' ? current * (1 + auto.onLossPct / 100) : base;
+        if (auto.stopProfit > 0 && total >= auto.stopProfit) break;
+        if (auto.stopLoss > 0 && -total >= auto.stopLoss) break;
+        await sleep(opts.auto.delay ?? (state.prefs.animations ? 120 : 30));
+      }
+    } catch (err) {
+      toastError(err, 'Autobet stopped');
+    } finally {
+      if (!infinite) betsInput.value = auto.bets;
+      autoRunning = false;
+      autoStop = false;
+      applyDisabled();
+      for (const fn of listeners) fn('autoStopped', true, values);
+    }
+  }
+
+  betBtn.addEventListener('click', () => {
+    if (mode === 'auto') {
+      if (autoRunning) {
+        autoStop = true;
+        applyDisabled();
+      } else runAuto();
+    } else manualBet();
+  });
+
+  // ---- hotkeys ----
+  const onKey = (e) => {
+    if (!state.prefs.hotkeys) return;
+    if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+    if (document.querySelector('.modal-backdrop')) return;
+    const k = e.key.toLowerCase();
+    if (k === ' ') {
+      e.preventDefault();
+      if (!betBtn.disabled) betBtn.click();
+    } else if (k === 's') setValue('amount', (values.amount || 0) * 2);
+    else if (k === 'a') setValue('amount', (values.amount || 0) / 2);
+    else if (k === 'd') setValue('amount', 0);
+    else if (opts.hotkeys?.[k]) opts.hotkeys[k](e);
+  };
+  document.addEventListener('keydown', onKey);
+  cleanups.push(() => document.removeEventListener('keydown', onKey));
+
+  // Reset the amount to the remembered value when the currency changes.
+  cleanups.push(
+    bus.on('currency', (code) => {
+      for (const { node, spec } of Object.values(fieldEls)) {
+        if (spec.type === 'amount') {
+          node.querySelector('.suffix').innerHTML = coin(code);
+          setValue(spec.key, recallAmount(code));
+        }
+        if (spec.type === 'profit') node.querySelector('.suffix').innerHTML = coin(code);
+      }
+      autoEl.querySelectorAll('.auto-coin').forEach((s) => (s.innerHTML = coin(code)));
+      refreshProfit();
+    }),
+  );
+
+  updateAmountAux();
+  setMode('manual');
+
+  const panel = {
+    root,
+    button: betBtn,
+    extra: extraEl,
+    get mode() {
+      return mode;
+    },
+    get autoRunning() {
+      return autoRunning;
+    },
+    values: snapshot,
+    get: (k) => values[k],
+    set(k, v) {
+      setValue(k, v);
+      if (k !== 'amount') emit(k);
+    },
+    onChange(fn) {
+      listeners.push(fn);
+    },
+    setProfit(multiplier) {
+      profitMultiplier = multiplier;
+      refreshProfit();
+    },
+    setBusy(b) {
+      busy = b;
+      if (mode === 'manual') betBtn.disabled = b;
+      applyDisabled();
+    },
+    lock(b) {
+      locked = b;
+      applyDisabled();
+    },
+    setButton(label, { variant = 'primary', disabled = false } = {}) {
+      betBtn.textContent = label;
+      betBtn.className = `btn btn-${variant} btn-block bp-bet`;
+      betBtn.disabled = disabled;
+    },
+    resetButton() {
+      betBtn.className = 'btn btn-primary btn-block bp-bet';
+      betBtn.textContent = mode === 'auto' ? 'Start Autobet' : opts.betLabel || 'Bet';
+      betBtn.disabled = busy;
+    },
+    setLabel(k, text) {
+      const lbl = fieldEls[k]?.node.querySelector('.bp-label span');
+      if (lbl) lbl.textContent = text;
+    },
+    setAux(k, text) {
+      const aux = fieldEls[k]?.node.querySelector('.aux');
+      if (aux) aux.textContent = text;
+    },
+    show(k, visible) {
+      const f = fieldEls[k];
+      if (!f) return;
+      f.spec.hidden = !visible;
+      f.node.style.display = visible && (!f.spec.mode || f.spec.mode === mode) ? '' : 'none';
+    },
+    field: (k) => fieldEls[k]?.node,
+    checkBalance,
+    stopAuto() {
+      if (autoRunning) autoStop = true;
+      applyDisabled();
+    },
+    destroy() {
+      autoStop = true;
+      cleanups.forEach((fn) => fn());
+      root.remove();
+    },
+  };
+  return panel;
+}
+
+export function toggleHotkeys(enabled) {
+  savePrefs({ hotkeys: enabled });
+}
