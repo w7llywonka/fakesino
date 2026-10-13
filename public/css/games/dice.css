@@ -53,21 +53,32 @@
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-}
-
-.dice-lose,
-.dice-win {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-}
-
-.dice-lose {
   background: var(--red);
 }
 
 .dice-win {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   background: var(--accent);
+}
+
+.dice-handles {
+  position: absolute;
+  inset: 0;
+}
+
+/* Several thumbs on one track: only the thumbs take the pointer. */
+.dice-handles.multi .dice-slider {
+  pointer-events: none;
+}
+
+.dice-handles.multi .dice-slider::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+
+.dice-handles.multi .dice-slider::-moz-range-thumb {
+  pointer-events: auto;
 }
 
 .dice-slider {
@@ -177,6 +188,48 @@
   border-color: #4c6a82;
 }
 
+.dice-flip span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.dice-flip.static {
+  cursor: default;
+}
+
+.dice-flip.static svg {
+  display: none;
+}
+
+.dice-modes {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 4px;
+}
+
+.dice-modes button {
+  height: 32px;
+}
+
+.dice-bounds {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 2), 1fr);
+  gap: 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.dice-bounds[data-n='4'] {
+  --n: 4;
+}
+
+.dice-bounds .input {
+  background: var(--surface-4);
+}
+
 @media (max-width: 600px) {
   .dice-board {
     padding: 50px 12px 10px;
@@ -190,5 +243,13 @@
     width: 48px;
     height: 48px;
     font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dice-modes button {
+    font-size: 12px;
+    white-space: nowrap;
+    padding: 0 4px;
   }
 }

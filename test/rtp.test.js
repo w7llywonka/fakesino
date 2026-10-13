@@ -227,3 +227,23 @@ test('floor is lava: each round pays 0.98 ÷ P(survive), levels compound', () =>
   }
   assert.deepEqual(Object.keys(lava.DIFFICULTIES).map((d) => lava.multiplierFor(d, 3, lava.DIFFICULTIES[d].rounds)), [336.14, 922.36, 4270.22, 115296.02]);
 });
+
+test('dice range modes pay 99% of the true odds on 10,001 rolls', () => {
+  const cases = [
+    { condition: 'between', low: 25, high: 75 },
+    { condition: 'between', low: 0, high: 0.01 },
+    { condition: 'outside', low: 10, high: 90 },
+    { condition: 'outside', low: 49, high: 51 },
+    { condition: 'between2', low: 10, high: 20, low2: 20, high2: 35.55 },
+  ];
+  for (const p of cases) {
+    const n = dice.normalize(p);
+    let count = 0;
+    for (let k = 0; k <= 10000; k++) if (dice.wins(n, k / 100)) count++;
+    const ev = (count / 10001) * dice.multiplierFor(n);
+    assert.ok(ev <= 0.99 && ev > 0.989, `${JSON.stringify(p)}: ${ev}`);
+  }
+  assert.throws(() => dice.normalize({ condition: 'between2', low: 10, high: 60, low2: 50, high2: 70 }), /overlap/);
+  assert.throws(() => dice.normalize({ condition: 'outside', low: 1, high: 2 }), /Win chance/);
+  assert.deepEqual(dice.normalize({ condition: 'over', target: 50.5, low: 3 }), { target: 50.5, condition: 'over' });
+});

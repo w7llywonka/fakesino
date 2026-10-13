@@ -15,8 +15,15 @@ export function renderResult(game, result, params = {}) {
   if (!result) return '';
   const winColor = (w) => (w ? 'var(--accent)' : 'var(--text)');
   switch (game) {
-    case 'dice':
-      return box(`<div style="text-align:center">${big(result.roll.toFixed(2), winColor(result.win))}<div class="muted">Roll ${params.condition} ${Number(params.target).toFixed(2)}</div></div>`);
+    case 'dice': {
+      const f = (n) => Number(n).toFixed(2);
+      const cond = {
+        between: () => `Roll between ${f(params.low)} and ${f(params.high)}`,
+        outside: () => `Roll outside ${f(params.low)} – ${f(params.high)}`,
+        between2: () => `Roll in ${f(params.low)}–${f(params.high)} or ${f(params.low2)}–${f(params.high2)}`,
+      }[params.condition];
+      return box(`<div style="text-align:center">${big(result.roll.toFixed(2), winColor(result.win))}<div class="muted">${cond ? cond() : `Roll ${params.condition} ${f(params.target)}`}</div></div>`);
+    }
     case 'limbo':
       return box(`<div style="text-align:center">${big(fmt.multiplier(result.result), winColor(result.win))}<div class="muted">Target ${fmt.multiplier(params.target)}</div></div>`);
     case 'crash':
