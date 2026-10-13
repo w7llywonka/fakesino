@@ -53,7 +53,7 @@ const SECURITY_HEADERS = {
     "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
 };
 
-export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crashTiming, secureCookies = false } = {}) {
+export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crashTiming, roundTiming = {}, secureCookies = false } = {}) {
   const store = new Store(dataFile);
   const live = new LiveHub();
   const engine = createEngine({ store, live });
@@ -299,9 +299,12 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
   });
 
   // --- Plugins (multiplayer games, site features) ------------------------------------
+  const plugins = {};
   const pluginHandles = PLUGINS.map((p) => {
     try {
-      return p.register({ router, store, live, engine, crash, payments, authed, publicUser, secureCookies }) || null;
+      const handle = p.register({ router, store, live, engine, crash, payments, authed, publicUser, secureCookies, betLimit, roundDown, timing: roundTiming[p.name] }) || null;
+      plugins[p.name] = handle;
+      return handle;
     } catch (err) {
       console.error(`[plugin:${p.name}] failed to register`, err);
       return null;
@@ -420,5 +423,5 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     return new Promise((resolve) => server.close(() => resolve()));
   }
 
-  return { server, store, crash, engine, close, roundDown };
+  return { server, store, crash, engine, plugins, close, roundDown };
 }

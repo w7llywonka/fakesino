@@ -5,7 +5,8 @@ import { state, setUser } from '../state.js';
 import { setQuery } from '../router.js';
 import { openModal } from './modal.js';
 import { toast, toastError, toastSuccess } from './toast.js';
-import { verifyBet, sha256Hex, floats, crashChain, loadRules, latestRulesVersion } from '../verify.js';
+import { verifyBet, sha256Hex, floats, roundChain, loadRules, latestRulesVersion } from '../verify.js';
+import { NAMES as ZOO_NAMES } from '../shared/games/zoo.js';
 import { renderResult, renderResultAsync } from './betpreview.js';
 import { bySlug, GAMES } from '../games/registry.js';
 import { createArrayRng } from '../shared/fair.js';
@@ -25,7 +26,7 @@ function copyField(label, value, extra = '') {
 
 export function openFairnessModal({ tab = 'seeds', prefill = null } = {}) {
   const modal = openModal({ title: 'Fairness', iconName: 'shield', onClose: () => setQuery({ modal: null, tab: null, game: null, id: null }, { replace: true }) });
-  const root = el(`<div><div class="tabs block" style="margin-bottom:16px"><button class="tab" data-t="seeds">Seeds</button><button class="tab" data-t="verify">Verify</button><button class="tab" data-t="crash">Crash</button></div><div class="fx"></div></div>`);
+  const root = el(`<div><div class="tabs block" style="margin-bottom:16px"><button class="tab" data-t="seeds">Seeds</button><button class="tab" data-t="verify">Verify</button><button class="tab" data-t="crash">Live Games</button></div><div class="fx"></div></div>`);
   modal.setBody(root);
   modal.setFoot(`<a href="/provably-fair" class="link">What is provably fair?</a>`);
   const body = root.querySelector('.fx');
@@ -198,36 +199,77 @@ async function renderVerification(game, serverSeed, clientSeed, nonce, params, a
     ${result.multiplier != null ? `<div class="muted" style="text-align:center">Multiplier ${fmt.multiplier(result.multiplier ?? 0)}</div>` : ''}`;
 }
 
+const ROUND_GAMES = {
+  crash: {
+    name: 'Crash',
+    formula: (info) =>
+      `crash point = ${info.formulaVersion >= 2 ? 'max(1, 2³² ÷ (first 8 hex digits + 1) × 0.99)' : 'max(1, floor(99 ÷ (1 − first 52 bits ÷ 2⁵²)) ÷ 100)'} (formula v${info.formulaVersion})`,
+    head: 'Crash point',
+    cell: (c) => `<span style="color:${c.crashPoint >= 2 ? 'var(--accent)' : 'var(--text)'}">${fmt.multiplier(c.crashPoint)}</span>`,
+  },
+  slide: {
+    name: 'Slide',
+    formula: () => 'result = max(1, 2³² ÷ (first 8 hex digits + 1) × 0.98), floored to 2 decimals',
+    head: 'Result',
+    cell: (c) => `<span style="color:${c.point >= 2 ? 'var(--accent)' : 'var(--text)'}">${fmt.multiplier(c.point)}</span>`,
+  },
+  zoo: {
+    name: 'Zoo',
+    formula: () => 'spin j = floor(float_j × 20) for j = 0, 1, 2, using bytes 4j…4j+3 of the HMAC as the float; tiles map to the published ring',
+    head: 'Spins',
+    cell: (c) => c.animals.map((a) => ZOO_NAMES[a]).join(' · '),
+  },
+};
+
 async function crashTab(body, prefill = null) {
-  body.innerHTML = '<div class="spinner"></div>';
-  let info;
-  try {
-    info = await api.get('/api/fair/crash');
-  } catch (err) {
-    body.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
-    return;
-  }
-  const last = info.history[0];
-  body.innerHTML = `
-    <div class="muted" style="font-size:13px;margin-bottom:12px">Crash rounds come from a chain of ${info.chainLength.toLocaleString()} SHA-256 hashes generated before the first round and played in reverse. Each round's crash point comes from HMAC-SHA256(game hash, salt) — formula v${info.formulaVersion}: ${info.formulaVersion >= 2 ? 'max(1, 2³² ÷ (first 8 hex digits + 1) × 0.99)' : 'max(1, floor(99 ÷ (1 − first 52 bits ÷ 2⁵²)) ÷ 100)'}. Hashing any round's hash gives the previous round's hash, ending at the published terminating hash.</div>
-    ${copyField('Terminating hash (commitment)', info.terminatingHash)}
-    ${copyField('Salt', info.salt)}
-    <form><div class="field"><div class="field-label">Game hash</div><input class="input mono" name="hash" value="${esc(prefill?.hash || last?.hash || '')}" placeholder="Paste a round hash"></div>
-      <div class="field"><div class="field-label">Formula</div><select class="select" name="formula"><option value="2" ${(prefill?.formulaVersion ?? info.formulaVersion) >= 2 ? 'selected' : ''}>v2 (current chains)</option><option value="1" ${(prefill?.formulaVersion ?? info.formulaVersion) < 2 ? 'selected' : ''}>v1 (first chains)</option></select></div></form>
-    <div class="cx"></div>`;
-  const out = body.querySelector('.cx');
-  const run = async () => {
-    const hash = body.querySelector('[name=hash]').value.trim();
-    if (!/^[0-9a-f]{64}$/.test(hash)) {
-      out.innerHTML = '<div class="empty">Enter a 64-character round hash.</div>';
+  let game = prefill?.game && ROUND_GAMES[prefill.game] ? prefill.game : 'crash';
+  const render = async () => {
+    body.innerHTML = '<div class="spinner"></div>';
+    let info;
+    try {
+      info = await api.get(`/api/fair/${game}`);
+    } catch (err) {
+      body.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
       return;
     }
-    const chain = await crashChain(hash, prefill?.salt || info.salt, 10, Number(body.querySelector('[name=formula]').value));
-    out.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>Hash</th><th class="r">Crash point</th></tr></thead><tbody>${chain
-      .map((c, i) => `<tr><td class="mono" style="font-size:12px">${i === 0 ? '<b>this</b> ' : ''}${c.hash.slice(0, 20)}…</td><td class="r" style="color:${c.crashPoint >= 2 ? 'var(--accent)' : 'var(--text)'}">${fmt.multiplier(c.crashPoint)}</td></tr>`)
-      .join('')}</tbody></table></div>`;
+    const g = ROUND_GAMES[game];
+    const own = prefill?.game ? prefill.game === game : game === 'crash';
+    const last = info.history[0];
+    const fv = own && prefill?.formulaVersion != null ? prefill.formulaVersion : info.formulaVersion ?? 1;
+    body.innerHTML = `
+      <div class="segmented" style="margin-bottom:12px">${Object.entries(ROUND_GAMES)
+        .map(([k, v]) => `<button type="button" data-g="${k}" class="${k === game ? 'active' : ''}">${v.name}</button>`)
+        .join('')}</div>
+      <div class="muted" style="font-size:13px;margin-bottom:12px">${g.name} rounds come from a chain of ${info.chainLength.toLocaleString()} SHA-256 hashes generated before the first round and played in reverse. Each round uses HMAC-SHA256(key = game hash, message = salt): ${g.formula({ formulaVersion: fv })}. Hashing any round's hash gives the previous round's hash, ending at the published terminating hash.</div>
+      ${copyField('Terminating hash (commitment)', info.terminatingHash)}
+      ${copyField('Salt', info.salt)}
+      <form><div class="field"><div class="field-label">Game hash</div><input class="input mono" name="hash" value="${esc((own && prefill?.hash) || last?.hash || '')}" placeholder="Paste a round hash"></div>
+        ${game === 'crash' ? `<div class="field"><div class="field-label">Formula</div><select class="select" name="formula"><option value="2" ${fv >= 2 ? 'selected' : ''}>v2 (current chains)</option><option value="1" ${fv < 2 ? 'selected' : ''}>v1 (first chains)</option></select></div>` : ''}</form>
+      <div class="cx"></div>`;
+    const out = body.querySelector('.cx');
+    const salt = (own && prefill?.salt) || info.salt;
+    const run = async () => {
+      const hash = body.querySelector('[name=hash]').value.trim();
+      if (!/^[0-9a-f]{64}$/.test(hash)) {
+        out.innerHTML = '<div class="empty">Enter a 64-character round hash.</div>';
+        return;
+      }
+      const formula = Number(body.querySelector('[name=formula]')?.value || 1);
+      const chain = await roundChain(game, hash, salt, 10, formula);
+      out.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr><th>Hash</th><th class="r">${g.head}</th></tr></thead><tbody>${chain
+        .map((c, i) => `<tr><td class="mono" style="font-size:12px">${i === 0 ? '<b>this</b> ' : ''}${c.hash.slice(0, 20)}…</td><td class="r">${g.cell(c)}</td></tr>`)
+        .join('')}</tbody></table></div>`;
+    };
+    body.querySelector('form').addEventListener('input', run);
+    body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
+    body.querySelectorAll('[data-g]').forEach((b) =>
+      b.addEventListener('click', () => {
+        if (b.dataset.g === game) return;
+        game = b.dataset.g;
+        render();
+      }),
+    );
+    run().catch(toastError);
   };
-  body.querySelector('form').addEventListener('input', run);
-  body.querySelector('form').addEventListener('submit', (e) => e.preventDefault());
-  run().catch(toastError);
+  render();
 }

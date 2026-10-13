@@ -1,5 +1,6 @@
 import { bus, state, setBalance } from './state.js';
 import { api } from './api.js';
+import { bySlug } from './games/registry.js';
 
 let source = null;
 let retry = 1000;
@@ -35,7 +36,12 @@ export async function connectLive() {
       connectLive();
     }
   });
-  source.addEventListener('bet', (e) => bus.emit('live:bet', JSON.parse(e.data)));
+  source.addEventListener('bet', (e) => {
+    const bet = JSON.parse(e.data);
+    bus.emit('live:bet', bet);
+    // Shared-round games settle on the server, so our own results arrive here.
+    if (bet.mine && bySlug[bet.game]?.kind === 'multiplayer') bus.emit('bet:mine', bet);
+  });
   source.addEventListener('crash', (e) => {
     const data = JSON.parse(e.data);
     state.serverOffset = data.serverTime - Date.now();

@@ -23,7 +23,8 @@ export async function openBetModal(id) {
   const win = bet.payout > bet.amount;
   const who = bet.username ? esc(bet.username) : `<span class="user-hidden">${icon('eyeOff', 14)} Hidden</span>`;
   const seed = bet.seed || {};
-  const isCrash = bet.game === 'crash';
+  // Shared-round games (Crash, Slide, Zoo) are verified from the round's hash chain.
+  const isCrash = g.kind === 'multiplayer';
   const body = el(`<div>
     <div class="bet-summary"><div class="game-name">${icon(bet.game, 20)} ${esc(g.name)}</div>
       <div class="meta">ID ${bet.id} · Placed by ${who} on ${fmt.dateTime(bet.createdAt)}</div></div>
@@ -58,7 +59,7 @@ export async function openBetModal(id) {
     toast({ type: 'success', title: 'Link copied' });
   });
   on(body, 'click', '[data-act=verify]', () => {
-    if (isCrash) openFairnessModal({ tab: 'crash', prefill: { hash: seed.hash, salt: seed.salt, formulaVersion: seed.formulaVersion || 1 } });
+    if (isCrash) openFairnessModal({ tab: 'crash', prefill: { game: bet.game, hash: seed.hash, salt: seed.salt, formulaVersion: seed.formulaVersion || 1 } });
     else openFairnessModal({ tab: 'verify', prefill: { game: bet.game, serverSeed: seed.serverSeed, clientSeed: seed.clientSeed, nonce: seed.nonce, params: bet.params, actions: bet.actions, rulesVersion: bet.rulesVersion || 1 } });
   });
   return modal;

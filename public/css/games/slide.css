@@ -1,0 +1,181 @@
+/* ---------- Slide ---------- */
+
+.sl2-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 18px;
+}
+
+.sl2-history .chip.grey {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.sl2-history .chip.green {
+  background: #1f9d55;
+  color: #fff;
+}
+
+.sl2-history .chip.blue {
+  background: #2f7cf6;
+  color: #fff;
+}
+
+.sl2-history .chip.gold {
+  background: var(--gold);
+  color: #2b1d00;
+}
+
+.sl2-track {
+  position: relative;
+  margin: auto 0;
+  height: 170px;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--bg) 0%, transparent 12%, transparent 88%, var(--bg) 100%), var(--bg-deep);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.sl2-cards {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  display: flex;
+  gap: 8px;
+  margin-top: -55px;
+  will-change: transform;
+}
+
+.sl2-card {
+  flex: 0 0 96px;
+  height: 110px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: var(--surface-3);
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.25);
+  transition: transform 0.25s, box-shadow 0.25s, opacity 0.25s;
+}
+
+.sl2-card.grey {
+  background: linear-gradient(180deg, #3a4b5c, #2a3846);
+  color: var(--text-2);
+}
+
+.sl2-card.green {
+  background: linear-gradient(180deg, #27b366, #187a44);
+}
+
+.sl2-card.blue {
+  background: linear-gradient(180deg, #4c8dff, #2459c9);
+}
+
+.sl2-card.gold {
+  background: linear-gradient(180deg, #ffd65a, #e6a019);
+  color: #3b2600;
+}
+
+.sl2-track.done .sl2-card:not(.hit) {
+  opacity: 0.45;
+}
+
+.sl2-card.hit {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px #fff, 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.sl2-pointer {
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border: 12px solid transparent;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.sl2-pointer.top {
+  top: 0;
+  border-top-color: var(--gold);
+}
+
+.sl2-pointer.bottom {
+  bottom: 0;
+  border-bottom-color: var(--gold);
+}
+
+.sl2-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  background: rgba(10, 17, 24, 0.72);
+  z-index: 3;
+  text-align: center;
+}
+
+.sl2-count {
+  font-weight: 900;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl2-bar {
+  width: 220px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.sl2-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+}
+
+.sl2-caption {
+  padding: 0 16px;
+}
+
+.sl2-quick {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+.sl2-quick button {
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.sl2-quick button:hover,
+.sl2-quick button.active {
+  background: var(--surface-4);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+@media (max-width: 640px) {
+  .sl2-quick {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .sl2-track {
+    height: 140px;
+  }
+}

@@ -99,10 +99,7 @@ export function createLiveBets(container, { game = null } = {}) {
     bus.on('live:bet', (bet) => {
       if (game && bet.game !== game) return;
       // Our own bets arrive via bet:mine once the animation has finished.
-      if (bet.mine) {
-        if (bet.game === 'crash') bus.emit('bet:mine', bet);
-        return;
-      }
+      if (bet.mine) return;
       add(rows.all, bet);
       if (bet.amountUsd >= HIGH_ROLLER_USD) add(rows.high, bet);
       if (tab === 'all' || (tab === 'high' && bet.amountUsd >= HIGH_ROLLER_USD)) render(bet.id);

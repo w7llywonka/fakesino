@@ -8,6 +8,8 @@ import { createApp } from '../server/app.js';
 import { createArrayRng } from '../public/js/shared/fair.js';
 import * as dice from '../public/js/shared/games/dice.js';
 import * as mines from '../public/js/shared/games/mines.js';
+import * as zoo from '../public/js/shared/games/zoo.js';
+import { slidePointFromHex } from '../public/js/shared/fair.js';
 import { createRng, sha256 } from '../server/fair.js';
 
 process.env.FAKESINO_CONFIRM_MS = '20';
@@ -18,7 +20,11 @@ let base;
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fakesino-'));
 
 before(async () => {
-  app = createApp({ dataFile: path.join(dir, 'db.json'), crashTiming: { bettingMs: 300, crashedMs: 100 } });
+  app = createApp({
+    dataFile: path.join(dir, 'db.json'),
+    crashTiming: { bettingMs: 300, crashedMs: 100 },
+    roundTiming: { slide: { betting: 250, playing: 120, result: 80 }, zoo: { betting: 250, playing: 120, result: 80 } },
+  });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${app.server.address().port}`;
 });
@@ -388,6 +394,88 @@ test('crash: bet, auto cashout, queueing and recorded bets', async () => {
   if (b.result.crashPoint >= 1.01) assert.equal(b.payout, 10.1);
   else assert.equal(b.payout, 0);
   assert.equal((await c.post('/api/crash/cashout')).status, 400);
+});
+
+// Wait for a shared-round game to reach a phase with at least `ms` left.
+async function phaseOf(slug, phase, ms = 120) {
+  for (let i = 0; i < 200; i++) {
+    const r = app.plugins[slug].game.round;
+    if (r?.phase === phase && r.endsAt - Date.now() > ms) return r;
+    await new Promise((res) => setTimeout(res, 15));
+  }
+  throw new Error(`${slug} never reached ${phase}`);
+}
+
+async function settled(c, slug, count) {
+  for (let i = 0; i < 200; i++) {
+    const { bets } = (await c.get(`/api/bets/mine?game=${slug}`)).data;
+    if (bets.length >= count) return bets;
+    await new Promise((res) => setTimeout(res, 25));
+  }
+  throw new Error('bets never settled');
+}
+
+test('slide: bets settle against the hash-chain result; late bets queue; cancel refunds', async () => {
+  const c = await newPlayer(100);
+  await phaseOf('slide', 'betting');
+  const a = await c.post('/api/slide/bet', { amount: 1, currency: 'USD', target: 1.5 });
+  assert.equal(a.status, 200, JSON.stringify(a.data));
+  assert.equal(a.data.queued, false);
+  const b = await c.post('/api/slide/bet', { amount: 2, currency: 'USD', target: 1000 });
+  assert.equal(b.data.balance.amount, 97);
+  assert.equal((await c.post('/api/slide/bet', { amount: 1, currency: 'USD', target: 1 })).status, 400);
+  const cancel = await c.post('/api/slide/cancel', { betId: b.data.bet.id });
+  assert.equal(cancel.data.balance.amount, 99);
+  const bets = await settled(c, 'slide', 1);
+  const bet = bets[0];
+  const { seed } = (await c.get(`/api/bets/${bet.id}`)).data.bet;
+  const point = slidePointFromHex(crypto.createHmac('sha256', seed.hash).update(seed.salt).digest('hex'));
+  assert.equal(bet.result.point, point);
+  assert.equal(bet.payout, point >= 1.5 ? 1.5 : 0);
+  assert.equal(bet.multiplier, point >= 1.5 ? 1.5 : 0);
+  // The chain is played in reverse: hashing a round's hash gives the previous round's.
+  const fair = (await c.get('/api/fair/slide')).data;
+  assert.equal(fair.salt, seed.salt);
+  assert.ok(fair.history.some((h) => h.hash === seed.hash));
+  // During play, bets go to the next round.
+  await phaseOf('slide', 'playing', 30);
+  const q = await c.post('/api/slide/bet', { amount: 1, currency: 'USD', target: 2 });
+  assert.equal(q.data.queued, true);
+  assert.equal((await c.get('/api/slide/state')).data.me.queued.length, 1);
+});
+
+test('zoo: chip stakes pay by how many of three spins land on each animal', async () => {
+  const c = await newPlayer(100);
+  await phaseOf('zoo', 'betting');
+  assert.equal((await c.post('/api/zoo/bet', { amount: 1, currency: 'USD', stakes: { unicorn: 1 } })).status, 400);
+  const r = await c.post('/api/zoo/bet', { currency: 'USD', stakes: { lion: 1, penguin: 2.5, rhino: 0 } });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.balance.amount, 96.5);
+  const [bet] = await settled(c, 'zoo', 1);
+  const { seed } = (await c.get(`/api/bets/${bet.id}`)).data.bet;
+  const tiles = zoo.spinsFromBytes(crypto.createHmac('sha256', seed.hash).update(seed.salt).digest());
+  assert.deepEqual(bet.result.tiles, tiles);
+  const expected = Math.floor(zoo.payoutFor({ lion: 1, penguin: 2.5 }, tiles) * 100 + 1e-7) / 100;
+  assert.equal(bet.payout, expected);
+  assert.deepEqual(bet.params.stakes, { lion: 1, penguin: 2.5 });
+});
+
+test('round games refund unsettled stakes on stop and after a crash', async () => {
+  const c = await newPlayer(50);
+  const me = (await c.get('/api/me')).data.user;
+  const g = app.plugins.slide.game;
+  await phaseOf('slide', 'betting');
+  await c.post('/api/slide/bet', { amount: 5, currency: 'USD', target: 2 });
+  // Simulate a crash: the pending list survives in the store and is refunded on the next start.
+  const pending = app.store.data.slide.pending;
+  assert.ok(pending.some((p) => p.userId === me.id && p.amount === 5));
+  const user = app.store.data.users[me.id];
+  const before = user.balances.USD;
+  g.refundPending();
+  assert.equal(user.balances.USD, before + 5);
+  // Undo the simulated refund so the live round can settle normally.
+  user.balances.USD = before;
+  app.store.data.slide.pending = pending;
 });
 
 test('vault, rakeback and daily reload', async () => {

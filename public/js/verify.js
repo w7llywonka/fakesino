@@ -1,6 +1,7 @@
 // Browser-side provably-fair verifier. Recomputes any bet from its seeds with
 // WebCrypto, using exactly the same shared game modules as the server.
-import { createArrayRng, bytesToFloat, FLOATS_PER_ROUND, crashPointFromHex } from './shared/fair.js';
+import { createArrayRng, bytesToFloat, FLOATS_PER_ROUND, crashPointFromHex, slidePointFromHex } from './shared/fair.js';
+import { spinsFromBytes, hexToBytes, RING } from './shared/games/zoo.js';
 
 const enc = new TextEncoder();
 
@@ -75,13 +76,26 @@ export async function crashPoint(hash, salt, formulaVersion = 1) {
   return crashPointFromHex(await hmacHex(hash, salt), formulaVersion);
 }
 
-// Walk the hash chain backwards to list previous rounds from one game hash.
-export async function crashChain(hash, salt, count = 10, formulaVersion = 1) {
+// Shared-round results from a game hash: HMAC_SHA256(key = hash, msg = salt).
+export async function roundResult(game, hash, salt, formulaVersion = 1) {
+  const hex = await hmacHex(hash, salt);
+  if (game === 'slide') return { point: slidePointFromHex(hex) };
+  if (game === 'zoo') {
+    const tiles = spinsFromBytes(hexToBytes(hex));
+    return { tiles, animals: tiles.map((t) => RING[t]) };
+  }
+  return { crashPoint: crashPointFromHex(hex, formulaVersion) };
+}
+
+// Walk a hash chain backwards to list previous rounds from one game hash.
+export async function roundChain(game, hash, salt, count = 10, formulaVersion = 1) {
   const out = [];
   let h = hash;
   for (let i = 0; i < count; i++) {
-    out.push({ hash: h, crashPoint: await crashPoint(h, salt, formulaVersion) });
+    out.push({ hash: h, ...(await roundResult(game, h, salt, formulaVersion)) });
     h = await sha256Hex(h);
   }
   return out;
 }
+
+export const crashChain = (hash, salt, count = 10, formulaVersion = 1) => roundChain('crash', hash, salt, count, formulaVersion);

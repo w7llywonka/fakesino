@@ -732,3 +732,134 @@
   background: var(--accent);
   color: var(--accent-text);
 }
+
+/* ---------- Shared-round players list (Slide, Zoo) ---------- */
+
+.rk-players {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 200px;
+  max-height: 420px;
+}
+
+.rk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.rk-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rk-count b,
+.rk-total {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-cols,
+.rk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(56px, auto) minmax(84px, auto);
+  gap: 8px;
+  align-items: center;
+}
+
+.rk-cols {
+  padding: 0 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.rk-cols span:nth-child(n + 2),
+.rk-row > span:nth-child(n + 2) {
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.rk-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 4px 6px;
+  scrollbar-width: thin;
+}
+
+.rk-row {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rk-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.rk-row.me {
+  background: rgba(47, 124, 246, 0.14);
+  box-shadow: inset 2px 0 0 var(--blue);
+}
+
+.rk-row.won .rk-amt {
+  color: var(--accent);
+}
+
+.rk-row.lost {
+  opacity: 0.55;
+}
+
+.rk-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rk-x {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.rk-x:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.rk-amt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.rk-empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
