@@ -1,4 +1,4 @@
-import { CURRENCIES } from './shared/currencies.js';
+import { CURRENCIES, DISPLAY_FIATS } from './shared/currencies.js';
 import { state } from './state.js';
 
 const nf = new Map();
@@ -16,15 +16,24 @@ export function amount(value, code) {
 }
 
 export function fiat(usd, code = 'USD') {
-  const c = CURRENCIES[code] || CURRENCIES.USD;
-  return `${c.symbol}${formatter(2, 2).format(usd / c.usd)}`;
+  const c = DISPLAY_FIATS[code] || CURRENCIES[code] || CURRENCIES.USD;
+  const d = c.decimals ?? 2;
+  return `${c.symbol}${formatter(d, d).format(usd / c.usd)}`;
 }
+
+// ---- "Display crypto in fiat" ----
+export const displayFiatCode = () => (DISPLAY_FIATS[state.user?.settings?.displayFiatCurrency] ? state.user.settings.displayFiatCurrency : 'USD');
+export const displayFiat = () => DISPLAY_FIATS[displayFiatCode()];
+// True when amounts of this currency are shown (and entered) in fiat.
+export const fiatMode = (code) => !!state.user?.settings?.displayFiat && CURRENCIES[code]?.type === 'crypto';
+export const toDisplayFiat = (value, code) => ((Number(value) || 0) * CURRENCIES[code].usd) / displayFiat().usd;
+export const fromDisplayFiat = (value, code) => ((Number(value) || 0) * displayFiat().usd) / CURRENCIES[code].usd;
+// "≈ value" hints next to crypto amounts, in the chosen display currency.
+export const equiv = (usd) => fiat(usd, displayFiatCode());
 
 // Amount honouring the "display in fiat" preference.
 export function money(value, code) {
-  if (state.user?.settings?.displayFiat && CURRENCIES[code]?.type === 'crypto') {
-    return fiat((Number(value) || 0) * CURRENCIES[code].usd);
-  }
+  if (fiatMode(code)) return equiv((Number(value) || 0) * CURRENCIES[code].usd);
   if (CURRENCIES[code]?.type === 'fiat') return `${CURRENCIES[code].symbol}${amount(value, code)}`;
   return amount(value, code);
 }

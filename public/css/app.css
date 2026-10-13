@@ -3542,3 +3542,57 @@ textarea.input {
     gap: 4px;
   }
 }
+
+/* Wallet settings */
+.wset .setting-row {
+  padding: 12px 0;
+}
+.wset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.wset-grid.off {
+  opacity: 0.45;
+}
+.wset-fiat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 0;
+}
+.wset-fiat > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.wset-fiat .dim {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wset-fiat .sym {
+  width: 30px;
+  text-align: center;
+  font-weight: 800;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.wset-fiat:has(input:checked) {
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+.wset-fiat input {
+  accent-color: var(--blue);
+}
+.input-icon .suffix.fiat-sym {
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--text-2);
+}

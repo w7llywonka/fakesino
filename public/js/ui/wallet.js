@@ -435,7 +435,7 @@ function cryptoDeposit(container, code, offs) {
       });
       const amountInput = view.querySelector('[data-field=amount] input');
       const aux = view.querySelector('.aux');
-      const updateAux = () => (aux.textContent = `≈ ${fmt.fiat(fmt.usdOf(Number(amountInput.value) || 0, code))}`);
+      const updateAux = () => (aux.textContent = `≈ ${fmt.equiv(fmt.usdOf(Number(amountInput.value) || 0, code))}`);
       updateAux();
       amountInput.addEventListener('input', updateAux);
       on(view, 'click', '[data-usd]', (e, b) => {
@@ -810,7 +810,7 @@ function swapTab({ body, offs }) {
     const update = async () => {
       amountValue = input.value;
       const amount = Number(input.value) || 0;
-      aux.textContent = `≈ ${fmt.fiat(fmt.usdOf(amount, from))}`;
+      aux.textContent = `≈ ${fmt.equiv(fmt.usdOf(amount, from))}`;
       const seq = ++quoteSeq;
       try {
         const res = await api.get(`/api/payments/swap/quote?from=${from}&to=${to}&amount=${amount}`);
@@ -959,7 +959,7 @@ function tipTab({ body }) {
       <div class="muted" style="font-size:12px;margin-top:10px">Tips are play money and can't be reversed. Daily limit: $1,000 sent and received.</div></form>`);
     content.appendChild(view);
     const aux = view.querySelector('.aux');
-    const updateAux = () => (aux.textContent = CURRENCIES[code].type === 'crypto' ? `≈ ${fmt.fiat(fmt.usdOf(Number(view.amount.value) || 0, code))}` : '');
+    const updateAux = () => (aux.textContent = CURRENCIES[code].type === 'crypto' ? `≈ ${fmt.equiv(fmt.usdOf(Number(view.amount.value) || 0, code))}` : '');
     view.amount.addEventListener('input', updateAux);
     updateAux();
     view.querySelector('[data-act=max]').addEventListener('click', () => {

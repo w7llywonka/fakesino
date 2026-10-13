@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { CURRENCIES, isCurrency, roundDown, toUsd, emptyBalances } from '../public/js/shared/currencies.js';
+import { CURRENCIES, isCurrency, isDisplayFiat, roundDown, toUsd, emptyBalances } from '../public/js/shared/currencies.js';
 import { initialSeeds, publicSeeds } from './fair.js';
 import { HttpError, badRequest } from './http.js';
 
@@ -76,7 +76,10 @@ function applySnapshot(store, user, snap) {
     for (const code of Object.keys(CURRENCIES)) user[field][code] = roundDown(code, num(src[code], RESTORE_CAP_USD / CURRENCIES[code].usd));
   }
   if (isCurrency(snap.currency)) user.currency = snap.currency;
-  if (snap.settings && typeof snap.settings === 'object') for (const k of SETTING_KEYS) if (k in snap.settings) user.settings[k] = !!snap.settings[k];
+  if (snap.settings && typeof snap.settings === 'object') {
+    for (const k of SETTING_KEYS) if (k in snap.settings) user.settings[k] = !!snap.settings[k];
+    if (isDisplayFiat(snap.settings.displayFiatCurrency)) user.settings.displayFiatCurrency = snap.settings.displayFiatCurrency;
+  }
   user.stats.wageredUsd = num(snap.wageredUsd, 1e10);
   if (snap.username) {
     try {
@@ -98,7 +101,7 @@ export function createGuest(store, snapshot = null) {
     balances: emptyBalances(),
     vault: emptyBalances(),
     currency: 'USD',
-    settings: { hideZero: false, displayFiat: false, privateMode: false, sound: true, animations: true, maxBetWarning: true },
+    settings: { hideZero: false, displayFiat: false, displayFiatCurrency: 'USD', privateMode: false, sound: true, animations: true, maxBetWarning: true },
     stats: { bets: 0, wins: 0, losses: 0, wageredUsd: 0, profitUsd: 0, byGame: {}, byCurrency: {} },
     rakeback: emptyBalances(),
     seeds: initialSeeds(),

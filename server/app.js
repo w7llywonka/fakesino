@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CURRENCIES, isCurrency, roundDown } from '../public/js/shared/currencies.js';
+import { CURRENCIES, isCurrency, isDisplayFiat, roundDown } from '../public/js/shared/currencies.js';
 import { Router, HttpError, badRequest, sendJson, readJson, parseCookies, cookie, rateLimiter } from './http.js';
 import { Store } from './store.js';
 import { LiveHub } from './live.js';
@@ -134,6 +134,10 @@ export function createApp({ dataFile = path.join(ROOT, 'data', 'db.json'), crash
     authed((ctx) => {
       const allowed = ['hideZero', 'displayFiat', 'privateMode', 'sound', 'animations', 'maxBetWarning'];
       for (const k of allowed) if (k in ctx.body) ctx.user.settings[k] = !!ctx.body[k];
+      if ('displayFiatCurrency' in ctx.body) {
+        if (!isDisplayFiat(ctx.body.displayFiatCurrency)) throw badRequest('Unsupported display currency', { field: 'displayFiatCurrency' });
+        ctx.user.settings.displayFiatCurrency = ctx.body.displayFiatCurrency;
+      }
       store.save();
       return { user: publicUser(ctx.user) };
     }),

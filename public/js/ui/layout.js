@@ -6,7 +6,7 @@ import { state, bus, currency, balanceOf, setCurrency, savePrefs } from '../stat
 import { CURRENCIES, CURRENCY_CODES } from '../shared/currencies.js';
 import { GAMES, CATEGORIES } from '../games/registry.js';
 import * as fmt from '../format.js';
-import { setQuery, navigate } from '../router.js';
+import { setQuery } from '../router.js';
 import { createChat } from './chat.js';
 
 export function renderShell(app) {
@@ -248,7 +248,7 @@ function currencyDropdown() {
   });
   dd.querySelector('[data-act=wallet-settings]').addEventListener('click', () => {
     closeDropdowns();
-    navigate('/settings/preferences');
+    setQuery({ modal: 'wallet-settings' });
   });
   return dd;
 }

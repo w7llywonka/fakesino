@@ -92,7 +92,7 @@ export default function settingsPage(page, { tab = 'general' }) {
     const rows = [
       ['privateMode', 'Ghost mode', 'Hide your username in public bet feeds, leaderboards, big wins and live rounds.', 'server'],
       ['hideZero', 'Hide zero balances', 'Only show currencies with a balance in the wallet dropdown.', 'server'],
-      ['displayFiat', 'Display crypto in fiat', 'Show crypto balances and bets as their USD value.', 'server'],
+      ['displayFiat', 'Display crypto in fiat', 'Show crypto balances and bet amounts in your display currency (choose it in Wallet settings).', 'server'],
       ['sound', 'Game sounds', 'Play sound effects in games.', 'local'],
       ['animations', 'Animations', 'Animate game results. Turn off for instant results.', 'local'],
       ['hotkeys', 'Hotkeys', 'Space to bet, S/A to double/halve, D to zero your bet.', 'local'],

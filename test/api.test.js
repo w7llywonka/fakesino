@@ -628,6 +628,17 @@ test('offers: welcome code once per new wallet, drop codes with wager and claim 
   assert.ok(chat.some((m) => m.code === code), 'DropBot posts the code in chat');
 });
 
+test('wallet display settings: hide zero, display fiat currency', async () => {
+  const c = await newPlayer(0);
+  assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'USD');
+  const r = await c.post('/api/account/settings', { hideZero: true, displayFiat: true, displayFiatCurrency: 'JPY' });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.data.user.settings.hideZero, r.data.user.settings.displayFiat, r.data.user.settings.displayFiatCurrency], [true, true, 'JPY']);
+  assert.equal((await c.post('/api/account/settings', { displayFiatCurrency: 'XYZ' })).status, 400);
+  assert.equal((await c.post('/api/account/settings', { displayFiatCurrency: '__proto__' })).status, 400);
+  assert.equal((await c.get('/api/me')).data.user.settings.displayFiatCurrency, 'JPY');
+});
+
 test('vault, rakeback and daily reload', async () => {
   const c = await newPlayer(100);
   const v = await c.post('/api/wallet/vault', { currency: 'USD', amount: 40, direction: 'deposit' });

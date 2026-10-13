@@ -26,6 +26,19 @@ function recallAmount(code) {
   }
 }
 
+// Bet amounts are entered in the display fiat when "Display crypto in fiat"
+// is on; the stake itself is always the crypto amount.
+const fiatText = (v, code) => {
+  const d = fmt.displayFiat().decimals;
+  return fmt.toDisplayFiat(v, code).toFixed(d);
+};
+const amountText = (v, code) => (fmt.fiatMode(code) ? fiatText(v, code) : fmt.inputAmount(v, code));
+const amountSuffix = (code) => (fmt.fiatMode(code) ? esc(fmt.displayFiat().symbol) : coin(code));
+const auxText = (v, code) => {
+  if (CURRENCIES[code].type !== 'crypto') return '';
+  return fmt.fiatMode(code) ? `${fmt.amount(v, code)} ${code}` : fmt.equiv(fmt.usdOf(v, code));
+};
+
 export function amountField({ key = 'amount', label = 'Bet Amount', halfDouble = true } = {}) {
   return { key, type: 'amount', label, halfDouble };
 }
@@ -80,12 +93,13 @@ export function createBetPanel(container, opts) {
         values[f.key] = recallAmount(code);
         node = el(`<div class="bp-field" data-key="${f.key}">${label}
           <div class="input-group">
-            <div class="input-icon"><input class="input" inputmode="decimal" autocomplete="off" value="${fmt.inputAmount(values[f.key], code)}"><span class="suffix">${coin(code)}</span></div>
+            <div class="input-icon"><input class="input" inputmode="decimal" autocomplete="off" value="${amountText(values[f.key], code)}"><span class="suffix">${amountSuffix(code)}</span></div>
             ${f.halfDouble !== false ? '<button class="addon" data-act="half">½</button><button class="addon" data-act="double">2×</button><button class="addon bp-max" data-act="max" hidden>Max</button>' : ''}
           </div></div>`);
         const input = node.querySelector('input');
         input.addEventListener('input', () => {
-          const v = Number(input.value.replace(/,/g, ''));
+          const raw = Number(input.value.replace(/,/g, ''));
+          const v = fmt.fiatMode(currency()) ? roundDown(currency(), fmt.fromDisplayFiat(raw, currency())) : raw;
           values[f.key] = Number.isFinite(v) && v >= 0 ? v : 0;
           rememberAmount(currency(), values[f.key]);
           updateAmountAux();
@@ -217,7 +231,7 @@ export function createBetPanel(container, opts) {
       const code = currency();
       v = Math.max(0, roundDown(code, Number(v) || 0));
       values[key] = v;
-      f.node.querySelector('input').value = fmt.inputAmount(v, code);
+      f.node.querySelector('input').value = amountText(v, code);
       rememberAmount(code, v);
       updateAmountAux();
       refreshProfit();
@@ -241,7 +255,7 @@ export function createBetPanel(container, opts) {
       if (spec.type !== 'amount') continue;
       const code = currency();
       const aux = node.querySelector('.aux');
-      if (aux) aux.textContent = CURRENCIES[code].type === 'crypto' ? fmt.fiat(fmt.usdOf(values[spec.key], code)) : '';
+      if (aux) aux.textContent = auxText(values[spec.key], code);
     }
   }
 
@@ -252,9 +266,9 @@ export function createBetPanel(container, opts) {
     const m = profitMultiplier;
     const amount = values.amount || 0;
     const profit = m == null ? 0 : Math.max(0, amount * m - amount);
-    pf.node.querySelector('input').value = fmt.amount(roundDown(code, profit), code);
+    pf.node.querySelector('input').value = fmt.fiatMode(code) ? fiatText(profit, code) : fmt.amount(roundDown(code, profit), code);
     const aux = pf.node.querySelector('.aux');
-    if (aux) aux.textContent = CURRENCIES[code].type === 'crypto' ? fmt.fiat(fmt.usdOf(profit, code)) : '';
+    if (aux) aux.textContent = auxText(profit, code);
   }
 
   function applyDisabled() {
@@ -499,15 +513,29 @@ export function createBetPanel(container, opts) {
   cleanups.push(() => document.removeEventListener('keydown', onKey));
 
   // Reset the amount to the remembered value when the currency changes.
+  const syncSuffixes = (code) => {
+    for (const { node, spec } of Object.values(fieldEls)) {
+      if (spec.type === 'amount' || spec.type === 'profit') {
+        const sfx = node.querySelector('.suffix');
+        sfx.innerHTML = amountSuffix(code);
+        sfx.classList.toggle('fiat-sym', fmt.fiatMode(code));
+      }
+    }
+  };
+  syncSuffixes(currency());
+  // Switching "display crypto in fiat" re-renders amounts in the new unit.
+  cleanups.push(
+    bus.on('user-settings', () => {
+      const code = currency();
+      syncSuffixes(code);
+      for (const { spec } of Object.values(fieldEls)) if (spec.type === 'amount') setValue(spec.key, values[spec.key]);
+      refreshProfit();
+    }),
+  );
   cleanups.push(
     bus.on('currency', (code) => {
-      for (const { node, spec } of Object.values(fieldEls)) {
-        if (spec.type === 'amount') {
-          node.querySelector('.suffix').innerHTML = coin(code);
-          setValue(spec.key, recallAmount(code));
-        }
-        if (spec.type === 'profit') node.querySelector('.suffix').innerHTML = coin(code);
-      }
+      syncSuffixes(code);
+      for (const { spec } of Object.values(fieldEls)) if (spec.type === 'amount') setValue(spec.key, recallAmount(code));
       autoEl.querySelectorAll('.auto-coin').forEach((s) => (s.innerHTML = coin(code)));
       advEl.querySelectorAll('.auto-coin').forEach((s) => (s.innerHTML = coin(code)));
       refreshProfit();
