@@ -10,6 +10,7 @@ import { NAMES as ZOO_NAMES } from '../shared/games/zoo.js';
 import { renderResult, renderResultAsync } from './betpreview.js';
 import { bySlug, GAMES } from '../games/registry.js';
 import { createArrayRng } from '../shared/fair.js';
+import { markStep } from './onboarding.js';
 import { cardFromFloat } from '../shared/games/util.js';
 import * as fmt from '../format.js';
 
@@ -25,6 +26,7 @@ function copyField(label, value, extra = '') {
 }
 
 export function openFairnessModal({ tab = 'seeds', prefill = null } = {}) {
+  markStep('fair');
   const modal = openModal({ title: 'Fairness', iconName: 'shield', onClose: () => setQuery({ modal: null, tab: null, game: null, id: null }, { replace: true }) });
   const root = el(`<div><div class="tabs block" style="margin-bottom:16px"><button class="tab" data-t="seeds">Seeds</button><button class="tab" data-t="verify">Verify</button><button class="tab" data-t="crash">Live Games</button></div><div class="fx"></div></div>`);
   modal.setBody(root);

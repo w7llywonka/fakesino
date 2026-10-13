@@ -144,7 +144,7 @@ export default function mountBaccarat(ctx) {
     const { value } = rack.chip;
     const next = sumOf(chips) + value;
     if (ctx.isAuthed() && next > ctx.balance() + 1e-12) {
-      ctx.toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to add more chips.' });
+      ctx.toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to add more chips.', action: { label: 'Deposit', href: '?modal=wallet&tab=deposit' } });
       return;
     }
     placed.push({ spot, value });

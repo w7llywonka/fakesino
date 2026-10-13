@@ -6,6 +6,7 @@ import { CURRENCIES, CURRENCY_CODES } from '../shared/currencies.js';
 import { toast, toastSuccess } from '../ui/toast.js';
 import { showFieldErrors } from '../ui/forms.js';
 import * as fmt from '../format.js';
+import { emptyState } from '../ui/empty.js';
 
 const TABS = [
   ['overview', 'Overview'],
@@ -80,7 +81,7 @@ function campaigns(body, d, reload) {
           <td class="r"><button class="btn btn-secondary btn-sm" data-copy="${esc(linkFor(c.code))}">${icon('link', 14)} Copy link</button></td></tr>`,
             )
             .join('')
-        : '<tr><td colspan="6"><div class="empty">No campaigns yet.</div></td></tr>'
+        : `<tr><td colspan="6">${emptyState({ ic: 'link', title: 'No campaigns yet', text: 'Name your first campaign above to get a referral link to share.' })}</td></tr>`
     }</tbody></table></div>`;
   const form = body.querySelector('form');
   form.name.addEventListener('input', () => {
@@ -139,7 +140,7 @@ function referred(body, d) {
           <td class="hide-mobile">${fmt.dateTime(r.joinedAt)}</td><td class="r">${fmt.fiat(r.wageredUsd)}</td><td class="r">${usd4(r.commissionUsd)}</td></tr>`,
             )
             .join('')
-        : '<tr><td colspan="5"><div class="empty">Nobody has joined through your links yet.</div></td></tr>'
+        : `<tr><td colspan="5">${emptyState({ ic: 'users', title: 'Nobody has joined through your links yet', text: 'Players who open one of your campaign links are listed here.' })}</td></tr>`
     }</tbody></table></div>`;
 }
 

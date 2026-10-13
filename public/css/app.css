@@ -4357,3 +4357,725 @@ textarea.input {
   padding-top: 0;
   padding-bottom: 0;
 }
+
+/* ==========================================================================
+   Polish & help: finishing touches on top of the base design
+   ========================================================================== */
+
+/* Tooltips: fade in, wrap long help text, point at their target. */
+.tooltip.in {
+  animation: tipin 0.12s ease-out;
+}
+.tooltip.wrap {
+  white-space: normal;
+  max-width: 260px;
+  font-weight: 600;
+  line-height: 1.45;
+  padding: 8px 11px;
+}
+.tooltip::after {
+  content: '';
+  position: absolute;
+  left: var(--arrow-x, 50%);
+  bottom: -4px;
+  width: 8px;
+  height: 8px;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+.tooltip.below::after {
+  bottom: auto;
+  top: -4px;
+}
+@keyframes tipin {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* (?) help buttons next to field labels */
+.help-tip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 auto 0 4px;
+  border-radius: 50%;
+  color: var(--text-3);
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.help-tip::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+.help-tip:hover,
+.help-tip:focus-visible {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.bp-label .aux {
+  margin-left: auto;
+}
+
+/* Inputs: a soft glow on focus */
+.input:focus,
+.select:focus {
+  box-shadow: 0 0 0 3px rgba(47, 124, 246, 0.14);
+}
+.input-group:focus-within {
+  border-color: #4c6a82;
+}
+.input-group .input:focus {
+  box-shadow: none;
+}
+
+/* Page content eases in on navigation. */
+#page > * {
+  animation: pagein 0.24s ease-out;
+}
+@keyframes pagein {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Sidebar: an accent marker on the current page */
+.nav-item {
+  position: relative;
+}
+.sidebar a.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+.shell.sidebar-collapsed .sidebar a.nav-item.active::before {
+  top: 11px;
+  bottom: 11px;
+}
+
+/* Mobile bottom bar: the current section is highlighted */
+@media (max-width: 900px) {
+  .mobile-nav a,
+  .mobile-nav button {
+    position: relative;
+    transition: color 0.15s;
+  }
+  .mobile-nav .active svg {
+    color: var(--accent);
+  }
+  .mobile-nav .active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 28px;
+    height: 3px;
+    border-radius: 0 0 3px 3px;
+    background: var(--accent);
+    transform: translateX(-50%);
+  }
+}
+
+/* Game tiles: a play button on hover, a deeper lift */
+.game-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 12, 18, 0.34)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='24' fill='%2322d36b'/%3E%3Cpath d='M19.5 15.5l14 8.5-14 8.5z' fill='%23052812'/%3E%3C/svg%3E")
+    center / 46px no-repeat;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.game-card:hover {
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.45);
+}
+.game-card:hover::after,
+.game-card:focus-visible::after {
+  opacity: 1;
+}
+@media (hover: none) {
+  .game-card::after {
+    display: none;
+  }
+  .game-card:hover {
+    transform: none;
+  }
+}
+.game-tile-meta {
+  min-width: 0;
+}
+.game-tile-meta .gtm-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Carousels keep a steady card size, however few games they hold. */
+.game-row {
+  grid-auto-columns: max(140px, calc((100% - 6 * 14px) / 7));
+  scroll-behavior: smooth;
+}
+.row-nav {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 6px;
+}
+.row-nav .icon-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--surface-2);
+}
+.row-nav .icon-btn:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.row-nav .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+@media (max-width: 600px) {
+  .game-row {
+    grid-auto-columns: calc((100% - 2 * 10px) / 3.25);
+    gap: 10px;
+  }
+  .game-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .game-tile-meta {
+    font-size: 11px;
+    margin-top: 6px;
+  }
+}
+
+/* Empty states: the icon sits in a soft badge */
+.empty {
+  line-height: 1.5;
+}
+.empty > svg:first-child {
+  display: block;
+  box-sizing: content-box;
+  margin: 0 auto 12px;
+  padding: 14px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-2);
+  opacity: 1;
+}
+.empty .empty-title {
+  color: var(--text);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+.empty .empty-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Get started checklist (lobby) */
+.onboard {
+  margin-top: 16px;
+  background: linear-gradient(135deg, rgba(34, 211, 107, 0.09), rgba(47, 124, 246, 0.07)), var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  animation: fadein 0.3s ease-out;
+  transition: opacity 0.18s, transform 0.18s;
+}
+.onboard.leaving {
+  opacity: 0;
+  transform: scale(0.98);
+}
+.ob-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ob-ring {
+  color: var(--text);
+}
+.ob-ring circle:nth-child(2) {
+  transition: stroke-dashoffset 0.6s ease;
+}
+.ob-titles {
+  flex: 1;
+  min-width: 0;
+}
+.ob-title {
+  font-weight: 800;
+  font-size: 16px;
+}
+.ob-sub {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.ob-hide {
+  align-self: flex-start;
+}
+.ob-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.ob-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.ob-step:hover {
+  background: var(--surface-3);
+  border-color: var(--surface-4);
+}
+.ob-ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--surface-4);
+  color: var(--text);
+}
+.ob-step.done .ob-ic {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+.ob-step.done .ob-t {
+  color: var(--text-2);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-3);
+}
+.ob-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.ob-t {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.ob-d {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.ob-go {
+  color: var(--text-3);
+  margin-top: 6px;
+}
+.ob-step:hover .ob-go {
+  color: var(--text);
+}
+.onboard.complete .ob-steps {
+  display: none;
+}
+@media (min-width: 601px) {
+  .ob-go,
+  .ob-more {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .ob-steps {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .ob-step {
+    padding: 9px 10px;
+    align-items: center;
+  }
+  .ob-step.done,
+  .onboard:not(.expanded) .ob-step:not(.next) {
+    display: none;
+  }
+  .onboard.expanded .ob-d,
+  .ob-step:not(.next) .ob-d {
+    display: none;
+  }
+  .ob-more {
+    display: block;
+    margin: 10px auto 0;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .onboard.expanded .ob-more {
+    display: none;
+  }
+  .ob-ic {
+    width: 28px;
+    height: 28px;
+  }
+  .ob-go {
+    margin-top: 0;
+  }
+  .onboard {
+    padding: 14px;
+  }
+}
+
+/* First visit to a game: a short how-to above the board */
+.game-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(90deg, rgba(47, 124, 246, 0.14), rgba(47, 124, 246, 0.04)), var(--surface);
+  border: 1px solid rgba(47, 124, 246, 0.35);
+  animation: fadein 0.3s ease-out;
+}
+.game-tip > svg {
+  color: #77a8fb;
+  margin-top: 2px;
+}
+.gt-body {
+  flex: 1;
+  min-width: 0;
+}
+.gt-title {
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.gt-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: gt;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.gt-steps li {
+  counter-increment: gt;
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+}
+.gt-steps li::before {
+  content: counter(gt);
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: rgba(47, 124, 246, 0.25);
+  color: #cfe0fe;
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.gt-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.gt-off {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 8px;
+  display: inline-block;
+}
+.gt-off:hover {
+  color: var(--text);
+}
+[data-gt-act='expand'] {
+  display: none;
+}
+@media (max-width: 700px) {
+  .game-tip {
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 10px 12px;
+  }
+  .game-tip > svg {
+    margin-top: 0;
+  }
+  .gt-title {
+    margin-bottom: 0;
+  }
+  .gt-steps {
+    flex-direction: column;
+    margin-top: 6px;
+  }
+  .game-tip:not(.expanded) .gt-steps,
+  .game-tip:not(.expanded) .gt-off,
+  .game-tip:not(.expanded) [data-gt-act='rules'] {
+    display: none;
+  }
+  .game-tip:not(.expanded) [data-gt-act='expand'] {
+    display: inline-flex;
+  }
+  .game-tip.expanded .gt-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Help Center: topic chips and tidy disclosure arrows */
+.help-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+}
+.help-chips button {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-weight: 700;
+  font-size: 12.5px;
+  transition: background 0.15s, color 0.15s;
+}
+.help-chips button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.help-chips button.active {
+  background: var(--surface-4);
+  color: var(--text);
+}
+.help-item summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+.help-item summary::-webkit-details-marker {
+  display: none;
+}
+.help-item summary::after {
+  content: '';
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-right: 2px solid var(--text-3);
+  border-bottom: 2px solid var(--text-3);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.2s;
+}
+.help-item[open] summary::after {
+  transform: rotate(225deg) translate(-2px, 0);
+}
+.help-item summary:hover {
+  background: var(--surface-3);
+}
+.help-item[open] .help-a {
+  animation: fadein 0.2s ease-out;
+}
+.help-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-top: 12px;
+  color: var(--text-2);
+}
+.help-keys {
+  color: var(--text-3);
+}
+.help-keys .kbd {
+  margin: 0 2px;
+}
+
+/* Wallet button: a gentle pulse until the first deposit */
+.wallet-btn {
+  position: relative;
+}
+.wallet-btn.nudge::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  animation: nudge 1.8s ease-out infinite;
+}
+@keyframes nudge {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 107, 0.6);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 9px rgba(34, 211, 107, 0);
+  }
+}
+
+/* Back to top */
+.to-top {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 24;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s, background 0.15s;
+}
+.to-top.show {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.to-top:hover {
+  background: var(--surface-4);
+}
+.shell.drawer-open .to-top {
+  right: calc(var(--chat-w) + 20px);
+}
+@media (max-width: 1100px) {
+  .shell.drawer-open .to-top {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .to-top {
+    right: 14px;
+    bottom: 76px;
+  }
+}
+
+/* Toasts can carry one action */
+.toast .t-action {
+  margin-top: 8px;
+}
+
+/* Scrollable tab rows fade at the edge that has more to show */
+.fade-r {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+}
+.fade-l {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px);
+  mask-image: linear-gradient(90deg, transparent, #000 36px);
+}
+.fade-l.fade-r {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
+/* Modals fade out as they close */
+.modal-backdrop.closing {
+  animation: fadeout 0.14s ease-in forwards;
+  pointer-events: none;
+}
+.modal-backdrop.closing .modal {
+  animation: modalout 0.14s ease-in forwards;
+}
+@keyframes fadeout {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes modalout {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* Loading placeholders */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 45%, var(--surface-2) 65%) 0 0 / 300% 100%;
+  animation: shimmer 1.3s ease-in-out infinite;
+}
+.skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+.skeleton-rows .skeleton {
+  height: 46px;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* Respect "reduce motion" for the decorative movement above. */
+@media (prefers-reduced-motion: reduce) {
+  #page > *,
+  .tooltip.in,
+  .onboard,
+  .game-tip,
+  .help-item[open] .help-a,
+  .modal-backdrop,
+  .modal,
+  .modal-backdrop.closing,
+  .modal-backdrop.closing .modal,
+  .toast {
+    animation: none !important;
+  }
+  .wallet-btn.nudge::after,
+  .skeleton {
+    animation: none;
+  }
+  .game-card,
+  .game-card:hover {
+    transform: none;
+  }
+  .game-row {
+    scroll-behavior: auto;
+  }
+}
+.table .empty,
+.table .skeleton-rows {
+  white-space: normal;
+}

@@ -8,6 +8,7 @@ import { brandChip } from '../ui/wallet.js';
 import { qrSvg } from '../shared/qr.js';
 import { LANGUAGES, currentLanguage, setLanguage } from '../i18n.js';
 import * as fmt from '../format.js';
+import { markStep, guideOn, setGuide, gameTipsOn, setGameTips } from '../ui/onboarding.js';
 
 const TABS = [
   ['general', 'General'],
@@ -64,9 +65,13 @@ export default function settingsPage(page, { tab = 'general' }) {
       }
     });
     const keyInput = body.querySelector('[data-role=key]');
-    body.querySelector('[data-act=reveal]').addEventListener('click', () => (keyInput.type = keyInput.type === 'password' ? 'text' : 'password'));
+    body.querySelector('[data-act=reveal]').addEventListener('click', () => {
+      keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+      if (keyInput.type === 'text') markStep('backup');
+    });
     body.querySelector('[data-act=copy]').addEventListener('click', async () => {
       await copyText(key);
+      markStep('backup');
       toast({ type: 'success', title: 'Wallet key copied', message: 'Store it somewhere safe.' });
     });
     const restoreForm = body.querySelector('.restore-form');
@@ -102,10 +107,13 @@ export default function settingsPage(page, { tab = 'general' }) {
       ['animations', 'Animations', 'Animate game results. Turn off for instant results.', 'local'],
       ['hotkeys', 'Hotkeys', 'Space to bet, S/A to double/halve, D to zero your bet.', 'local'],
       ['maxBetWarning', 'Max bet warning', 'Ask before placing a bet set with the Max button.', 'server'],
+      ['gameTips', 'Game tips', 'Show a quick how-to the first time you open each game.', 'help'],
+      ['guide', 'Getting-started guide', 'Show the checklist at the top of the lobby.', 'help'],
     ];
+    const HELP_PREFS = { gameTips: [gameTipsOn, setGameTips], guide: [guideOn, setGuide] };
     body.innerHTML = `<h3 style="margin-top:0">Preferences</h3>${rows
       .map(([k, t, d, where]) => {
-        const v = where === 'server' ? u.settings[k] : state.prefs[k] !== false && (k !== 'hotkeys' || state.prefs.hotkeys);
+        const v = where === 'server' ? u.settings[k] : where === 'help' ? HELP_PREFS[k][0]() : state.prefs[k] !== false && (k !== 'hotkeys' || state.prefs.hotkeys);
         return `<label class="setting-row"><div><div class="t">${t}</div><div class="d">${d}</div></div><input type="checkbox" class="toggle" data-k="${k}" data-where="${where}" ${v ? 'checked' : ''}></label>`;
       })
       .join('')}
@@ -128,6 +136,7 @@ export default function settingsPage(page, { tab = 'general' }) {
     });
     on(body, 'change', 'input[data-k]', async (e, input) => {
       const k = input.dataset.k;
+      if (input.dataset.where === 'help') return HELP_PREFS[k][1](input.checked);
       if (input.dataset.where === 'local') {
         savePrefs({ [k]: input.checked });
         return;

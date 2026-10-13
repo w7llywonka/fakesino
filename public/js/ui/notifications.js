@@ -46,7 +46,7 @@ bus.on('user', () => {
 
 // Bell button with an unread badge; opens the panel.
 export function bellButton() {
-  const wrap = el(`<div class="nt-wrap"><button class="icon-btn nt-bell" aria-label="Notifications">${icon('bell', 20)}<span class="nt-badge" hidden></span></button></div>`);
+  const wrap = el(`<div class="nt-wrap"><button class="icon-btn nt-bell" aria-label="Notifications" data-tip="Notifications">${icon('bell', 20)}<span class="nt-badge" hidden></span></button></div>`);
   const badge = wrap.querySelector('.nt-badge');
   const render = () => {
     badge.hidden = !store.unread;

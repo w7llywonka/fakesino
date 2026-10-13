@@ -180,7 +180,7 @@ export function createSlipPanel(container, onClose) {
         : slip.selections.map((s) => ({ selections: [s], stake: Number(slip.stakes[selKey(s)]) || 0, key: selKey(s) }));
     if (toPlace.some((b) => !(b.stake > 0))) return toast({ type: 'error', title: 'Enter a stake', message: slip.mode === 'multi' ? 'Set a stake for your multi.' : 'Set a stake for every selection.' });
     const total = toPlace.reduce((a, b) => a + b.stake, 0);
-    if (total > balanceOf(c) + 1e-12) return toast({ type: 'error', title: 'Insufficient balance', message: `You need ${fmt.money(total, c)} ${c}.` });
+    if (total > balanceOf(c) + 1e-12) return toast({ type: 'error', title: 'Insufficient balance', message: `You need ${fmt.money(total, c)} ${c}.`, action: { label: 'Deposit', href: '?modal=wallet&tab=deposit' } });
     if (slip.selections.some((s) => s.suspended)) return toast({ type: 'error', title: 'Remove suspended selections', message: 'Some markets are suspended or closed.' });
     placing = true;
     renderFoot();

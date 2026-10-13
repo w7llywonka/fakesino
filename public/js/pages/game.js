@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { state, bus, savePrefs } from '../state.js';
 import { setQuery } from '../router.js';
 import { bySlug, GAMES, loadGame } from '../games/registry.js';
-import { tile, loadPresence, refreshTiles, playing } from '../ui/tiles.js';
+import { tile, loadPresence, refreshTiles, playing, rowNav, wireRows } from '../ui/tiles.js';
 import { openGameSettings } from '../ui/gamesettings.js';
 import { toast } from '../ui/toast.js';
 import { challengeCard, tickCountdowns } from '../ui/challenges.js';
@@ -12,6 +12,7 @@ import { createGameContext, session } from '../ui/gamekit.js';
 import { createLiveBets } from '../ui/livebets.js';
 import * as fmt from '../format.js';
 import { notFound } from './misc.js';
+import { showGameTip, dismissGameTip, setGameTips } from '../ui/onboarding.js';
 
 const RECENT_KEY = 'fakesino:recent';
 const FAV_KEY = 'fakesino:favs';
@@ -45,6 +46,7 @@ export default async function gamePage(page, { slug }) {
   const catName = CATEGORY_LABEL[meta.category] || 'Fakesino Originals';
 
   const root = el(`<div class="game-page">
+    ${quickStart(meta)}
     <div class="game-frame ${state.prefs.theatre ? 'theatre' : ''}">
       <div class="game-controls"></div>
       <div class="game-stage"><div class="spinner" style="margin:auto"></div></div>
@@ -65,7 +67,7 @@ export default async function gamePage(page, { slug }) {
       <div class="gi-tabs tabs"><button class="tab active" data-gt="big">${icon('trophy', 15)} Big Wins</button><button class="tab" data-gt="lucky">${icon('sparkle', 15)} Lucky Wins</button><button class="tab" data-gt="challenges">${icon('gift', 15)} Challenges</button><button class="tab" data-gt="desc">${icon('info', 15)} Description</button></div>
       <div class="gi-body"></div>
     </div>
-    ${more.length ? `<div class="section-title gi-more-title">${icon('fire', 18)} More from ${esc(catName)}<span class="spacer"></span><a class="btn btn-ghost btn-sm" href="/casino/group/${meta.category}">View all</a></div><div class="game-row gi-more">${more.map(tile).join('')}</div>` : ''}
+    ${more.length ? `<div class="section-title gi-more-title">${icon('fire', 18)} More from ${esc(catName)}<span class="spacer"></span>${rowNav()}<a class="btn btn-ghost btn-sm" href="/casino/group/${meta.category}">View all</a></div><div class="game-row gi-more">${more.map(tile).join('')}</div>` : ''}
     <div class="lb-slot"></div>
   </div>`);
   page.appendChild(root);
@@ -78,6 +80,8 @@ export default async function gamePage(page, { slug }) {
   const info = root.querySelector('.game-info');
   const giBody = root.querySelector('.gi-body');
   const playingPill = root.querySelector('.gi-playing');
+  const rows = wireRows(root);
+  rows.sync();
 
   // ---- Big Wins / Lucky Wins / Description ----
   let giTab = 'big';
@@ -134,6 +138,17 @@ export default async function gamePage(page, { slug }) {
     else if (t === 'challenges') challenges();
     else wins(t);
   }
+  on(root, 'click', '[data-gt-act]', (e, b) => {
+    const act = b.dataset.gtAct;
+    if (act === 'expand') return b.closest('.game-tip').classList.add('expanded');
+    if (act === 'off') setGameTips(false);
+    else dismissGameTip(slug);
+    root.querySelector('.game-tip')?.remove();
+    if (act === 'rules') {
+      showGi('desc');
+      info.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
   const stopTicks = tickCountdowns(giBody);
   on(info, 'click', '[data-gt]', (e, b) => showGi(b.dataset.gt));
   on(giBody, 'click', '[data-p]', (e, b) => {
@@ -216,6 +231,7 @@ export default async function gamePage(page, { slug }) {
     instance?.destroy?.();
     ctx.destroy();
     live.destroy();
+    rows.destroy();
     statsPanel?.destroy();
     settingsPop?.close();
     offWins();
@@ -226,6 +242,16 @@ export default async function gamePage(page, { slug }) {
     if (document.fullscreenElement === frame) document.exitFullscreen().catch(() => {});
     if (state.prefs.theatre) document.querySelector('.shell')?.classList.toggle('sidebar-collapsed', !!state.prefs.sidebarCollapsed);
   };
+}
+
+// First visit to a game: its how-to steps above the board until dismissed.
+function quickStart(meta) {
+  if (!showGameTip(meta.slug) || !meta.howTo?.length) return '';
+  return `<div class="game-tip" role="note">${icon('sparkle', 18)}
+    <div class="gt-body"><div class="gt-title">Quick start</div>
+      <ol class="gt-steps">${meta.howTo.map((h) => `<li><span>${esc(h)}</span></li>`).join('')}</ol>
+      <button class="gt-off link" data-gt-act="off" type="button">Don’t show game tips</button></div>
+    <div class="gt-actions"><button class="btn btn-secondary btn-sm" data-gt-act="expand" type="button">How to play</button><button class="btn btn-secondary btn-sm" data-gt-act="rules" type="button">Full rules</button><button class="btn btn-primary btn-sm" data-gt-act="ok" type="button">Got it</button></div></div>`;
 }
 
 // Draggable session stats window with a profit sparkline.

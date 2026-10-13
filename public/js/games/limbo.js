@@ -1,5 +1,6 @@
 import { el } from '../dom.js';
 import { amountField, stepFor } from '../ui/controls.js';
+import { helpTip } from '../ui/helptip.js';
 import { winChance, MIN_TARGET, MAX_TARGET } from '../shared/games/limbo.js';
 
 const MIN_CHANCE = winChance(MAX_TARGET);
@@ -39,8 +40,8 @@ export default function mountLimbo(ctx) {
       <div class="limbo-mult" aria-live="polite">1.00×</div>
     </div>
     <div class="stage-bottom"><div class="stat-tiles limbo-tiles">
-      <div class="bp-field"><div class="bp-label">Target Multiplier</div><div class="input-suffix"><input class="input" data-k="target" inputmode="decimal" autocomplete="off" aria-label="Target multiplier"><span class="suffix">×</span></div></div>
-      <div class="bp-field"><div class="bp-label">Win Chance</div><div class="input-suffix"><input class="input" data-k="chance" inputmode="decimal" autocomplete="off" aria-label="Win chance"><span class="suffix">%</span></div></div>
+      <div class="bp-field"><div class="bp-label"><span>Target Multiplier</span>${helpTip('Target Multiplier')}</div><div class="input-suffix"><input class="input" data-k="target" inputmode="decimal" autocomplete="off" aria-label="Target multiplier"><span class="suffix">×</span></div></div>
+      <div class="bp-field"><div class="bp-label"><span>Win Chance</span>${helpTip('Win Chance')}</div><div class="input-suffix"><input class="input" data-k="chance" inputmode="decimal" autocomplete="off" aria-label="Win chance"><span class="suffix">%</span></div></div>
     </div></div>
   </div>`);
   ctx.stage.appendChild(stage);

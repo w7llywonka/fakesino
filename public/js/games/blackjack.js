@@ -384,7 +384,7 @@ export default function mountBlackjack(ctx) {
   async function act(action) {
     if (busy || !live() || !game.actions.includes(action)) return;
     if (!affordable(action)) {
-      ctx.toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to keep playing.' });
+      ctx.toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to keep playing.', action: { label: 'Deposit', href: '?modal=wallet&tab=deposit' } });
       return;
     }
     setBusy(true);

@@ -1,5 +1,6 @@
 import { el, on, sleep } from '../dom.js';
 import { amountField } from '../ui/controls.js';
+import { helpTip } from '../ui/helptip.js';
 import { chanceFor, multiplierFor, winRanges, MIN_CHANCE, MAX_CHANCE } from '../shared/games/dice.js';
 
 const MODES = [
@@ -68,9 +69,9 @@ export default function mountDice(ctx) {
       <div class="dice-modes segmented" role="tablist" aria-label="Dice mode">${MODES.map(([k, l]) => `<button data-mode="${k}" class="${k === mode ? 'active' : ''}">${l}</button>`).join('')}</div>
       <div class="dice-bounds" hidden></div>
       <div class="stat-tiles dice-tiles">
-        <div class="bp-field"><div class="bp-label">Multiplier</div><div class="input-suffix"><input class="input" data-k="mult" inputmode="decimal"><span class="suffix">×</span></div></div>
-        <div class="bp-field"><div class="bp-label" data-k="cond-label">Roll Over</div><button class="input dice-flip" data-k="flip"><span></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg></button></div>
-        <div class="bp-field"><div class="bp-label">Win Chance</div><div class="input-suffix"><input class="input" data-k="chance" inputmode="decimal"><span class="suffix">%</span></div></div>
+        <div class="bp-field"><div class="bp-label"><span>Multiplier</span>${helpTip('Multiplier')}</div><div class="input-suffix"><input class="input" data-k="mult" inputmode="decimal"><span class="suffix">×</span></div></div>
+        <div class="bp-field"><div class="bp-label"><span data-k="cond-label">Roll Over</span>${helpTip('Roll Over')}</div><button class="input dice-flip" data-k="flip"><span></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg></button></div>
+        <div class="bp-field"><div class="bp-label"><span>Win Chance</span>${helpTip('Win Chance')}</div><div class="input-suffix"><input class="input" data-k="chance" inputmode="decimal"><span class="suffix">%</span></div></div>
       </div>
     </div>
   </div>`);

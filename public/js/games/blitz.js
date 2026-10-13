@@ -1,6 +1,7 @@
 import { el } from '../dom.js';
 import { playingCard } from '../icons.js';
 import { amountField } from '../ui/controls.js';
+import { helpTip } from '../ui/helptip.js';
 import { timers, chanceLabel } from '../ui/stepgame.js';
 import { MIN_TARGET, MAX_TARGET, chanceFor, multiplierFor } from '../shared/games/blitz.js';
 
@@ -35,9 +36,9 @@ export default function mountBlitz(ctx) {
     <div class="stage-bottom">
       <div class="bz-slider"><span>${MIN_TARGET}</span><input type="range" min="${MIN_TARGET}" max="${MAX_TARGET}" step="1" value="${target}" aria-label="Cards to deal"><span>${MAX_TARGET}</span></div>
       <div class="stat-tiles">
-        <div class="bp-field"><div class="bp-label">Cards</div><div class="input-suffix"><input class="input" data-k="target" inputmode="numeric" autocomplete="off" aria-label="Cards to deal"></div></div>
-        <div class="bp-field bp-readonly"><div class="bp-label">Multiplier</div><div class="input-suffix"><input class="input" data-k="mult" readonly tabindex="-1"><span class="suffix">×</span></div></div>
-        <div class="bp-field bp-readonly"><div class="bp-label">Win Chance</div><div class="input-suffix"><input class="input" data-k="chance" readonly tabindex="-1"><span class="suffix">%</span></div></div>
+        <div class="bp-field"><div class="bp-label"><span>Cards</span>${helpTip('Cards')}</div><div class="input-suffix"><input class="input" data-k="target" inputmode="numeric" autocomplete="off" aria-label="Cards to deal"></div></div>
+        <div class="bp-field bp-readonly"><div class="bp-label"><span>Multiplier</span>${helpTip('Multiplier')}</div><div class="input-suffix"><input class="input" data-k="mult" readonly tabindex="-1"><span class="suffix">×</span></div></div>
+        <div class="bp-field bp-readonly"><div class="bp-label"><span>Win Chance</span>${helpTip('Win Chance')}</div><div class="input-suffix"><input class="input" data-k="chance" readonly tabindex="-1"><span class="suffix">%</span></div></div>
       </div>
     </div>
   </div>`);

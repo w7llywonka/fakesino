@@ -7,6 +7,7 @@ import { toastError } from '../ui/toast.js';
 import { navigate, setQuery } from '../router.js';
 import { brandChip } from '../ui/wallet.js';
 import * as fmt from '../format.js';
+import { emptyState, actionLink, skeletonRows } from '../ui/empty.js';
 
 const TABS = [
   ['deposits', 'Deposits', 'deposit'],
@@ -22,11 +23,14 @@ const TABS = [
 
 const STATUS = { completed: 'green', pending: 'yellow', failed: 'red' };
 const OFFER_LABEL = { weekly: 'Weekly bonus', monthly: 'Monthly bonus', levelup: 'Level-up bonus', reload: 'Reload', daily: 'Daily bonus' };
-const EMPTY_CTA = {
-  deposit: '<a class="link" href="?modal=wallet&tab=deposit">Make a deposit</a>',
-  purchase: '<a class="link" href="?modal=wallet&tab=buy">Buy crypto</a>',
-  swap: '<a class="link" href="?modal=wallet&tab=swap">Swap crypto</a>',
-  tips: '<a class="link" href="?modal=wallet&tab=tip">Send a tip</a>',
+const EMPTY = {
+  deposit: { ic: 'wallet', title: 'No deposits yet', text: 'Add play money with a demo card or a simulated crypto transfer.', actions: actionLink('?modal=wallet&tab=deposit', 'Deposit') },
+  withdrawal: { ic: 'arrowUp', title: 'No withdrawals yet', text: 'Withdrawals take play money out of your balance. Nothing is ever sent anywhere.' },
+  purchase: { ic: 'card', title: 'No purchases yet', text: 'Buy crypto with a demo card through a simulated provider.', actions: actionLink('?modal=wallet&tab=buy', 'Buy crypto') },
+  swap: { ic: 'swap', title: 'No swaps yet', text: 'Convert one coin into another at the reference rate.', actions: actionLink('?modal=wallet&tab=swap', 'Swap crypto') },
+  tips: { ic: 'gift', title: 'No tips yet', text: 'Tips and rain you send or receive show up here.', actions: actionLink('?modal=wallet&tab=tip', 'Send a tip') },
+  bonus: { ic: 'gift', title: 'No bonuses yet', text: 'Claimed bonuses, rakeback and prizes show up here.', actions: actionLink('/vip?tab=bonuses', 'VIP bonuses') },
+  vault: { ic: 'vault', title: 'No vault activity', text: 'Set play money aside in the vault so you can’t bet it by accident.', actions: actionLink('?modal=wallet&tab=vault', 'Open vault') },
 };
 
 export default async function transactionsPage(page, { tab = 'deposits' }) {
@@ -46,7 +50,7 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
       ${tab === 'bets' ? `<select class="select" data-game style="width:auto;min-width:170px"><option value="">All games</option>${GAMES.map((g) => `<option value="${g.slug}">${esc(g.name)}</option>`).join('')}</select>` : ''}
       ${!['bets', 'vault', 'archive'].includes(tab) ? `<select class="select" data-status style="width:auto;min-width:150px"><option value="">All statuses</option><option value="completed">Completed</option><option value="pending">Pending</option><option value="failed">Failed</option></select>` : ''}
     </div>
-    <div class="table-wrap"><table class="table"><thead></thead><tbody><tr><td><div class="spinner"></div></td></tr></tbody></table></div>
+    <div class="table-wrap"><table class="table"><thead></thead><tbody><tr><td colspan="6">${skeletonRows()}</td></tr></tbody></table></div>
     <div class="pager" hidden><button class="btn btn-secondary btn-sm" data-page="prev">${icon('left', 14)} Previous</button><span class="dim pager-label"></span><button class="btn btn-secondary btn-sm" data-page="next">Next ${icon('right', 14)}</button></div></div>`);
   page.appendChild(root);
   const thead = root.querySelector('thead');
@@ -69,7 +73,7 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
             .map((d) => `<tr><td>${esc(d.day)}</td><td class="r">${d.bets.toLocaleString()}</td><td class="r hide-mobile">${fmt.fiat(d.wageredUsd)}</td>
               <td class="r"><button class="btn btn-secondary btn-sm" data-archive="${esc(d.day)}">${icon('arrowDown', 14)} JSON</button></td></tr>`)
             .join('')
-        : '<tr><td colspan="4"><div class="empty">No bets to archive yet.</div></td></tr>';
+        : `<tr><td colspan="4">${emptyState({ ic: 'history', title: 'Nothing to archive yet', text: 'Each day of bets can be downloaded here as JSON.' })}</td></tr>`;
       return;
     }
     if (tab === 'bets') {
@@ -89,7 +93,7 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
             <td class="r">${fmt.multiplier(b.multiplier)}</td><td class="r"><span class="amt ${p > 0 ? 'win-text' : p < 0 ? 'loss-text' : ''}">${p < 0 ? '-' : ''}${fmt.money(Math.abs(p), b.currency)} ${coin(b.currency)}</span></td></tr>`;
             })
             .join('')
-        : `<tr><td colspan="6"><div class="empty">No bets yet. <a class="link" href="/casino">Find a game</a></div></td></tr>`;
+        : `<tr><td colspan="6">${game ? emptyState({ ic: 'list', title: 'No bets on this game yet' }) : emptyState({ ic: 'list', title: 'No bets yet', text: 'Every bet you place shows up here, with its result and proof.', actions: actionLink('/casino', 'Find a game') })}</td></tr>`;
       return;
     }
     if (tab === 'bonuses' && bonusView === 'unclaimed') {
@@ -104,14 +108,14 @@ export default async function transactionsPage(page, { tab = 'deposits' }) {
             <td class="r">${o.ready ? '<a class="btn btn-primary btn-sm" href="/vip?tab=bonuses">Claim</a>' : '<span class="dim">Upcoming</span>'}</td></tr>`,
             )
             .join('')
-        : '<tr><td colspan="5"><div class="empty">No unclaimed bonuses right now. Keep playing to unlock weekly and monthly bonuses. <a class="link" href="/vip">VIP Club</a></div></td></tr>';
+        : `<tr><td colspan="5">${emptyState({ ic: 'gift', title: 'No unclaimed bonuses right now', text: 'Keep playing to unlock weekly and monthly bonuses.', actions: actionLink('/vip', 'VIP Club', false) })}</td></tr>`;
       return;
     }
     const { transactions } = await api.get(`/api/wallet/transactions?type=${type}&limit=100${status ? `&status=${status}` : ''}`);
     thead.innerHTML = '<tr><th>Date</th><th>Method</th><th class="r">Amount</th><th class="r">Status</th><th class="hide-mobile">Reference</th></tr>';
     tbody.innerHTML = transactions.length
       ? transactions.map(txRow).join('')
-      : `<tr><td colspan="5"><div class="empty">Nothing here yet. ${status ? '' : EMPTY_CTA[type] || ''}</div></td></tr>`;
+      : `<tr><td colspan="5">${status ? emptyState({ ic: 'search', title: 'Nothing with this status' }) : emptyState(EMPTY[type])}</td></tr>`;
   };
   const reload = () => load().catch((err) => (tbody.innerHTML = `<tr><td><div class="empty">${esc(err.message)}</div></td></tr>`));
 

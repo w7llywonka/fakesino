@@ -8,6 +8,7 @@ import { initTooltips } from './ui/tooltip.js';
 import * as misc from './pages/misc.js';
 import { initRegistry } from './games/registry.js';
 import { initI18n } from './i18n.js';
+import './ui/onboarding.js';
 
 const lazy = (path, name = 'default') => async (page, params) => (await import(path))[name](page, params);
 
@@ -94,7 +95,7 @@ async function syncModal(q) {
       done(await (await import('./ui/betmodal.js')).openBetModal(q.id));
       break;
     case 'help':
-      done((await import('./ui/help.js')).openHelpModal());
+      done((await import('./ui/help.js')).openHelpModal({ q: q.q }));
       break;
     case 'wallet-settings':
       done((await import('./ui/walletsettings.js')).openWalletSettingsModal());

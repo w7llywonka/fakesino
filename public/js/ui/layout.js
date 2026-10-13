@@ -38,11 +38,12 @@ export function renderShell(app) {
     <div class="chat-slot"></div>
     <nav class="mobile-nav">
       <button data-act="mobile-menu">${icon('menu', 20)}<span>Browse</span></button>
-      <a href="/casino">${icon('casino', 20)}<span>Casino</span></a>
-      <a href="/transactions/bets">${icon('list', 20)}<span>Bets</span></a>
-      <a href="/sports">${icon('sports', 20)}<span>Sports</span></a>
+      <a href="/casino" data-nav="casino">${icon('casino', 20)}<span>Casino</span></a>
+      <a href="/transactions/bets" data-nav="bets">${icon('list', 20)}<span>Bets</span></a>
+      <a href="/sports" data-nav="sports">${icon('sports', 20)}<span>Sports</span></a>
       <button data-act="chat">${icon('chat', 20)}<span>Chat</span></button>
     </nav>
+    <button class="to-top" data-act="to-top" aria-label="Back to top" data-tip="Back to top">${icon('arrowUp', 18)}</button>
   </div>`);
   app.appendChild(shell);
 
@@ -81,6 +82,7 @@ export function renderShell(app) {
     }
     savePrefs({ chatOpen: !!chat });
     shell.querySelectorAll('[data-act=chat]').forEach((b) => b.classList.toggle('active', !!chat));
+    shell.classList.toggle('drawer-open', !!(chat || slipPanel));
   }
   function toggleSlip(force) {
     const open = force ?? !slipPanel;
@@ -91,6 +93,7 @@ export function renderShell(app) {
       slipPanel = null;
     }
     shell.querySelectorAll('[data-act=slip]').forEach((b) => b.classList.toggle('active', !!slipPanel));
+    shell.classList.toggle('drawer-open', !!(chat || slipPanel));
   }
   on(shell, 'click', '[data-act=slip]', () => toggleSlip());
   bus.on('slip:open', () => toggleSlip(true));
@@ -110,7 +113,62 @@ export function renderShell(app) {
   bus.on('route', ({ path }) => highlightNav(shell, path));
   highlightNav(shell, location.pathname);
   syncSlipBadge();
+
+  // Back to top, once a long page has been scrolled.
+  const toTop = shell.querySelector('.to-top');
+  let topTick = false;
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (topTick) return;
+      topTick = true;
+      requestAnimationFrame(() => {
+        topTick = false;
+        toTop.classList.toggle('show', window.scrollY > 900);
+      });
+    },
+    { passive: true },
+  );
+  toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }));
+
+  // Keyboard: "/" searches games, "?" opens the Help Center.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('.modal-backdrop:not(.closing)')) return;
+    e.preventDefault();
+    setQuery({ modal: 'help' });
+  });
+  initTabFades(shell);
   return { shell, page: shell.querySelector('#page'), toggleChat };
+}
+
+// Tab rows that scroll sideways fade at the edge that has more tabs.
+const FADE_ROWS = '.tabs, .help-chips';
+function initTabFades(root) {
+  const sync = (t) => {
+    const max = t.scrollWidth - t.clientWidth;
+    t.classList.toggle('fade-l', max > 2 && t.scrollLeft > 2);
+    t.classList.toggle('fade-r', max > 2 && t.scrollLeft < max - 2);
+  };
+  const ro = new ResizeObserver((entries) => entries.forEach((en) => sync(en.target)));
+  const seen = new WeakSet();
+  const scan = (node) => {
+    const list = node.matches?.(FADE_ROWS) ? [node] : [...(node.querySelectorAll?.(FADE_ROWS) || [])];
+    for (const t of list) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      ro.observe(t);
+      // The active tab is brought into view when a row first appears.
+      requestAnimationFrame(() => {
+        const a = t.querySelector('.active');
+        if (a && t.scrollWidth > t.clientWidth) t.scrollLeft = Math.max(0, a.offsetLeft - (t.clientWidth - a.offsetWidth) / 2);
+        sync(t);
+      });
+    }
+  };
+  document.addEventListener('scroll', (e) => e.target.matches?.(FADE_ROWS) && sync(e.target), true);
+  new MutationObserver((records) => records.forEach((r) => r.addedNodes.forEach(scan))).observe(document.body, { childList: true, subtree: true });
+  scan(document.body);
 }
 
 function sidebarNav() {
@@ -146,7 +204,7 @@ function siteNav() {
       <a class="nav-item" href="/provably-fair">${icon('shield', 18)}<span>Provably Fair</span></a>
       <a class="nav-item" href="/responsible-gaming">${icon('support', 18)}<span>Responsible Gaming</span></a>
       <button class="nav-item" data-act="chat">${icon('chat', 18)}<span>Live Chat</span></button>
-      <a class="nav-item" href="?modal=help">${icon('support', 18)}<span>Live Support</span></a>
+      <a class="nav-item" href="?modal=help">${icon('help', 18)}<span>Help Center</span></a>
     </div>`;
 }
 
@@ -181,6 +239,8 @@ function highlightNav(shell, path) {
     const href = a.getAttribute('href');
     a.classList.toggle('active', href === path || (href !== '/casino' && path.startsWith(href + '/')));
   });
+  const tab = path === '/transactions/bets' ? 'bets' : section === 'sports' ? 'sports' : path === '/' || path.startsWith('/casino') ? 'casino' : null;
+  shell.querySelectorAll('.mobile-nav [data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === tab));
 }
 
 function footer() {
@@ -217,18 +277,26 @@ function renderHeader(shell) {
       <button class="wallet-btn" data-modal="wallet" data-tab="deposit"><span class="show-mobile">${icon('wallet', 18)}</span><span class="label">Wallet</span></button>
     </div>`;
   right.innerHTML = `
-    <button class="icon-btn hide-mobile" data-act="search" aria-label="Search">${icon('search', 20)}</button>
+    <button class="icon-btn hide-mobile" data-act="search" aria-label="Search" data-tip="Search">${icon('search', 20)}</button>
+    <a class="icon-btn hide-mobile" href="?modal=help" aria-label="Help Center" data-tip="Help Center">${icon('help', 20)}</a>
     <span class="nt-slot"></span>
-    <button class="icon-btn slip-btn" data-act="slip" aria-label="Bet slip">${icon('ticket', 20)}<span class="slip-badge" hidden></span></button>
+    <button class="icon-btn slip-btn" data-act="slip" aria-label="Bet slip" data-tip="Bet slip">${icon('ticket', 20)}<span class="slip-badge" hidden></span></button>
     <div style="position:relative">
-      <button class="icon-btn" data-act="user" aria-label="Account">${icon('user', 20)}</button>
+      <button class="icon-btn" data-act="user" aria-label="Account" data-tip="Account">${icon('user', 20)}</button>
     </div>
-    <button class="icon-btn hide-mobile" data-act="chat" aria-label="Chat">${icon('chat', 20)}</button>`;
+    <button class="icon-btn hide-mobile" data-act="chat" aria-label="Chat" data-tip="Chat">${icon('chat', 20)}</button>`;
 
   const updateBalance = (e) => {
     const code = currency();
     const amountEl = center.querySelector('.bal-amount');
     if (!amountEl) return;
+    // Until the first deposit, the Wallet button pulses gently.
+    const u = state.user;
+    const empty = u && !u.stats?.bets && ![u.balances, u.vault].some((b) => Object.values(b || {}).some((v) => v > 0));
+    const wbtn = center.querySelector('.wallet-btn');
+    wbtn.classList.toggle('nudge', !!empty);
+    if (!empty) delete wbtn.dataset.tip;
+    else if (!wbtn.dataset.tip) wbtn.dataset.tip = 'Get free play money';
     amountEl.textContent = fmt.money(balanceOf(code), code);
     center.querySelector('.bal-coin').innerHTML = coin(code);
     if (e?.reason === 'win' || e?.reason === 'push') {
@@ -329,6 +397,7 @@ function userDropdown() {
     ['settings', 'Settings', '/settings/general'],
     ['lock', 'Wallet backup', '/settings/general#backup'],
     ['shield', 'Provably Fair', '?modal=fairness'],
+    ['help', 'Help Center', '?modal=help'],
   ];
   const dd = el(`<div class="dropdown"><div style="padding:8px 16px 10px;border-bottom:1px solid #e3e8ee;margin-bottom:4px">
       <div style="font-weight:800">${esc(state.user.username)}</div><div style="font-size:12px;color:#5a6b7e">${esc(state.user.vip.level)} VIP</div></div>

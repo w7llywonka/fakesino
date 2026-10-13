@@ -35,3 +35,9 @@ for (const lang of LANG_ORDER) {
 test('short UI strings have a translation for every language', () => {
   for (const r of ROWS) assert.equal(r.length, LANG_ORDER.length + 1, r[0]);
 });
+
+test('every help tip has a translation', async () => {
+  const { HELP } = await import('../public/js/ui/helptip.js');
+  const have = new Set(ROWS.map((r) => r[0]));
+  for (const text of Object.values(HELP)) assert.ok(have.has(text), text);
+});

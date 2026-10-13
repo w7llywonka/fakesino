@@ -55,7 +55,7 @@ export function openSearch() {
     }
     const hits = GAMES.filter((g) => g.name.toLowerCase().includes(q) || g.slug.includes(q) || catName[g.category]?.includes(q));
     body.innerHTML = `${q.length < 3 ? '<div class="sr-hint">Type 3 characters or more to search</div>' : ''}
-      ${hits.length ? `<div class="game-grid sr-grid">${hits.map(tile).join('')}</div>` : `<div class="empty">No results found for “${esc(q)}”</div>`}`;
+      ${hits.length ? `<div class="game-grid sr-grid">${hits.map(tile).join('')}</div>` : `<div class="empty"><div class="empty-title">No results found for “${esc(q)}”</div><div>Check the spelling, or try a shorter word.</div></div>`}`;
   }
 
   const remember = () => {
@@ -101,10 +101,10 @@ export function openSearch() {
   current = { close, input };
 }
 
-// '/' opens search when hotkeys are on (desktop).
+// '/' opens search from anywhere (except while typing).
 document.addEventListener('keydown', (e) => {
-  if (e.key !== '/' || !state.prefs.hotkeys || current) return;
-  if (e.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('.modal-backdrop')) return;
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || current) return;
+  if (e.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('.modal-backdrop:not(.closing)')) return;
   e.preventDefault();
   openSearch();
 });

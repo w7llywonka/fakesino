@@ -6,6 +6,7 @@ import { GAMES, bySlug } from '../games/registry.js';
 import { hmacHex, sha256Hex } from '../verify.js';
 import { verifyTab } from '../ui/fairness.js';
 import * as fmt from '../format.js';
+import { markStep } from '../ui/onboarding.js';
 
 const TABS = [
   ['overview', 'Overview'],
@@ -52,6 +53,7 @@ const ROUND_EVENTS = {
 
 export default function fairPage(page, { tab = 'overview' } = {}) {
   document.title = 'Provably Fair — Fakesino';
+  markStep('fair');
   if (!TABS.some(([k]) => k === tab)) tab = 'overview';
   const root = el(`<div class="fair-page"><div class="page-title">${icon('shield', 22)} Provably Fair</div>
     <div class="fair-layout"><nav class="fair-nav">${TABS.map(([k, l]) => `<a class="${k === tab ? 'active' : ''}" href="/provably-fair/${k}">${l}</a>`).join('')}</nav>

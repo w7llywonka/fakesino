@@ -598,7 +598,7 @@ export default function mountCrash(ctx) {
     clearTimeout(prefillTimer);
     let tries = 0;
     const fill = () => {
-      const input = document.querySelector('.modal input[name=hash]');
+      const input = document.querySelector('.modal-backdrop:not(.closing) .modal input[name=hash]');
       if (input) {
         if (input.value !== hash) {
           input.value = hash;

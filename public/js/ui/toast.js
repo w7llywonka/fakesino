@@ -1,12 +1,15 @@
 import { el, esc } from '../dom.js';
 import { icon } from '../icons.js';
 
-export function toast({ title = '', message = '', type = 'info', duration = 4000 } = {}) {
+// action: { label, href } adds one button (links go through the router).
+export function toast({ title = '', message = '', type = 'info', duration = 4000, action = null } = {}) {
   const root = document.getElementById('toast-root');
   const ic = type === 'success' ? 'check' : type === 'error' ? 'alert' : 'info';
   const t = el(`<div class="toast ${type}" style="--toast-d:${duration}ms">
     <span class="t-icon">${icon(ic, 18)}</span>
-    <div><div class="t-title">${esc(title)}</div>${message ? `<div class="t-msg">${esc(message)}</div>` : ''}</div>
+    <div><div class="t-title">${esc(title)}</div>${message ? `<div class="t-msg">${esc(message)}</div>` : ''}${
+      action ? `<div class="t-action"><a class="btn btn-secondary btn-sm" href="${esc(action.href)}">${esc(action.label)}</a></div>` : ''
+    }</div>
   </div>`);
   root.appendChild(t);
   const timer = setTimeout(dismiss, duration);
@@ -20,5 +23,6 @@ export function toast({ title = '', message = '', type = 'info', duration = 4000
   return dismiss;
 }
 
-export const toastError = (err, title = 'Error') => toast({ type: 'error', title, message: err?.message || String(err) });
+export const toastError = (err, title = 'Error') =>
+  toast({ type: 'error', title, message: err?.message || String(err), action: err?.code === 'insufficient_balance' ? { label: 'Deposit', href: '?modal=wallet&tab=deposit' } : null });
 export const toastSuccess = (title, message = '') => toast({ type: 'success', title, message });

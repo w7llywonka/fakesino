@@ -7,6 +7,7 @@ import { toast, toastError } from './toast.js';
 import { maxStake } from '../shared/limits.js';
 import { createRunner } from '../shared/autobet.js';
 import { api } from '../api.js';
+import { helpTip } from './helptip.js';
 
 const AMOUNT_KEY = 'fakesino:amounts';
 function rememberAmount(code, value) {
@@ -86,7 +87,7 @@ export function createBetPanel(container, opts) {
   // ---- field rendering ----
   function renderField(f) {
     let node;
-    const label = f.label ? `<div class="bp-label"><span>${esc(f.label)}</span><span class="aux"></span></div>` : '';
+    const label = f.label ? `<div class="bp-label"><span>${esc(f.label)}</span>${helpTip(f.help || f.label)}<span class="aux"></span></div>` : '';
     switch (f.type) {
       case 'amount': {
         const code = currency();
@@ -188,18 +189,18 @@ export function createBetPanel(container, opts) {
   const auto = { bets: 0, onWin: 'reset', onWinPct: 0, onLoss: 'reset', onLossPct: 0, stopProfit: 0, stopLoss: 0 };
   if (opts.auto) {
     autoEl.innerHTML = `
-      <div class="bp-field"><div class="bp-label"><span>Number of Bets</span></div>
+      <div class="bp-field"><div class="bp-label"><span>Number of Bets</span>${helpTip('Number of Bets')}</div>
         <div class="input-suffix"><input class="input" data-auto="bets" inputmode="numeric" value="0"><span class="suffix">${icon('refresh', 14)}</span></div></div>
       ${['Win', 'Loss']
         .map(
-          (k) => `<div class="bp-field"><div class="bp-label"><span>On ${k}</span></div>
+          (k) => `<div class="bp-field"><div class="bp-label"><span>On ${k}</span>${helpTip(`On ${k}`)}</div>
         <div class="bp-onwinloss"><div class="toggle-pair"><button class="active" data-on="${k}" data-v="reset">Reset</button><button data-on="${k}" data-v="increase">Increase by:</button></div>
         <div class="input-suffix" style="flex:1"><input class="input" data-auto="on${k}Pct" inputmode="decimal" value="0" disabled><span class="suffix">%</span></div></div></div>`,
         )
         .join('')}
-      <div class="bp-field"><div class="bp-label"><span>Stop on Profit</span><span class="aux" data-aux="stopProfit"></span></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Profit</span>${helpTip('Stop on Profit')}<span class="aux" data-aux="stopProfit"></span></div>
         <div class="input-suffix"><input class="input" data-auto="stopProfit" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>
-      <div class="bp-field"><div class="bp-label"><span>Stop on Loss</span><span class="aux" data-aux="stopLoss"></span></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Loss</span>${helpTip('Stop on Loss')}<span class="aux" data-aux="stopLoss"></span></div>
         <div class="input-suffix"><input class="input" data-auto="stopLoss" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>`;
     on(autoEl, 'input', 'input[data-auto]', (e, input) => {
       auto[input.dataset.auto] = Number(input.value) || 0;
@@ -319,7 +320,7 @@ export function createBetPanel(container, opts) {
   function checkBalance(amount) {
     if (!state.user) return true;
     if (amount > balanceOf() + 1e-12) {
-      toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to keep playing.' });
+      toast({ type: 'error', title: 'Insufficient balance', message: 'Deposit play money from the wallet to keep playing.', action: { label: 'Deposit', href: '?modal=wallet&tab=deposit' } });
       return false;
     }
     return true;
@@ -401,15 +402,15 @@ export function createBetPanel(container, opts) {
   const chanceApi = () => opts.chance || null;
   if (modes.includes('advanced')) {
     advEl.innerHTML = `
-      <div class="bp-field"><div class="bp-label"><span>Strategy</span></div>
+      <div class="bp-field"><div class="bp-label"><span>Strategy</span>${helpTip('Strategy')}</div>
         <div class="bp-strategy"><select class="select" data-adv="strategy"></select>
           <button class="btn btn-secondary btn-sm" data-adv-act="edit" type="button">Edit</button></div>
         <button class="btn btn-ghost btn-sm bp-create" data-adv-act="create" type="button">${icon('plus', 14)} Create strategy</button></div>
-      <div class="bp-field"><div class="bp-label"><span>Number of Bets</span></div>
+      <div class="bp-field"><div class="bp-label"><span>Number of Bets</span>${helpTip('Number of Bets')}</div>
         <div class="input-suffix"><input class="input" data-adv="bets" inputmode="numeric" value="0"><span class="suffix">∞</span></div></div>
-      <div class="bp-field"><div class="bp-label"><span>Stop on Profit</span></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Profit</span>${helpTip('Stop on Profit')}</div>
         <div class="input-suffix"><input class="input" data-adv="stopProfit" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>
-      <div class="bp-field"><div class="bp-label"><span>Stop on Loss</span></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Loss</span>${helpTip('Stop on Loss')}</div>
         <div class="input-suffix"><input class="input" data-adv="stopLoss" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>`;
     on(advEl, 'input', 'input[data-adv]', (e, input) => {
       adv[input.dataset.adv] = Number(input.value) || 0;
@@ -499,7 +500,7 @@ export function createBetPanel(container, opts) {
   const onKey = (e) => {
     if (!state.prefs.hotkeys) return;
     if (e.target.closest('input, textarea, select, [contenteditable]')) return;
-    if (document.querySelector('.modal-backdrop')) return;
+    if (document.querySelector('.modal-backdrop:not(.closing)')) return;
     const k = e.key.toLowerCase();
     if (k === ' ') {
       e.preventDefault();

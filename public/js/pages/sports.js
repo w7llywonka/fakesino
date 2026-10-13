@@ -9,6 +9,7 @@ import { inSlip, toggleSelection, showOdds } from '../ui/betslip.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { toastSuccess, toastError } from '../ui/toast.js';
 import * as fmt from '../format.js';
+import { emptyState, actionLink } from '../ui/empty.js';
 
 const POLL_MS = 2500;
 const kickoffText = (t) => {
@@ -203,7 +204,9 @@ async function myBetsPage(page) {
     const { bets } = await api.get(`/api/sports/bets?status=${tab}`);
     list.innerHTML = bets.length
       ? bets.map(betCard).join('')
-      : `<div class="empty">${tab === 'active' ? 'No active bets. <a class="link" href="/sports">Find a match</a>' : 'No settled bets yet.'}</div>`;
+      : tab === 'active'
+        ? emptyState({ ic: 'ticket', title: 'No active bets', text: 'Pick odds on any match to start a bet slip.', actions: actionLink('/sports', 'Find a match') })
+        : emptyState({ ic: 'ticket', title: 'No settled bets yet', text: 'Finished bets and cash-outs show up here.' });
   }
   on(root, 'click', '[data-t]', (e, b) => {
     tab = b.dataset.t;

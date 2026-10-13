@@ -1,8 +1,9 @@
 import { el, esc, on } from '../dom.js';
-import { setQuery } from '../router.js';
+import { setQuery, navigate } from '../router.js';
 import { DEMO_CARDS } from '../shared/cards.js';
 import { openModal } from './modal.js';
 import { helpFaq } from '../i18n.js';
+import { setGuide, guideOn } from './onboarding.js';
 
 // Help Center: searchable answers about how this play-money site works.
 const FAQ = [
@@ -41,30 +42,50 @@ const entries = () => {
   return t && t.length === FAQ.length ? t.map(([c, q, a]) => [c, q, a.replace('{cards}', CARDS)]) : FAQ;
 };
 
-export function openHelpModal() {
+export function openHelpModal({ q = '' } = {}) {
+  const all = entries();
+  const cats = [...new Set(all.map(([c]) => c))];
   const view = el(`<div class="help">
     <input class="input" type="search" placeholder="Search help articles" aria-label="Search help articles">
+    <div class="help-chips" role="tablist"><button class="active" data-cat="">All topics</button>${cats.map((c) => `<button data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>
     <div class="help-list"></div>
-    <div class="muted" style="font-size:12px;margin-top:12px"><span>Fakesino has no human support team — it’s a play-money demo.</span> <button class="link" data-act="chat">Ask in Live Chat</button></div></div>`);
+    <div class="help-foot">
+      <span class="help-keys hide-mobile"><span>Shortcuts:</span> <span class="kbd">/</span> <span>search games</span> · <span class="kbd">?</span> <span>this Help Center</span></span>
+      ${guideOn() ? '' : '<button class="link" data-act="guide">Show the getting-started guide</button>'}
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:10px"><span>Fakesino has no human support team — it’s a play-money demo.</span> <button class="link" data-act="chat">Ask in Live Chat</button></div></div>`);
   const list = view.querySelector('.help-list');
-  const render = (q = '') => {
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const hits = entries().filter(([cat, qn, a]) => words.every((w) => `${cat} ${qn} ${a}`.toLowerCase().includes(w)));
+  const input = view.querySelector('input');
+  let cat = '';
+  const render = () => {
+    const words = input.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const hits = all.filter(([c, qn, a]) => (!cat || c === cat) && words.every((w) => `${c} ${qn} ${a}`.toLowerCase().includes(w)));
     let lastCat = null;
     list.innerHTML = hits.length
       ? hits
-          .map(([cat, qn, a]) => {
-            const head = cat !== lastCat ? `<div class="help-cat">${esc(cat)}</div>` : '';
-            lastCat = cat;
-            return `${head}<details class="help-item" ${words.length && hits.length <= 3 ? 'open' : ''}><summary>${esc(qn)}</summary><div class="help-a">${a}</div></details>`;
+          .map(([c, qn, a]) => {
+            const head = c !== lastCat && !cat ? `<div class="help-cat">${esc(c)}</div>` : '';
+            lastCat = c;
+            return `${head}<details class="help-item" ${(words.length && hits.length <= 3) || hits.length === 1 ? 'open' : ''}><summary>${esc(qn)}</summary><div class="help-a">${a}</div></details>`;
           })
           .join('')
-      : '<div class="empty">No articles match. Try different words.</div>';
+      : `<div class="empty"><div class="empty-title">No articles match</div><div>Try different words, or ask in Live Chat.</div></div>`;
   };
+  input.value = q;
   render();
-  view.querySelector('input').addEventListener('input', (e) => render(e.target.value.trim()));
-  const modal = openModal({ title: 'Help Center', iconName: 'support', body: view, onClose: () => setQuery({ modal: null }, { replace: true }) });
+  input.addEventListener('input', render);
+  on(view, 'click', '[data-cat]', (e, b) => {
+    cat = b.dataset.cat;
+    view.querySelectorAll('[data-cat]').forEach((x) => x.classList.toggle('active', x === b));
+    render();
+  });
+  const modal = openModal({ title: 'Help Center', iconName: 'help', body: view, onClose: () => setQuery({ modal: null, q: null }, { replace: true }) });
   on(view, 'click', 'a.link', () => modal.close());
+  view.querySelector('[data-act=guide]')?.addEventListener('click', () => {
+    setGuide(true);
+    modal.close();
+    navigate('/casino');
+  });
   view.querySelector('[data-act=chat]').addEventListener('click', () => {
     modal.close();
     document.querySelector('[data-act=chat]')?.click();

@@ -5,7 +5,7 @@ let current = null;
 
 // One modal at a time. Returns a handle to update or close it.
 export function openModal({ title = '', iconName = null, size = '', body = '', foot = '', onClose = null, dismissable = true } = {}) {
-  closeModal({ silent: true });
+  closeModal({ silent: true, instant: true });
   const root = document.getElementById('modal-root');
   const backdrop = el(`<div class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal ${size}">
@@ -67,12 +67,17 @@ export function openModal({ title = '', iconName = null, size = '', body = '', f
   return handle;
 }
 
-export function closeModal({ silent = false } = {}) {
+export function closeModal({ silent = false, instant = false } = {}) {
   if (!current) return;
   const h = current;
   current = null;
   document.removeEventListener('keydown', h.keydown);
-  h.backdrop.remove();
+  // A quick fade-out, unless another modal is replacing this one.
+  if (instant || matchMedia('(prefers-reduced-motion: reduce)').matches) h.backdrop.remove();
+  else {
+    h.backdrop.classList.add('closing');
+    setTimeout(() => h.backdrop.remove(), 140);
+  }
   document.body.style.overflow = '';
   if (!silent && h.onClose) h.onClose();
 }
