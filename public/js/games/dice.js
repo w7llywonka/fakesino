@@ -25,6 +25,32 @@ export default function mountDice(ctx) {
     onBet: () => play(false),
     auto: { run: () => play(true) },
     hotkeys: { q: () => flip(), w: () => nudge(-1), e: () => nudge(1) },
+    // Advanced autobet: win-chance actions and over/under switching.
+    chance: {
+      get: () => chance(),
+      set: (c) => {
+        fitChance(c);
+        render();
+      },
+      min: MIN_CHANCE,
+      max: MAX_CHANCE,
+      switchOverUnder: () => {
+        if (mode === 'classic') {
+          condition = condition === 'over' ? 'under' : 'over';
+          target = r2(100 - target);
+        } else if (mode === 'between' || mode === 'outside') {
+          const next = mode === 'between' ? 'outside' : 'between';
+          const prev = mode;
+          mode = next;
+          if (!validChance(chance())) mode = prev;
+          else {
+            modesEl.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+            buildHandles();
+          }
+        }
+        render();
+      },
+    },
   });
 
   const stage = el(`<div class="dice-stage">

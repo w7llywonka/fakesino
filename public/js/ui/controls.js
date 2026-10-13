@@ -5,6 +5,7 @@ import { state, bus, currency, balanceOf, savePrefs, ensureSession } from '../st
 import * as fmt from '../format.js';
 import { toast, toastError } from './toast.js';
 import { maxStake } from '../shared/limits.js';
+import { createRunner } from '../shared/autobet.js';
 import { api } from '../api.js';
 
 const AMOUNT_KEY = 'fakesino:amounts';
@@ -37,8 +38,12 @@ export function amountField({ key = 'amount', label = 'Bet Amount', halfDouble =
  * opts.auto: { run(values) → { profit, win } } enables the Auto tab
  */
 export function createBetPanel(container, opts) {
-  const modes = opts.auto ? ['manual', 'auto'] : ['manual'];
-  let mode = 'manual';
+  // Advanced (strategy) autobet is on wherever Auto is, unless a game opts out.
+  const modes = opts.auto ? ['manual', 'auto', ...(opts.advanced === false ? [] : ['advanced'])] : ['manual'];
+  const MODE_LABEL = { manual: 'Manual', auto: 'Auto', advanced: 'Advanced' };
+  let mode = 'manual'; // games see 'auto' for both Auto and Advanced
+  let advanced = false;
+  let strategyId = 'martingale';
   let busy = false;
   let locked = false;
   let autoRunning = false;
@@ -51,15 +56,17 @@ export function createBetPanel(container, opts) {
   let maxedAt = null; // amount set by the Max button, for the max-bet warning
 
   const root = el(`<div class="bet-panel stack" style="gap:12px">
-    ${modes.length > 1 ? `<div class="bp-mode"><div class="tabs">${modes.map((m) => `<button class="tab ${m === mode ? 'active' : ''}" data-mode="${m}">${m === 'manual' ? 'Manual' : 'Auto'}</button>`).join('')}</div></div>` : ''}
+    ${modes.length > 1 ? `<div class="bp-mode"><div class="tabs">${modes.map((m) => `<button class="tab ${m === mode ? 'active' : ''}" data-mode="${m}">${MODE_LABEL[m]}</button>`).join('')}</div></div>` : ''}
     <div class="bp-fields stack" style="gap:12px"></div>
     <div class="bp-auto-fields stack" style="gap:12px;display:none"></div>
+    <div class="bp-adv-fields stack" style="gap:12px;display:none"></div>
     <div class="bp-actions"><button class="btn btn-primary btn-block bp-bet">${esc(opts.betLabel || 'Bet')}</button></div>
     <div class="bp-extra stack" style="gap:8px"></div>
   </div>`);
   container.appendChild(root);
   const fieldsEl = root.querySelector('.bp-fields');
   const autoEl = root.querySelector('.bp-auto-fields');
+  const advEl = root.querySelector('.bp-adv-fields');
   const betBtn = root.querySelector('.bp-bet');
   const extraEl = root.querySelector('.bp-extra');
 
@@ -263,6 +270,7 @@ export function createBetPanel(container, opts) {
         x.disabled = autoRunning || auto[k] !== 'increase';
       } else x.disabled = autoRunning;
     });
+    advEl.querySelectorAll('input, select, button').forEach((x) => (x.disabled = autoRunning));
     root.querySelectorAll('.bp-mode .tab').forEach((t) => (t.disabled = busy || locked || autoRunning));
     if (mode === 'auto') {
       betBtn.textContent = autoRunning ? (autoStop ? 'Finishing Bet' : 'Stop Autobet') : 'Start Autobet';
@@ -270,10 +278,14 @@ export function createBetPanel(container, opts) {
     }
   }
 
-  function setMode(m) {
+  function setMode(tab) {
+    advanced = tab === 'advanced';
+    const m = advanced ? 'auto' : tab;
     mode = m;
-    root.querySelectorAll('.bp-mode .tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === m));
-    autoEl.style.display = m === 'auto' ? '' : 'none';
+    root.querySelectorAll('.bp-mode .tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === tab));
+    autoEl.style.display = m === 'auto' && !advanced ? '' : 'none';
+    advEl.style.display = advanced ? '' : 'none';
+    if (advanced) renderStrategies();
     for (const { node, spec } of Object.values(fieldEls)) {
       if (spec.mode) node.style.display = spec.mode === m && !spec.hidden ? '' : 'none';
     }
@@ -321,6 +333,7 @@ export function createBetPanel(container, opts) {
       ensureSession().catch(() => {});
       return;
     }
+    if (advanced) return runAdvanced();
     autoRunning = true;
     autoStop = false;
     applyDisabled();
@@ -369,6 +382,105 @@ export function createBetPanel(container, opts) {
     } else manualBet();
   });
 
+  // ---- advanced autobet ----
+  const adv = { bets: 0, stopProfit: 0, stopLoss: 0 };
+  const chanceApi = () => opts.chance || null;
+  if (modes.includes('advanced')) {
+    advEl.innerHTML = `
+      <div class="bp-field"><div class="bp-label"><span>Strategy</span></div>
+        <div class="bp-strategy"><select class="select" data-adv="strategy"></select>
+          <button class="btn btn-secondary btn-sm" data-adv-act="edit" type="button">Edit</button></div>
+        <button class="btn btn-ghost btn-sm bp-create" data-adv-act="create" type="button">${icon('plus', 14)} Create strategy</button></div>
+      <div class="bp-field"><div class="bp-label"><span>Number of Bets</span></div>
+        <div class="input-suffix"><input class="input" data-adv="bets" inputmode="numeric" value="0"><span class="suffix">∞</span></div></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Profit</span></div>
+        <div class="input-suffix"><input class="input" data-adv="stopProfit" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>
+      <div class="bp-field"><div class="bp-label"><span>Stop on Loss</span></div>
+        <div class="input-suffix"><input class="input" data-adv="stopLoss" inputmode="decimal" value="0"><span class="suffix auto-coin">${coin(currency())}</span></div></div>`;
+    on(advEl, 'input', 'input[data-adv]', (e, input) => {
+      adv[input.dataset.adv] = Number(input.value) || 0;
+      if (input.dataset.adv === 'bets') input.nextElementSibling.textContent = adv.bets > 0 ? '' : '∞';
+    });
+    on(advEl, 'change', 'select[data-adv=strategy]', (e, s) => (strategyId = s.value));
+    on(advEl, 'click', '[data-adv-act]', async (e, b) => {
+      if (autoRunning) return;
+      const { editStrategy, loadStrategies } = await import('./strategy.js');
+      const caps = { chance: !!chanceApi(), overUnder: !!chanceApi()?.switchOverUnder };
+      const current = loadStrategies().find((s) => s.id === strategyId);
+      editStrategy(b.dataset.advAct === 'edit' ? current : null, {
+        caps,
+        onSaved: (id) => {
+          strategyId = id || 'martingale';
+          renderStrategies();
+        },
+      });
+    });
+  }
+
+  async function renderStrategies() {
+    const { loadStrategies } = await import('./strategy.js');
+    const list = loadStrategies();
+    if (!list.some((s) => s.id === strategyId)) strategyId = list[0].id;
+    const sel = advEl.querySelector('select[data-adv=strategy]');
+    if (!sel) return;
+    sel.innerHTML = list.map((s) => `<option value="${esc(s.id)}" ${s.id === strategyId ? 'selected' : ''}>${esc(s.name)}${s.builtin ? '' : ' ★'}</option>`).join('');
+    advEl.querySelector('[data-adv-act=edit]').textContent = list.find((s) => s.id === strategyId)?.builtin ? 'View' : 'Edit';
+  }
+  on(advEl, 'change', 'select[data-adv=strategy]', () => renderStrategies());
+
+  async function runAdvanced() {
+    const { loadStrategies } = await import('./strategy.js');
+    const strategy = loadStrategies().find((s) => s.id === strategyId);
+    if (!strategy) return;
+    autoRunning = true;
+    autoStop = false;
+    applyDisabled();
+    const ch = chanceApi();
+    const base = values.amount || 0;
+    const baseChance = ch ? ch.get() : null;
+    const runner = createRunner(strategy, { amount: base, chance: baseChance });
+    let current = base;
+    let total = 0;
+    let remaining = adv.bets;
+    const infinite = !adv.bets;
+    const betsInput = advEl.querySelector('[data-adv=bets]');
+    toast({ title: 'Autobet started', message: strategy.name });
+    try {
+      while (!autoStop && (infinite || remaining > 0)) {
+        if (opts.auto.canRun && !opts.auto.canRun()) break;
+        setValue('amount', current);
+        const v = snapshot();
+        if (!checkBalance(v.amount)) break;
+        const r = await opts.auto.run(v);
+        if (!r) break;
+        total += r.profit;
+        if (!infinite) betsInput.value = --remaining;
+        const next = runner.record({ profit: r.profit });
+        current = next.amount;
+        if (ch && next.chance != null) {
+          const c = Math.min(ch.max ?? 98, Math.max(ch.min ?? 0.01, next.chance));
+          if (Math.abs(c - ch.get()) > 1e-9) ch.set(c);
+        }
+        if (ch?.switchOverUnder && next.switchOverUnder) ch.switchOverUnder();
+        if (next.stop) break;
+        if (adv.stopProfit > 0 && total >= adv.stopProfit) break;
+        if (adv.stopLoss > 0 && -total >= adv.stopLoss) break;
+        await sleep(opts.instant?.() ? Math.min(opts.auto.delay ?? 10, 10) : opts.auto.delay ?? (state.prefs.animations ? 120 : 30));
+      }
+    } catch (err) {
+      toastError(err, 'Autobet stopped');
+    } finally {
+      if (!infinite) betsInput.value = adv.bets;
+      setValue('amount', base);
+      if (ch && baseChance != null && Math.abs(ch.get() - baseChance) > 1e-9) ch.set(baseChance);
+      autoRunning = false;
+      autoStop = false;
+      applyDisabled();
+      toast({ title: 'Autobet ended', message: `${total >= 0 ? 'Profit' : 'Loss'} ${fmt.money(Math.abs(total), currency())}` });
+      for (const fn of listeners) fn('autoStopped', true, values);
+    }
+  }
+
   // ---- hotkeys ----
   const onKey = (e) => {
     if (!state.prefs.hotkeys) return;
@@ -397,6 +509,7 @@ export function createBetPanel(container, opts) {
         if (spec.type === 'profit') node.querySelector('.suffix').innerHTML = coin(code);
       }
       autoEl.querySelectorAll('.auto-coin').forEach((s) => (s.innerHTML = coin(code)));
+      advEl.querySelectorAll('.auto-coin').forEach((s) => (s.innerHTML = coin(code)));
       refreshProfit();
     }),
   );
@@ -417,6 +530,9 @@ export function createBetPanel(container, opts) {
     },
     get autoRunning() {
       return autoRunning;
+    },
+    get advanced() {
+      return advanced;
     },
     values: snapshot,
     get: (k) => values[k],

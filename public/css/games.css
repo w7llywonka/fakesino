@@ -1082,3 +1082,73 @@
     display: none;
   }
 }
+
+/* ---------- Advanced autobet ---------- */
+
+.bp-strategy {
+  display: flex;
+  gap: 6px;
+}
+
+.bp-strategy .select {
+  flex: 1;
+  min-width: 0;
+}
+
+.bp-create {
+  margin-top: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
+.st-edit .st-blocks {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.st-block {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.st-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-kind {
+  flex: 1;
+}
+
+.st-tools {
+  display: flex;
+  gap: 2px;
+}
+
+.st-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.st-row .select {
+  flex: 1;
+  min-width: 140px;
+}
+
+.st-w {
+  width: 64px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.st-n {
+  width: 90px;
+}

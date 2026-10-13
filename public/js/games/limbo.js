@@ -21,6 +21,16 @@ export default function mountLimbo(ctx) {
     onBet: () => play(false),
     auto: { run: () => play(true) },
     hotkeys: { w: () => nudge(-1), e: () => nudge(1) },
+    // Advanced autobet: win-chance actions map to the target multiplier.
+    chance: {
+      get: () => winChance(target),
+      set: (c) => {
+        target = clampTarget(winChance(1) / c);
+        render();
+      },
+      min: MIN_CHANCE,
+      max: MAX_CHANCE,
+    },
   });
 
   const stage = el(`<div class="limbo-stage">
