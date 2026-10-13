@@ -33,7 +33,7 @@ function setList(key, list) {
 export const recentGames = () => getList(RECENT_KEY);
 export const favouriteGames = () => getList(FAV_KEY);
 
-const CATEGORY_LABEL = { originals: 'Fakesino Originals', table: 'Table Games', slots: 'Fakesino Slots' };
+const CATEGORY_LABEL = { originals: 'Fakesino Originals', table: 'Table Games', slots: 'Fakesino Slots', live: 'Live Casino' };
 const KIND_TAGS = { multiplayer: 'Multiplayer', stateful: 'Multi-step', chips: 'Table', instant: 'Instant' };
 
 export default async function gamePage(page, { slug }) {

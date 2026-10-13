@@ -1,0 +1,43 @@
+@import url('./roulette.css');
+
+.rl-live {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 auto 10px;
+  width: min(100%, 720px);
+  font-weight: 800;
+  font-size: 14px;
+}
+.rl-live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(255, 77, 94, 0.2);
+  animation: rl-pulse 1.4s infinite;
+}
+@keyframes rl-pulse {
+  50% {
+    box-shadow: 0 0 0 7px rgba(255, 77, 94, 0.05);
+  }
+}
+.rl-live-bar {
+  grid-column: 1 / -1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.rl-live-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+.rl-live[data-phase='playing'] .rl-live-bar > div {
+  background: var(--gold);
+}
+.rl-live[data-phase='result'] .rl-live-bar > div {
+  background: var(--blue);
+}

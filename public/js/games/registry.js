@@ -10,6 +10,7 @@ export const CATEGORIES = [
   { key: 'originals', name: 'Fakesino Originals', icon: 'fire' },
   { key: 'table', name: 'Table Games', icon: 'blackjack' },
   { key: 'slots', name: 'Slots', icon: 'slots' },
+  { key: 'live', name: 'Live Casino', icon: 'liveroulette' },
 ];
 
 export function initRegistry(games) {

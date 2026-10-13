@@ -46,6 +46,7 @@ const EVENTS = {
 const ROUND_EVENTS = {
   crash: 'Shared round from a pre-generated hash chain. <code>h = HMAC_SHA256(gameHash, salt)</code>; <code>crash point = max(1, 2³² ÷ (int(first 8 hex of h) + 1) × 0.99)</code>, floored to 2 decimals.',
   slide: 'Shared round from its own hash chain. Same as Crash with a 2% edge: <code>result = max(1, 2³² ÷ (int(first 8 hex of h) + 1) × 0.98)</code>.',
+  liveroulette: 'Shared table from its own hash chain: <code>pocket = floor(float × 37)</code>, where the float comes from the first 4 bytes of <code>HMAC_SHA256(gameHash, salt)</code>. Payouts as on the solo table.',
   zoo: 'Shared round from its own hash chain. Three spins of the 20-tile ring: spin <i>j</i> = <code>floor(float_j × 20)</code>, where float_j is built from bytes 4j…4j+3 of <code>HMAC_SHA256(gameHash, salt)</code>.',
 };
 

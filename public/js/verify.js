@@ -2,6 +2,7 @@
 // WebCrypto, using exactly the same shared game modules as the server.
 import { createArrayRng, bytesToFloat, FLOATS_PER_ROUND, crashPointFromHex, slidePointFromHex } from './shared/fair.js';
 import { spinsFromBytes, hexToBytes, RING } from './shared/games/zoo.js';
+import { resultFromHex as liveRouletteResult } from './shared/games/liveroulette.js';
 
 const enc = new TextEncoder();
 
@@ -80,6 +81,7 @@ export async function crashPoint(hash, salt, formulaVersion = 1) {
 export async function roundResult(game, hash, salt, formulaVersion = 1) {
   const hex = await hmacHex(hash, salt);
   if (game === 'slide') return { point: slidePointFromHex(hex) };
+  if (game === 'liveroulette') return liveRouletteResult(hex);
   if (game === 'zoo') {
     const tiles = spinsFromBytes(hexToBytes(hex));
     return { tiles, animals: tiles.map((t) => RING[t]) };

@@ -3,6 +3,7 @@ import { coin } from '../icons.js';
 import { chipRack, chipColor } from '../ui/chips.js';
 import { CURRENCIES, roundDown } from '../shared/currencies.js';
 import { BETS, WHEEL_ORDER, colorOf, payoutFor } from '../shared/games/roulette.js';
+import { createRoundClient, phaseProgress, roundPlayers } from '../ui/roundkit.js';
 
 const STEP = 360 / WHEEL_ORDER.length;
 const R = { rim: 98, track: 84, numOuter: 77, numText: 70.5, numInner: 63, pocket: 58.5, cone: 53 };
@@ -131,7 +132,10 @@ const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 const easeOutQuart = (t) => 1 - (1 - t) ** 4;
 const easeInCubic = (t) => t * t * t;
 
-export default function mountRoulette(ctx) {
+// `opts.live` = slug of a shared-round table (Live Roulette): same table and
+// wheel, but everyone bets on one scheduled spin.
+export default function mountRoulette(ctx, opts = {}) {
+  const LIVE = opts.live || null;
   const { api, fmt, sound } = ctx;
   let code = ctx.currency();
   let chips = {}; // betKey → amount
@@ -187,6 +191,7 @@ export default function mountRoulette(ctx) {
       <div class="history-strip rl-history"></div>
       <div class="rl-wheel-wrap">${wheelSvg()}<div class="rl-badge idle"><span>–</span></div></div>
     </div>
+    ${LIVE ? '<div class="rl-live"><span class="rl-live-dot"></span><span class="rl-live-text">Connecting…</span><div class="rl-live-bar"><div></div></div></div>' : ''}
     <div class="rl-table-wrap"><div class="rl-board">${tableHtml()}</div></div>
     <div class="rl-info"><span class="dim">${touch ? 'Tap the table to place chips · swipe it for more bets' : 'Hover the table to see a bet · right-click a bet to remove it'}</span></div>
   </div>`);
@@ -429,6 +434,7 @@ export default function mountRoulette(ctx) {
       if (!stake) throw new Error('Bet is too small');
     }
     if (!isAuto && !panel.checkBalance(stake)) return null;
+    if (LIVE) return livePlace(isAuto, sendChips);
     busy = true;
     if (!isAuto) panel.setBusy(true);
     board.classList.add('locked');
@@ -511,7 +517,7 @@ export default function mountRoulette(ctx) {
   });
 
   async function loadHistory() {
-    if (!ctx.isAuthed()) return;
+    if (LIVE || !ctx.isAuthed()) return;
     try {
       const { bets } = await api.get('/api/bets/mine?game=roulette&limit=10');
       if (destroyed || !bets?.length || historyEl.children.length) return;
@@ -527,6 +533,99 @@ export default function mountRoulette(ctx) {
   }
   ctx.on('user', (user) => user && !historyEl.children.length && loadHistory());
 
+  // ---- live table ----
+  let rc = null;
+  let players = null;
+  let spunRound = null;
+  let paidRound = null;
+  let liveTimer = 0;
+  async function livePlace(isAuto, sendChips) {
+    try {
+      const res = await rc.place({ chips: sendChips });
+      sound.bet();
+      if (!isAuto) ctx.toast({ type: 'success', title: res.queued ? 'Bet placed for the next spin' : 'Bet placed', message: `${fmt.money(res.bet.amount, res.bet.currency)} ${res.bet.currency} on the table` });
+      if (!isAuto) return res;
+      const settled = await rc.settled(res.bet.id);
+      if (!settled) return null;
+      return { win: settled.payout > settled.amount, profit: settled.payout - settled.amount };
+    } catch (err) {
+      if (!isAuto) ctx.toastError(err);
+      else throw err;
+      return null;
+    }
+  }
+  function renderLive() {
+    const r = rc.s.round;
+    if (!r) return;
+    const bar = stage.querySelector('.rl-live-bar > div');
+    const text = stage.querySelector('.rl-live-text');
+    const { left, p } = phaseProgress(rc);
+    stage.querySelector('.rl-live').dataset.phase = r.phase;
+    if (r.phase === 'betting') text.textContent = `Place your bets · ${Math.ceil(left / 1000)}s`;
+    else if (r.phase === 'playing') text.textContent = 'No more bets';
+    else text.textContent = r.result ? `${r.result.number} ${r.result.color === 'green' ? 'green' : r.result.color}` : 'Result';
+    bar.style.width = `${(r.phase === 'betting' ? 1 - p : p) * 100}%`;
+    board.classList.toggle('locked', r.phase === 'playing');
+  }
+  function onRoundState(s) {
+    const r = s.round;
+    if (!r) return;
+    if (!historyEl.children.length && s.history.length) s.history.slice(0, 10).reverse().forEach((h) => pushHistory(h.result.number, null));
+    if (r.phase === 'betting' && spunRound && spunRound !== r.id) {
+      clearResult();
+      badge.className = 'rl-badge idle';
+    }
+    if ((r.phase === 'playing' || r.phase === 'result') && r.result && spunRound !== r.id) {
+      spunRound = r.id;
+      const number = r.result.number;
+      const anim = ctx.animations() && r.phase === 'playing';
+      badge.className = 'rl-badge spinning';
+      badge.innerHTML = '<span></span>';
+      if (anim) sound.spin();
+      spinTo(number, anim ? Math.max(1200, r.endsAt - rc.serverNow() - 300) : 0).then(() => {
+        if (destroyed || spunRound !== r.id) return;
+        lastResult = number;
+        showBadge(number);
+        board.classList.add('settled');
+        numEls.get(number)?.classList.add('win-num');
+        const mine = rc.myBets();
+        const keys = new Set(mine.flatMap((b) => Object.keys(b.params.chips).filter((k) => BETS[k].numbers.includes(number))));
+        for (const key of Object.keys(chips)) {
+          const host = betEls.get(key);
+          if (!mine.length) continue;
+          host?.classList.toggle('win', keys.has(key));
+          host?.querySelector(':scope > .rl-chip')?.classList.add(keys.has(key) ? 'won' : 'lost');
+        }
+        pushHistory(number, null);
+      });
+    }
+    if (r.phase === 'result' && paidRound !== r.id) {
+      paidRound = r.id;
+      const mine = rc.myBets().filter((b) => b.payout != null);
+      const stake = mine.reduce((a, b) => a + b.amount, 0);
+      const paid = mine.reduce((a, b) => a + b.payout, 0);
+      if (mine.length) {
+        if (paid > stake) {
+          sound.win();
+          ctx.resultPop(top, { multiplier: Math.round((paid / stake) * 100) / 100, payout: paid, currency: mine[0].currency, duration: 1800 });
+        } else if (paid > 0) sound.click();
+        else sound.lose();
+      }
+    }
+    players?.render(s.bets, { phase: r.phase, isMine: rc.isMine, onCancel: (id) => rc.cancel(id).catch((err) => ctx.toastError(err)) });
+    renderLive();
+  }
+  if (LIVE) {
+    players = roundPlayers(ctx, { columns: ['Player', 'Spots', 'Amount'], cells: (b) => [`${Object.keys(b.params.chips).length}`] });
+    rc = createRoundClient(ctx, LIVE, {
+      onState: onRoundState,
+      onBet: () => onRoundState(rc.s),
+      onCancel: () => onRoundState(rc.s),
+    });
+    rc.fetchState();
+    liveTimer = setInterval(() => rc.s.round && renderLive(), 250);
+  }
+
   draw();
   updateChipAux();
   updateTotal();
@@ -535,6 +634,8 @@ export default function mountRoulette(ctx) {
   return {
     destroy() {
       destroyed = true;
+      clearInterval(liveTimer);
+      rc?.destroy();
       cancelAnimationFrame(raf);
       timers.forEach(clearTimeout);
       timers.clear();

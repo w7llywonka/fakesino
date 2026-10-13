@@ -24,7 +24,7 @@ before(async () => {
   app = createApp({
     dataFile: path.join(dir, 'db.json'),
     crashTiming: { bettingMs: 300, crashedMs: 100 },
-    roundTiming: { slide: { betting: 250, playing: 120, result: 80 }, zoo: { betting: 250, playing: 120, result: 80 } },
+    roundTiming: { slide: { betting: 250, playing: 120, result: 80 }, zoo: { betting: 250, playing: 120, result: 80 }, liveroulette: { betting: 250, playing: 120, result: 80 } },
   });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${app.server.address().port}`;
@@ -563,6 +563,23 @@ test('zoo: chip stakes pay by how many of three spins land on each animal', asyn
   const expected = Math.floor(zoo.payoutFor({ lion: 1, penguin: 2.5 }, tiles) * 100 + 1e-7) / 100;
   assert.equal(bet.payout, expected);
   assert.deepEqual(bet.params.stakes, { lion: 1, penguin: 2.5 });
+});
+
+test('live roulette: one shared spin pays every chip like the solo table', async () => {
+  const lr = await import('../public/js/shared/games/liveroulette.js');
+  const c = await newPlayer(100);
+  await phaseOf('liveroulette', 'betting');
+  assert.equal((await c.post('/api/liveroulette/bet', { currency: 'USD', chips: { 'straight:37': 1 } })).status, 400);
+  const chips = { red: 2, 'straight:17': 1, 'dozen:1': 1.5 };
+  const r = await c.post('/api/liveroulette/bet', { currency: 'USD', chips });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  assert.equal(r.data.balance.amount, 95.5);
+  const [bet] = await settled(c, 'liveroulette', 1);
+  const { seed } = (await c.get(`/api/bets/${bet.id}`)).data.bet;
+  const { number } = lr.resultFromHex(crypto.createHmac('sha256', seed.hash).update(seed.salt).digest('hex'));
+  assert.equal(bet.result.number, number);
+  assert.equal(bet.payout, Math.floor(lr.payout(chips, number) * 100 + 1e-7) / 100);
+  assert.deepEqual(bet.params.chips, chips);
 });
 
 test('round games refund unsettled stakes on stop and after a crash', async () => {

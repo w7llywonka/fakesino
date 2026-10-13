@@ -220,6 +220,12 @@ const ROUND_GAMES = {
     head: 'Spins',
     cell: (c) => c.animals.map((a) => ZOO_NAMES[a]).join(' · '),
   },
+  liveroulette: {
+    name: 'Live Roulette',
+    formula: () => 'pocket = floor(float × 37), using the first 4 bytes of the HMAC as the float',
+    head: 'Pocket',
+    cell: (c) => `<span class="pill ${c.color === 'red' ? 'red' : c.color === 'green' ? 'green' : ''}">${c.number}</span>`,
+  },
 };
 
 async function crashTab(body, prefill = null) {
